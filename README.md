@@ -26,3 +26,9 @@ The production service worker uses network-first application assets and a versio
 - Optional: install Playwright and its Chromium, then run `node tests/calendar-sync.cjs`.
 
 Desktop and 390px mobile browser harness checks passed. Static/service-worker checks passed. Real Google OAuth consent and a live write from the second account were not exercised by these synthetic tests. The Google Cloud OAuth publishing/testing mode and calendar sharing ACLs remain managed in Google.
+
+## Firebase foundation (phase 1)
+
+The cloud-account dialog, Firebase Auth adapter, isolated Firestore repository, role rules, idempotent transactions and raw local JSON backup are now present. Firebase remains **disabled by default** because a project has not yet been created. Existing Calendar, document and accounting functions continue using localStorage. No data migration, production role provisioning or live business synchronization has been performed.
+
+See [the code/data review, permission model, setup steps and phased migration plan](docs/FIREBASE-PHASE-1.md). Run `pnpm test`, `pnpm test:rules`, and `pnpm test:browser` for the corresponding checks. GitHub Pages deployment is unchanged.

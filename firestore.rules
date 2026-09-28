@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function member(company) {
+      return request.auth != null
+        && request.auth.token.companyId == company
+        && request.auth.token.role in ['admin', 'staff'];
+    }
+    function admin(company) { return member(company) && request.auth.token.role == 'admin'; }
+    function operational(name) { return name in ['calendarLinks', 'estimates', 'projects', 'documents']; }
+    function business(name) {
+      return name in ['calendarLinks', 'estimates', 'projects', 'documents', 'sales',
+        'payments', 'expenses', 'suppliers', 'cashLedger', 'settings', 'bankTransactions'];
+    }
+    function validRecord(company, name, id) {
+      let d = request.resource.data;
+      let op = getAfter(/databases/$(database)/documents/companies/$(company)/operations/$(d.lastOperationId)).data;
+      let audit = getAfter(/databases/$(database)/documents/companies/$(company)/auditLogs/$(d.lastOperationId)).data;
+      return d.keys().hasOnly(['schemaVersion', 'companyId', 'payload', 'revision', 'createdBy', 'updatedBy', 'updatedAt', 'lastOperationId'])
+        && d.schemaVersion == 1 && d.companyId == company && d.payload is map
+        && d.revision is int && d.revision > 0 && d.updatedBy == request.auth.uid
+        && d.updatedAt == request.time && d.lastOperationId is string
+        && op.actorId == request.auth.uid && op.collection == name && op.recordId == id
+        && op.revision == d.revision && op.createdAt == request.time
+        && audit.operationId == d.lastOperationId && audit.actorId == request.auth.uid
+        && audit.collection == name && audit.recordId == id && audit.revision == d.revision
+        && audit.createdAt == request.time;
+    }
+    match /companies/{company}/{name}/{id} {
+      allow read: if business(name) && (admin(company) || (member(company) && (operational(name) || (name == 'settings' && id == 'system'))));
+      allow create: if business(name) && admin(company) && validRecord(company, name, id)
+        && request.resource.data.revision == 1 && request.resource.data.createdBy == request.auth.uid;
+      allow update: if business(name) && admin(company) && validRecord(company, name, id)
+        && request.resource.data.revision == resource.data.revision + 1
+        && request.resource.data.createdBy == resource.data.createdBy;
+      // Hard deletes stay disabled during the staged rollout, including for admins.
+      allow delete: if false;
+    }
+    match /companies/{company}/operations/{id} {
+      allow read: if admin(company);
+      allow create: if admin(company)
+        && request.resource.data.keys().hasOnly(['actorId','collection','recordId','fingerprint','revision','createdAt'])
+        && business(request.resource.data.collection)
+        && request.resource.data.actorId == request.auth.uid
+        && request.resource.data.fingerprint is string
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/companies/$(company)/$(request.resource.data.collection)/$(request.resource.data.recordId)).data.lastOperationId == id;
+      allow update, delete: if false;
+    }
+    match /companies/{company}/auditLogs/{id} {
+      allow read: if admin(company);
+      allow create: if admin(company)
+        && request.resource.data.keys().hasOnly(['actorId','action','collection','recordId','operationId','revision','createdAt'])
+        && request.resource.data.actorId == request.auth.uid && request.resource.data.action == 'upsert'
+        && request.resource.data.operationId == id && request.resource.data.createdAt == request.time
+        && business(request.resource.data.collection)
+        && getAfter(/databases/$(database)/documents/companies/$(company)/$(request.resource.data.collection)/$(request.resource.data.recordId)).data.lastOperationId == id;
+      allow update, delete: if false;
+    }
+    // No client account creation, role escalation, migrations, or cross-company access.
+    match /{document=**} { allow read, write: if false; }
+  }
+}

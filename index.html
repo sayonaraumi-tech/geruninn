@@ -24,7 +24,7 @@
   if(isMobile){
     const link=document.createElement('link');
     link.rel='manifest';
-    link.href='./manifest.webmanifest?v=production-20260929';
+    link.href='./manifest.webmanifest?v=cloud-foundation-20260929';
     document.head.appendChild(link);
   }
 })();
@@ -1074,6 +1074,10 @@ body{padding-top:72px}
 <style>
 .pwa-offline{display:none;position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:99998;background:#1a1a1a;color:#fff;padding:9px 14px;border-radius:999px;font-size:12px;box-shadow:0 4px 18px rgba(0,0,0,.2)}
 .pwa-offline.show{display:block}
+#cloudDialog::backdrop{background:rgba(0,0,0,.4)}
+#cloudDialog p,#cloudDialog .biz-field{margin-bottom:12px}
+@media(max-width:800px){#bizCloudAccountButton{position:absolute;top:6px;right:12px;padding:5px 9px;font-size:12px}}
+@media print{#cloudDialog{display:none!important}}
 </style>
 
 </head>
@@ -1095,8 +1099,26 @@ body{padding-top:72px}
   </div>
   <div class="biz-sync" id="bizSyncState">ローカル保存</div>
   <div class="biz-user" id="bizUserLabel">未ログイン</div>
+  <button id="bizCloudAccountButton" class="biz-btn" type="button" onclick="bizOpenCloudAccount()" style="white-space:nowrap">クラウド</button>
 </div>
 <div class="pwa-offline" id="pwaOfflineBadge">オフライン：端末内データで表示中</div>
+
+<dialog id="cloudDialog" aria-labelledby="cloudTitle" style="margin:auto;width:min(520px,calc(100% - 32px));max-height:90vh;overflow:auto;border:0;border-radius:14px;padding:22px">
+ <div class="biz-section-head"><h2 id="cloudTitle">クラウドアカウント</h2><button class="biz-btn" type="button" onclick="bizCloseCloudAccount()">閉じる</button></div>
+ <p id="cloudStatus" role="status" aria-live="polite">接続準備中</p><p id="cloudAccount"></p>
+ <p class="biz-muted">現在は端末内データを使用しています。ログインしても既存データの移行・削除は行いません。業務データの共有は次の段階で有効になります。</p>
+ <form id="cloudLoginForm">
+  <div id="cloudAuthFields">
+   <div class="biz-field"><label for="cloudEmail">メールアドレス</label><input id="cloudEmail" type="email" autocomplete="username" required></div>
+   <div class="biz-field"><label for="cloudPassword">パスワード</label><input id="cloudPassword" type="password" autocomplete="current-password" required></div>
+   <button class="biz-btn primary" id="cloudLogin" type="submit" disabled>ログイン</button>
+  </div>
+ </form>
+ <button class="biz-btn" id="cloudLogout" type="button" hidden onclick="bizCloudLogout()">ログアウト</button>
+ <button class="biz-btn" id="cloudConfigRetry" type="button" hidden>接続を再試行</button>
+ <p id="cloudRealtime" role="status"></p><p id="cloudError" role="alert" style="color:#a02020"></p>
+ <button class="biz-btn" type="button" onclick="bizCloudBackup()">端末内データをバックアップ（JSON）</button>
+</dialog>
 
 <div id="pageDashboard" class="biz-page app-page active">
  <div class="biz-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
@@ -1197,8 +1219,10 @@ body{padding-top:72px}
   <div class="biz-muted" style="line-height:1.9">1. 「日程」→「Googleに接続」で Google アカウントを許可<br>2. 「Google日程を同期」で対象月を直接取得<br>3. 祝日・従業員の休みは自動除外<br>4. 見積・請求・領収の正式情報を保存すると、連携済みの元 Google Calendar イベントへ顧客名・正式金額・状態・システムリンクを反映<br>5. ICS取込は API が使えない場合の予備機能です</div>
  </div>
  <div class="biz-section">
-  <div class="biz-section-head"><h2>現在まだ未接続の機能</h2></div><div class="biz-alert" style="margin-bottom:10px"><b>Firestore は未接続です。</b> そのためスマホとPCの見積・帳票・売上等の業務データは、まだ自動共有されません。</div>
-  <div class="biz-muted">次に Firestore / Firebase Authentication を接続すると、同じURLでスマホ・PCが同一データをリアルタイム共有し、管理者・従業員の権限も分けられます。</div>
+  <div class="biz-section-head"><h2>クラウド接続（段階導入）</h2></div>
+  <div class="biz-muted">アカウント接続の準備段階です。現在の帳票・記帳は引き続きこの端末に保存されます。クラウド移行はバックアップを確認した後の段階で行います。</div>
+  <button class="biz-btn" onclick="bizOpenCloudAccount()">クラウドアカウントを開く</button>
+
  </div>
 </div>
 
@@ -2858,8 +2882,8 @@ function bizMoney(n){return '¥'+Math.round(Number(n)||0).toLocaleString('ja-JP'
 function bizMonth(d){return String(d||'').slice(0,7)}
 function bizNowMonth(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function bizEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
-function bizLoad(){try{const x=JSON.parse(localStorage.getItem(BIZ_KEY)||'null');if(x)bizState=Object.assign(bizState,x)}catch(_){} try{const x=JSON.parse(localStorage.getItem(BIZ_SETTINGS_KEY)||'null');if(x)bizSettings=Object.assign(bizSettings,x)}catch(_){}}
-function bizPersist(){try{localStorage.setItem(BIZ_KEY,JSON.stringify(bizState))}catch(_){} if(bizCloudReady&&!bizRemoteApplying)bizCloudSave()}
+function bizLoad(){if(window.TsukinowaCloudCore){const old=TsukinowaCloudCore.readLegacy(localStorage);bizState=Object.assign(bizState,old.business);bizSettings=Object.assign(bizSettings,old.settings);if(old.errors.length)console.warn('一部の端末内データを読み込めませんでした。元データは保持されています。');return;}try{const x=JSON.parse(localStorage.getItem(BIZ_KEY)||'null');if(x)bizState=Object.assign(bizState,x)}catch(_){} try{const x=JSON.parse(localStorage.getItem(BIZ_SETTINGS_KEY)||'null');if(x)bizSettings=Object.assign(bizSettings,x)}catch(_){}}
+function bizPersist(){try{localStorage.setItem(BIZ_KEY,JSON.stringify(bizState))}catch(_){} /* Phase 1: legacy writes remain local; cloud writes use the record repository explicitly. */}
 function bizAudit(action,detail){bizState.audit.unshift({id:bizId('log'),at:new Date().toISOString(),user:'local',action,detail});bizState.audit=bizState.audit.slice(0,1000)}
 function bizSwitchPage(page){document.querySelectorAll('.app-page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('#bizNav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const map={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',projects:'pageProjects',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',monthly:'pageMonthly',settings:'pageSettings'};document.getElementById(map[page]||'pageDashboard')?.classList.add('active');if(page==='chohyo')window.scrollTo({top:0});bizRefreshAll()}
 function bizCalcDocumentTotal(state){if(state.docType==='receipt')return Number(state.receiptTotal)||0;let subtotal=0,nonTax=0;if(state.docType==='onoda'){(state.items||[]).forEach(i=>{const a=(Number(i.qty)||0)*(Number(i.price)||0);subtotal+=a;if(i.taxable===false)nonTax+=a});return Math.round(subtotal+(subtotal-nonTax)*.1)}(state.items||[]).forEach(i=>subtotal+=(Number(i.qty)||0)*(Number(i.price)||0));subtotal+=Number(state.travelFee)||0;return Math.round(subtotal*1.1)}
@@ -3483,5 +3507,8 @@ window.addEventListener('load',()=>{
   }
 });
 </script>
+<script src="./js/cloud-core.js"></script>
+<script src="./js/firebase-driver.js"></script>
+<script src="./js/cloud-ui.js"></script>
 </body>
 </html>

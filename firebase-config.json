@@ -1,0 +1,12 @@
+{
+  "enabled": false,
+  "companyId": "tsukinowa",
+  "firebase": {
+    "apiKey": "",
+    "authDomain": "",
+    "projectId": "",
+    "storageBucket": "",
+    "messagingSenderId": "",
+    "appId": ""
+  }
+}
