@@ -1,5 +1,5 @@
-const CACHE='tsukinowa-pwa-cloud-foundation-20260929-1';
-const APP_SHELL=['./index.html','./manifest.webmanifest','./js/cloud-core.js','./js/firebase-driver.js','./js/cloud-ui.js','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png'];
+const CACHE='tsukinowa-pwa-core-sync-20260929-2';
+const APP_SHELL=['./index.html','./manifest.webmanifest','./js/cloud-core.js','./js/firebase-driver.js','./js/cloud-ui.js','./js/business-domain.js','./js/business-sync.js','./js/business-ui.js','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
   await cache.addAll(APP_SHELL.map(path=>new Request(path,{cache:'reload'})));

@@ -13,22 +13,22 @@
     el('cloudConfigRetry').hidden=state.phase!=='error';
     el('bizUserLabel').textContent=state.role?(state.role==='admin'?'管理者':'スタッフ'):'未ログイン';
     el('cloudRealtime').textContent='';
-    if(state.phase==='ready'){
-      // Connectivity probe only. No cloud snapshot is copied into localStorage or bizState.
-      client.listen('settings','system',(record,meta)=>{
-        el('cloudRealtime').textContent=meta.fromCache?'接続確認中（サーバー応答待ち）':'Firestore 接続確認済'+(record?'':'（初期設定データなし）');
-      },()=>{el('cloudRealtime').textContent='Firestore に接続できません。管理者がデータベースとアクセスルールを確認してください。';});
-    }
+    root.TsukinowaBusinessUI?.auth(state,client);
   }
   async function initialize(){
     if(initializing)return initializing;
     initializing=(async()=>{
+      let cachedConfig=null;try{cachedConfig=JSON.parse(localStorage.getItem('tsukinowa_cloud_config_v2')||'null');}catch(_){}
+      if(cachedConfig?.enabled)root.TsukinowaBusinessUI?.configure(true);
       render({phase:'initializing'});
       try{
-        const response=await fetch('./firebase-config.json',{cache:'no-store'});
-        if(!response.ok)throw Error('クラウド設定を読み込めません。既存の端末内データは引き続き使用できます。');
-        const config=await response.json();
-        if(!root.TsukinowaCloudCore.validateConfig(config)){render({phase:'unconfigured'});return;}
+        let config;
+        try{const response=await fetch('./firebase-config.json',{cache:'no-store'});if(!response.ok)throw Error('設定読込失敗');config=await response.json();}
+        catch(e){if(!cachedConfig)throw e;config=cachedConfig;}
+        root.TsukinowaBusinessUI?.configure(config.enabled===true);
+        const validated=root.TsukinowaCloudCore.validateConfig(config);
+        localStorage.setItem('tsukinowa_cloud_config_v2',JSON.stringify(config));
+        if(!validated){render({phase:'unconfigured'});return;}
         const driver=await root.createTsukinowaFirebaseDriver();
         client=root.TsukinowaCloudCore.createClient(driver,render);
         await client.start(config);

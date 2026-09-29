@@ -1106,7 +1106,7 @@ body{padding-top:72px}
 <dialog id="cloudDialog" aria-labelledby="cloudTitle" style="margin:auto;width:min(520px,calc(100% - 32px));max-height:90vh;overflow:auto;border:0;border-radius:14px;padding:22px">
  <div class="biz-section-head"><h2 id="cloudTitle">クラウドアカウント</h2><button class="biz-btn" type="button" onclick="bizCloseCloudAccount()">閉じる</button></div>
  <p id="cloudStatus" role="status" aria-live="polite">接続準備中</p><p id="cloudAccount"></p>
- <p class="biz-muted">現在は端末内データを使用しています。ログインしても既存データの移行・削除は行いません。業務データの共有は次の段階で有効になります。</p>
+ <p class="biz-muted">クラウド設定後はログインして業務データを共有できます。旧端末内データは管理者がバックアップ付きで移行できます。元データは削除しません。</p>
  <form id="cloudLoginForm">
   <div id="cloudAuthFields">
    <div class="biz-field"><label for="cloudEmail">メールアドレス</label><input id="cloudEmail" type="email" autocomplete="username" required></div>
@@ -2300,6 +2300,7 @@ function systemPrint() {
 }
 
 function doPrint() {
+  const confirmedSnapshot = collectFormState();
   try {
     const sourceInvoice = document.querySelector('.invoice');
     if (!sourceInvoice) {
@@ -2477,7 +2478,7 @@ function doPrint() {
           }
 
           pdf.save(filename);
-          saveConfirmedHistory();
+          saveConfirmedHistory(confirmedSnapshot);
           cleanup();
         });
       }).catch(function(err) {
@@ -2516,9 +2517,9 @@ function hasMeaningfulCurrentContent() {
   if (docType === 'receipt') return !!customer || Number(document.getElementById('receiptTotal')?.value || 0) > 0 || !!remarks;
   return !!customer || itemHas || !!remarks;
 }
-function saveConfirmedHistory() {
+function saveConfirmedHistory(capturedState) {
   if (_simpleArchiveMode || !hasMeaningfulCurrentContent()) return;
-  const state = collectFormState();
+  const state = capturedState || collectFormState();
   state.savedAt = new Date().toISOString();
   state.historyId = state.docType === 'onoda'
     ? 'onoda_' + (state.invoiceDate || todayISO()).slice(0,7)
@@ -2902,10 +2903,10 @@ function bizOnDocumentConfirmed(state){
     if(sale&&amount>0){const receiptSourceId=state.historyId||('receipt_'+(state.invoiceNo||'')+'_'+(state.invoiceDate||''));let pay=bizState.payments.find(p=>p.sourceId===receiptSourceId);const payload={sourceId:receiptSourceId,saleId:sale.id,date:state.invoiceDate||todayISO(),amount,method:state.paymentMethod||'現金',memo:'領収書から登録',updatedAt:new Date().toISOString()};if(pay){Object.assign(pay,payload)}else{pay=Object.assign({id:bizId('pay'),createdAt:new Date().toISOString()},payload);bizState.payments.push(pay);bizAudit('入金登録',`${sale.customer} ${amount}円 ${state.paymentMethod||'現金'}`)}bizPersist();bizRefreshAll()}
   }
 }
-function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id).reduce((a,p)=>a+(Number(p.amount)||0),0)}
+function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
 function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
 function bizRefreshAll(){const m=bizNowMonth();['calendarMonth','salesMonth','expenseMonth','monthlyMonth'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=m});['paymentDate','expDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=todayISO()});const sd=document.getElementById('salesDate');if(sd&&!sd.value)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderMonthly();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
-function renderDashboard(){const m=bizNowMonth();document.getElementById('dashPeriod').textContent=m.replace('-','年')+'月';const sales=bizState.sales.filter(x=>bizMonth(x.saleDate)===m);const pays=bizState.payments.filter(x=>bizMonth(x.date)===m);const exps=bizState.expenses.filter(x=>bizMonth(x.date)===m);const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);document.getElementById('kpiSales').textContent=bizMoney(sum(sales));document.getElementById('kpiPayments').textContent=bizMoney(sum(pays));document.getElementById('kpiReceivable').textContent=bizMoney(bizState.sales.reduce((a,s)=>a+bizOutstanding(s),0));document.getElementById('kpiExpenses').textContent=bizMoney(sum(exps));const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0).length;const unmatched=bizState.bank.filter(b=>!b.matched).length;document.getElementById('attentionList').innerHTML=`未入金 <b>${unpaid}</b>件 ／ 銀行未照合 <b>${unmatched}</b>件 ／ カレンダー取込 <b>${bizState.calendar.length}</b>件`;document.getElementById('dashSalesRows').innerHTML=bizState.sales.slice(0,10).map(s=>`<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate)}</td><td>${bizOutstanding(s)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金 '+bizMoney(bizOutstanding(s))+'</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="biz-muted">まだ売上はありません。</td></tr>'}
+function renderDashboard(){const m=bizNowMonth();document.getElementById('dashPeriod').textContent=m.replace('-','年')+'月';const sales=bizState.sales.filter(x=>bizMonth(x.saleDate)===m);const pays=bizState.payments.filter(x=>bizMonth(x.date)===m&&x.confirmation!=='pending-bank');const exps=bizState.expenses.filter(x=>bizMonth(x.date)===m);const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);document.getElementById('kpiSales').textContent=bizMoney(sum(sales));document.getElementById('kpiPayments').textContent=bizMoney(sum(pays));document.getElementById('kpiReceivable').textContent=bizMoney(bizState.sales.reduce((a,s)=>a+bizOutstanding(s),0));document.getElementById('kpiExpenses').textContent=bizMoney(sum(exps));const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0).length;const unmatched=bizState.bank.filter(b=>!b.matched).length;document.getElementById('attentionList').innerHTML=`未入金 <b>${unpaid}</b>件 ／ 銀行未照合 <b>${unmatched}</b>件 ／ カレンダー取込 <b>${bizState.calendar.length}</b>件`;document.getElementById('dashSalesRows').innerHTML=bizState.sales.slice(0,10).map(s=>`<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate)}</td><td>${bizOutstanding(s)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金 '+bizMoney(bizOutstanding(s))+'</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="biz-muted">まだ売上はありません。</td></tr>'}
 function renderSales(){const m=document.getElementById('salesMonth')?.value||bizNowMonth();const rows=bizState.sales.filter(s=>!m||bizMonth(s.saleDate)===m);document.getElementById('salesRows').innerHTML=rows.map(s=>{const paid=bizPaid(s),out=bizOutstanding(s);return `<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate)}</td><td class="biz-money">${bizMoney(paid)}</td><td class="biz-money">${bizMoney(out)}</td><td>${out<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金</span>'}</td><td><button class="biz-btn" onclick="selectSaleForPayment(\'${s.id}\')">入金</button></td></tr>`}).join('')||'<tr><td colspan="9" class="biz-muted">対象月の売上はありません。</td></tr>';renderPaymentSaleOptions()}
 function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0);sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('')}
 function selectSaleForPayment(id){bizSwitchPage('sales');const s=bizState.sales.find(x=>x.id===id);if(!s)return;document.getElementById('paymentSale').value=id;document.getElementById('paymentAmount').value=bizOutstanding(s);document.getElementById('paymentType').value=s.paymentMethod||'銀行振込';document.getElementById('paymentDate').scrollIntoView({behavior:'smooth',block:'center'})}
@@ -2920,11 +2921,11 @@ function autoSuggestBank(){bizState.bank.forEach(b=>{if(b.matched)return;if(b.in
 function matchBankSale(bankId,saleId){const b=bizState.bank.find(x=>x.id===bankId),s=bizState.sales.find(x=>x.id===saleId);if(!b||!s)return;bizState.payments.push({id:bizId('pay'),saleId:s.id,date:b.date,amount:b.incoming,method:'GMO銀行',memo:'銀行CSV照合',bankId:b.id,createdAt:new Date().toISOString()});b.matched=true;b.matchType='sale';b.matchId=s.id;bizAudit('銀行入金照合',`${s.customer} ${b.incoming}円`);bizPersist();bizRefreshAll()}
 function matchBankExpense(bankId,expId){const b=bizState.bank.find(x=>x.id===bankId),e=bizState.expenses.find(x=>x.id===expId);if(!b||!e)return;b.matched=true;b.matchType='expense';b.matchId=e.id;e.bankMatched=true;bizAudit('銀行支出照合',`${e.category} ${b.outgoing}円`);bizPersist();bizRefreshAll()}
 function renderBank(){autoSuggestBank();document.getElementById('bankRows').innerHTML=bizState.bank.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>{let sug='';if(b.suggestSaleId){const s=bizState.sales.find(x=>x.id===b.suggestSaleId);if(s)sug=`${bizEsc(s.customer)} ${bizMoney(s.amount)} <button class="biz-btn ok" onclick="matchBankSale('${b.id}','${s.id}')">入金確定</button>`}else if(b.suggestExpenseId){const e=bizState.expenses.find(x=>x.id===b.suggestExpenseId);if(e)sug=`${bizEsc(e.category)} ${bizMoney(e.amount)} <button class="biz-btn ok" onclick="matchBankExpense('${b.id}','${e.id}')">支出確定</button>`}return `<tr><td>${bizEsc(b.date)}</td><td>${bizEsc(b.desc)}</td><td class="biz-money">${b.incoming?bizMoney(b.incoming):''}</td><td class="biz-money">${b.outgoing?bizMoney(b.outgoing):''}</td><td>${sug||'<span class="biz-muted">候補なし</span>'}</td><td>${b.matched?'<span class="biz-badge ok">照合済</span>':'<span class="biz-badge warn">未照合</span>'}</td></tr>`}).join('')||'<tr><td colspan="6" class="biz-muted">銀行CSVはまだ取り込まれていません。</td></tr>'}
-function renderMonthly(){const m=document.getElementById('monthlyMonth')?.value||bizNowMonth();const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);const sales=sum(bizState.sales.filter(x=>bizMonth(x.saleDate)===m)),pays=sum(bizState.payments.filter(x=>bizMonth(x.date)===m)),exps=sum(bizState.expenses.filter(x=>bizMonth(x.date)===m));document.getElementById('mSales').textContent=bizMoney(sales);document.getElementById('mPayments').textContent=bizMoney(pays);document.getElementById('mExpenses').textContent=bizMoney(exps);document.getElementById('mCashDiff').textContent=bizMoney(pays-exps);document.getElementById('auditRows').innerHTML=bizState.audit.slice(0,30).map(l=>`<div class="biz-log-row"><b>${bizEsc(l.action)}</b><span>${new Date(l.at).toLocaleString('ja-JP')} ｜ ${bizEsc(l.user)} ｜ ${bizEsc(l.detail)}</span></div>`).join('')||'<div class="biz-muted">履歴はまだありません。</div>'}
+function renderMonthly(){const m=document.getElementById('monthlyMonth')?.value||bizNowMonth();const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);const sales=sum(bizState.sales.filter(x=>bizMonth(x.saleDate)===m)),pays=sum(bizState.payments.filter(x=>bizMonth(x.date)===m&&x.confirmation!=='pending-bank')),exps=sum(bizState.expenses.filter(x=>bizMonth(x.date)===m));document.getElementById('mSales').textContent=bizMoney(sales);document.getElementById('mPayments').textContent=bizMoney(pays);document.getElementById('mExpenses').textContent=bizMoney(exps);document.getElementById('mCashDiff').textContent=bizMoney(pays-exps);document.getElementById('auditRows').innerHTML=bizState.audit.slice(0,30).map(l=>`<div class="biz-log-row"><b>${bizEsc(l.action)}</b><span>${new Date(l.at).toLocaleString('ja-JP')} ｜ ${bizEsc(l.user)} ｜ ${bizEsc(l.detail)}</span></div>`).join('')||'<div class="biz-muted">履歴はまだありません。</div>'}
 function downloadText(name,text,type='text/csv;charset=utf-8'){const blob=new Blob(['\uFEFF'+text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 function exportDecisionCsv(){const rows=[['区分','日付','取引先','内容','請求番号','金額','入金/支払方法','関連ID']];bizState.sales.forEach(s=>rows.push(['売上',s.saleDate,s.customer,s.content,s.invoiceNo,s.amount,'',s.id]));bizState.payments.forEach(p=>{const s=bizState.sales.find(x=>x.id===p.saleId);rows.push(['入金',p.date,s?.customer||'',p.memo||'入金',s?.invoiceNo||'',p.amount,p.method,p.saleId])});bizState.expenses.forEach(e=>rows.push(['支出',e.date,e.vendor,e.category+' '+(e.memo||''),'',e.amount,e.method,e.id]));downloadText('月輪合同会社_決算データ_'+todayISO()+'.csv',rows.map(r=>r.map(csvCell).join(',')).join('\r\n'));bizAudit('決算CSV出力',`${rows.length-1}行`);bizPersist()}
-function exportBackup(){downloadText('月輪合同会社_全データ_'+todayISO()+'.json',JSON.stringify({version:2,mode:'trial-local',exportedAt:new Date().toISOString(),state:bizState},null,2),'application/json;charset=utf-8')}
+function exportBackup(){downloadText('月輪合同会社_全データ_'+todayISO()+'.json',JSON.stringify({version:2,mode:'production',exportedAt:new Date().toISOString(),state:bizState},null,2),'application/json;charset=utf-8')}
 // Google Calendar 予備機能：ICSファイルをローカル読込
 function icsUnescape(v){return String(v||'').replace(/\\n/gi,'\n').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\')}
 function icsDateToIso(v){
@@ -2977,7 +2978,7 @@ async function importIcsCalendar(){
     const ignored=allEvents.filter(bizShouldIgnoreCalendarEvent);
     const events=allEvents.filter(e=>!bizShouldIgnoreCalendarEvent(e));
     let added=0,updated=0;
-    events.forEach(x=>{const i=bizState.calendar.findIndex(a=>a.id===x.id);if(i>=0){const old=bizState.calendar[i];if(!bizHasFormalData(old))bizState.calendar[i]=Object.assign({},old,x);updated++}else{bizState.calendar.push(x);added++}});
+    events.forEach(x=>{if(window.TsukinowaBusinessUI?.isEnabled()){bizGoogleMergeEvent({...x,source:'ics'});added++;return;}const i=bizState.calendar.findIndex(a=>a.id===x.id);if(i>=0){const old=bizState.calendar[i];if(!bizHasFormalData(old))bizState.calendar[i]=Object.assign({},old,x);updated++}else{bizState.calendar.push(x);added++}});
     bizAudit('ICS日程取込',`${f.name} ${events.length}件（新規${added}・更新${updated}・除外${ignored.length}・既存整理${cleaned}）`);bizPersist();renderCalendarEvents();
     const months=[...new Set(events.map(e=>bizMonth(e.date)))].sort(); if(months.length){const el=document.getElementById('calendarMonth');if(el&&months.includes(bizNowMonth()))el.value=bizNowMonth();else if(el)el.value=months[months.length-1];renderCalendarEvents()}
     alert(`${events.length}件の業務日程を読み込みました。\n新規 ${added}件 / 更新 ${updated}件\n祝日・休み等を ${ignored.length}件除外しました${cleaned?`（以前の取込分も${cleaned}件整理）`:''}`);
@@ -3452,7 +3453,7 @@ function bizRestoreDocumentLinks(state){
   bizCurrentProjectId=state.projectId||e?.projectId||estimate?.projectId||'';
 }
 function openSavedDoc(index){const rows=loadConfirmedHistory();const state=rows[index];if(!state)return;applyFormState(state,state.docType||'invoice');saveActiveTab(state.docType||'invoice');bizSwitchPage('chohyo');window.scrollTo({top:0,behavior:'smooth'});}
-function redownloadSavedDoc(index){const rows=loadConfirmedHistory();const state=rows[index];if(!state)return;applyFormState(state,state.docType||'invoice');saveActiveTab(state.docType||'invoice');bizSwitchPage('chohyo');setTimeout(()=>{if(typeof downloadPDF==='function')downloadPDF();else alert('帳票を開きました。PDFボタンから再ダウンロードしてください。');},120);}
+function redownloadSavedDoc(index){const rows=loadConfirmedHistory();const state=rows[index];if(!state)return;applyFormState(state,state.docType||'invoice');saveActiveTab(state.docType||'invoice');bizSwitchPage('chohyo');setTimeout(()=>{doPrint();},120);}
 
 // 页面切换增强
 const _oldBizSwitchPageV5=bizSwitchPage;
@@ -3509,6 +3510,9 @@ window.addEventListener('load',()=>{
 </script>
 <script src="./js/cloud-core.js"></script>
 <script src="./js/firebase-driver.js"></script>
+<script src="./js/business-domain.js"></script>
+<script src="./js/business-sync.js"></script>
+<script src="./js/business-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
 </body>
 </html>

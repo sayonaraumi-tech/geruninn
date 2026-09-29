@@ -1,7 +1,7 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
 const root=path.join(__dirname,'..');
 const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(root,pathname==='/'?'index.html':pathname);try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});
-const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {initialize:async()=>{},observeAuth:f=>{cb=f;f(null);return()=>{};},claims:async u=>u.claims,signIn:async(email,password)=>{if(password==='wrong')throw Error('no');await cb({uid:'test',email,claims:{role:email.startsWith('admin')?'admin':'staff',companyId:'tsukinowa'}});},signOut:async()=>cb(null),listen:(p,m,next)=>{next({payload:{cloud:'must-not-overwrite-local'}},{fromCache:false});return()=>{};}}};`;
+const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {initialize:async()=>{},observeAuth:f=>{cb=f;f(null);return()=>{};},claims:async u=>u.claims,signIn:async(email,password)=>{if(password==='wrong')throw Error('no');await cb({uid:'test',email,claims:{role:email.startsWith('admin')?'admin':'staff',companyId:'tsukinowa'}});},signOut:async()=>cb(null),listen:(p,m,next)=>{next([],{fromCache:false});return()=>{};}}};`;
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;const browser=await chromium.launch({headless:true});
  try{
@@ -18,7 +18,7 @@ const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {
   await page.route('**/js/firebase-driver.js',r=>r.fulfill({contentType:'text/javascript',body:fakeDriver}));
   await page.reload();await page.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});await page.locator('#bizCloudAccountButton').click();
   await page.locator('#cloudEmail').fill('admin@example.com');await page.locator('#cloudPassword').fill('wrong');await page.locator('#cloudLogin').click();await page.locator('#cloudError').filter({hasText:'ログインできませんでした'}).waitFor({state:'attached'});assert.equal(await page.locator('#cloudPassword').inputValue(),'');
-  await page.locator('#cloudPassword').fill('good');await page.locator('#cloudLogin').click();await page.locator('#cloudAccount').filter({hasText:'管理者'}).waitFor({state:'attached'});await page.locator('#cloudRealtime').filter({hasText:'Firestore 接続確認済'}).waitFor({state:'attached'});
+  await page.locator('#cloudPassword').fill('good');await page.locator('#cloudLogin').click();await page.locator('#cloudAccount').filter({hasText:'管理者'}).waitFor({state:'attached'});await page.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});
   assert.equal(await page.evaluate(()=>localStorage.getItem('tsukinowa_business_v1')),backup);assert.equal(await page.evaluate(()=>bizCloudReady),false);
   await page.locator('#cloudLogout').click();await page.locator('#cloudAccount').filter({hasText:/^$/}).waitFor({state:'attached'});
   await page.locator('#cloudEmail').fill('staff@example.com');await page.locator('#cloudPassword').fill('good');await page.locator('#cloudLogin').click();await page.locator('#cloudAccount').filter({hasText:'スタッフ'}).waitFor({state:'attached'});

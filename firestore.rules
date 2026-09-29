@@ -1,63 +1,66 @@
 rules_version = '2';
 service cloud.firestore {
-  match /databases/{database}/documents {
-    function member(company) {
-      return request.auth != null
-        && request.auth.token.companyId == company
-        && request.auth.token.role in ['admin', 'staff'];
-    }
-    function admin(company) { return member(company) && request.auth.token.role == 'admin'; }
-    function operational(name) { return name in ['calendarLinks', 'estimates', 'projects', 'documents']; }
-    function business(name) {
-      return name in ['calendarLinks', 'estimates', 'projects', 'documents', 'sales',
-        'payments', 'expenses', 'suppliers', 'cashLedger', 'settings', 'bankTransactions'];
-    }
-    function validRecord(company, name, id) {
-      let d = request.resource.data;
-      let op = getAfter(/databases/$(database)/documents/companies/$(company)/operations/$(d.lastOperationId)).data;
-      let audit = getAfter(/databases/$(database)/documents/companies/$(company)/auditLogs/$(d.lastOperationId)).data;
-      return d.keys().hasOnly(['schemaVersion', 'companyId', 'payload', 'revision', 'createdBy', 'updatedBy', 'updatedAt', 'lastOperationId'])
-        && d.schemaVersion == 1 && d.companyId == company && d.payload is map
-        && d.revision is int && d.revision > 0 && d.updatedBy == request.auth.uid
-        && d.updatedAt == request.time && d.lastOperationId is string
-        && op.actorId == request.auth.uid && op.collection == name && op.recordId == id
-        && op.revision == d.revision && op.createdAt == request.time
-        && audit.operationId == d.lastOperationId && audit.actorId == request.auth.uid
-        && audit.collection == name && audit.recordId == id && audit.revision == d.revision
-        && audit.createdAt == request.time;
-    }
-    match /companies/{company}/{name}/{id} {
-      allow read: if business(name) && (admin(company) || (member(company) && (operational(name) || (name == 'settings' && id == 'system'))));
-      allow create: if business(name) && admin(company) && validRecord(company, name, id)
-        && request.resource.data.revision == 1 && request.resource.data.createdBy == request.auth.uid;
-      allow update: if business(name) && admin(company) && validRecord(company, name, id)
-        && request.resource.data.revision == resource.data.revision + 1
-        && request.resource.data.createdBy == resource.data.createdBy;
-      // Hard deletes stay disabled during the staged rollout, including for admins.
-      allow delete: if false;
-    }
-    match /companies/{company}/operations/{id} {
-      allow read: if admin(company);
-      allow create: if admin(company)
-        && request.resource.data.keys().hasOnly(['actorId','collection','recordId','fingerprint','revision','createdAt'])
-        && business(request.resource.data.collection)
-        && request.resource.data.actorId == request.auth.uid
-        && request.resource.data.fingerprint is string
-        && request.resource.data.createdAt == request.time
-        && getAfter(/databases/$(database)/documents/companies/$(company)/$(request.resource.data.collection)/$(request.resource.data.recordId)).data.lastOperationId == id;
-      allow update, delete: if false;
-    }
-    match /companies/{company}/auditLogs/{id} {
-      allow read: if admin(company);
-      allow create: if admin(company)
-        && request.resource.data.keys().hasOnly(['actorId','action','collection','recordId','operationId','revision','createdAt'])
-        && request.resource.data.actorId == request.auth.uid && request.resource.data.action == 'upsert'
-        && request.resource.data.operationId == id && request.resource.data.createdAt == request.time
-        && business(request.resource.data.collection)
-        && getAfter(/databases/$(database)/documents/companies/$(company)/$(request.resource.data.collection)/$(request.resource.data.recordId)).data.lastOperationId == id;
-      allow update, delete: if false;
-    }
-    // No client account creation, role escalation, migrations, or cross-company access.
-    match /{document=**} { allow read, write: if false; }
+ match /databases/{database}/documents {
+  function member(c) { return request.auth != null && request.auth.token.companyId == c && request.auth.token.role in ['admin','staff']; }
+  function admin(c) { return member(c) && request.auth.token.role == 'admin'; }
+  function core(n) { return n in ['calendarLinks','estimates','projects','documents','sales','payments']; }
+  function business(n) { return core(n) || n in ['expenses','suppliers','cashLedger','settings','bankTransactions','migrations']; }
+  function before(c,n,id) { return exists(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)) ? get(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)).data.payload : null; }
+  function valid(c,n,id) {
+   let d=request.resource.data;
+   let op=getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(d.lastOperationId)).data;
+   let a=getAfter(/databases/$(database)/documents/companies/$(c)/auditLogs/$(d.lastAuditId)).data;
+   return d.keys().hasOnly(['schemaVersion','companyId','payload','revision','createdBy','updatedBy','updatedAt','lastOperationId','lastAuditId'])
+    && d.schemaVersion==2 && d.companyId==c && d.payload is map && d.revision is int && d.revision>0
+    && d.updatedBy==request.auth.uid && d.updatedAt==request.time
+    && (n!='documents' || (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id)) || (d.payload.documentId==resource.data.payload.documentId && d.payload.docType==resource.data.payload.docType)))
+    && op.actorId==request.auth.uid && op.createdAt==request.time
+    && a.userId==request.auth.uid && a.timestamp==request.time && a.entityType==n && a.entityId==id
+    && a.operationId==d.lastOperationId && a.after==d.payload && a.before==before(c,n,id);
   }
+  function staffWrite(c,n,id) {
+   let p=request.resource.data.payload;
+   return n in ['calendarLinks','estimates','projects']
+    || (n=='documents' && p.documentId==id && p.confirmed==true && p.docType in ['invoice','onoda','estimate','receipt'] && p.snapshot.documentId==id && p.snapshot.docType==p.docType)
+    || (n=='sales' && id=='sale_'+p.documentId
+      && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.docType in ['invoice','onoda']
+      && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.amount==p.amount
+      && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.customerName==p.customer
+      && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.salesDate==p.salesDate
+      && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.invoiceDate==p.invoiceDate)
+    || (n=='payments' && p.paymentId==id && p.amount>0 && p.confirmation in ['cash-received','pending-bank']
+      && exists(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId))
+      && (!exists(/databases/$(database)/documents/companies/$(c)/payments/$(id))
+        || (resource.data.payload.confirmation!='bank-confirmed' && p.saleId==resource.data.payload.saleId)));
+  }
+  match /companies/{c}/{n}/{id} {
+   allow read: if business(n) && (admin(c) || (member(c) && (core(n) || (n=='settings' && id=='system'))));
+   allow create: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && valid(c,n,id) && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid;
+   allow update: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && valid(c,n,id) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy;
+   allow delete: if false;
+  }
+  match /companies/{c}/operations/{id} {
+   allow read: if member(c);
+   allow create: if member(c) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
+   allow update,delete: if false;
+  }
+  match /companies/{c}/auditLogs/{id} {
+   allow read: if member(c);
+   allow create: if member(c)
+    && request.resource.data.keys().hasOnly(['userId','timestamp','entityType','entityId','action','before','after','operationId'])
+    && request.resource.data.userId==request.auth.uid && request.resource.data.timestamp==request.time
+    && ((admin(c) && request.resource.data.entityType=='auditLogs' && request.resource.data.entityId==id && request.resource.data.action=='migration' && request.resource.data.before==null && request.resource.data.after.legacy is map
+      && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.actorId==request.auth.uid
+      && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.createdAt==request.time)
+    || (business(request.resource.data.entityType)
+    && request.resource.data.action in ['create','update','status change','payment','migration']
+    && (request.resource.data.action!='migration'||admin(c))
+    && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.lastAuditId==id
+    && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.updatedAt==request.time
+    && request.resource.data.before==before(c,request.resource.data.entityType,request.resource.data.entityId)
+    && request.resource.data.after==getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.payload));
+   allow update,delete: if false;
+  }
+  match /{document=**} { allow read,write: if false; }
+ }
 }

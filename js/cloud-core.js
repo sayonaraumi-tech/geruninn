@@ -1,12 +1,12 @@
-/* Phase 1: independent cloud repository; never replaces the legacy business state. */
+/* Scoped repository: atomic, revision-checked business writes with immutable audit. */
 (function(root,factory){
   const api=factory();
   if(typeof module==='object'&&module.exports)module.exports=api;
   else root.TsukinowaCloudCore=api;
 })(typeof globalThis==='object'?globalThis:this,function(){
   'use strict';
-  const COLLECTIONS=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','expenses','suppliers','cashLedger','auditLogs','settings','bankTransactions']);
-  const STAFF_READ=Object.freeze(['calendarLinks','estimates','projects','documents']);
+  const COLLECTIONS=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','expenses','suppliers','cashLedger','auditLogs','settings','bankTransactions','migrations']);
+  const STAFF_READ=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','auditLogs']);
   const LOCAL_KEYS=Object.freeze({business:'tsukinowa_business_v1',documents:'tsukinowa_chohyo_confirmed_history_v1',settings:'tsukinowa_business_settings_v1'});
   function segment(value){if(typeof value!=='string'||!value||value.length>200||/[\/\x00-\x1f]/.test(value)||value==='.'||value==='..')throw Error('Invalid record ID');return value;}
   function validateConfig(config){
@@ -29,7 +29,7 @@
   // Export raw strings as well as parsed data so even malformed old data can be recovered.
   function backupLegacy(storage,now=new Date()){
     const raw={};
-    for(let i=0;i<storage.length;i++){const key=storage.key(i);if(key&&(key.startsWith('tsukinowa_')||key.startsWith('chohyoLastSeq_')))raw[key]=storage.getItem(key);}
+    for(let i=0;i<storage.length;i++){const key=storage.key(i);if(key&&!key.startsWith('tsukinowa_cloud_')&&(key.startsWith('tsukinowa_')||key.startsWith('chohyoLastSeq_')))raw[key]=storage.getItem(key);}
     return {format:'tsukinowa-local-backup',schemaVersion:1,createdAt:now.toISOString(),raw,...readLegacy(storage)};
   }
   function canonical(value){
@@ -52,7 +52,7 @@
       generation++;clearSubscriptions();if(authStop){authStop();authStop=null;}
       config=validateConfig(input);
       if(!config){emit({phase:'unconfigured',user:null,role:null,companyId:null,error:null});return;}
-      emit({phase:'initializing',user:null,role:null,companyId:config.companyId,error:null});
+      emit({phase:'initializing',user:null,role:null,companyId:config.companyId,projectId:config.firebase.projectId,error:null});
       try{
         await driver.initialize(config.firebase);
         authStop=driver.observeAuth(async user=>{
@@ -79,32 +79,47 @@
       const off=driver.listen(path,id===null,(value,meta)=>{if(active&&who.generation===generation)onData(value,meta);},err=>{if(active&&who.generation===generation)onError(err);});
       const stop=()=>{active=false;off();subscriptions.delete(stop);};subscriptions.add(stop);return stop;
     }
-    async function put(name,id,payload,{operationId,expectedRevision=0}={}){
-      const who=identity();scope(name);segment(id);segment(operationId);
-      // Staff writes need the document-confirmation workflow in phase 2; fail closed in phase 1.
-      if(who.role!=='admin'||name==='auditLogs')throw Error('この操作は許可されていません。');
-      if(!Number.isInteger(expectedRevision)||expectedRevision<0)throw Error('Invalid revision');
-      const serialized=canonical(payload);if(serialized.length>300000)throw Error('Record too large');
-      const fingerprint=await driver.digest(canonical({name,id,payload,expectedRevision}));
-      const path=`companies/${who.companyId}`;
-      const recordPath=`${path}/${name}/${id}`,operationPath=`${path}/operations/${operationId}`,auditPath=`${path}/auditLogs/${operationId}`;
+    async function transact(operationId,command,planner){
+      const who=identity();segment(operationId);
+      const fingerprint=await driver.digest(canonical(command)),base=`companies/${who.companyId}`;
       const result=await driver.transaction(async tx=>{
         if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
-        const operation=await tx.get(operationPath);
-        if(operation){if(operation.fingerprint!==fingerprint||operation.actorId!==who.uid)throw Error('Operation ID conflict');return {revision:operation.revision,replayed:true};}
-        const existing=await tx.get(recordPath),revision=existing?.revision||0;
-        if(revision!==expectedRevision)throw Error('別の端末で更新されています。再読込して確認してください。');
+        const opPath=`${base}/operations/${operationId}`,previous=await tx.get(opPath);
+        if(previous){if(previous.fingerprint!==fingerprint||previous.actorId!==who.uid)throw Error('Operation ID conflict');return previous.result;}
+        const cache=new Map(),writes=[],legacyAudits=[];
+        const read=async(name,id)=>{scope(name);segment(id);const path=`${base}/${name}/${id}`;if(!cache.has(path))cache.set(path,await tx.get(path));return cache.get(path);};
+        const write=async(name,id,payload,action,expectedRevision)=>{
+          if(name==='auditLogs')throw Error('Audit records are append-only');
+          const old=await read(name,id);if(expectedRevision!==undefined&&(old?.revision||0)!==expectedRevision){const e=Error('別の端末で更新されています。クラウドの内容を確認してください。');e.code='conflict';throw e;}
+          const clean=JSON.parse(canonical(payload));
+          if(canonical(old?.payload??null)===canonical(clean))return old?.revision||0;
+          if(writes.some(w=>w.name===name&&w.id===id))throw Error('Duplicate transaction target');
+          const revision=(old?.revision||0)+1;writes.push({name,id,payload:clean,old,revision,action:action||(old?'update':'create')});return revision;
+        };
+        const archiveAudit=async(id,legacy)=>{if(who.role!=='admin')throw Error('管理者のみ');if(await read('auditLogs',id))return;legacyAudits.push({id,legacy:JSON.parse(canonical(legacy))});};
+        const result=await planner({read,write,who,archiveAudit});
         if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
-        const next=revision+1,at=driver.timestamp();
-        tx.set(recordPath,{schemaVersion:1,companyId:who.companyId,payload:JSON.parse(serialized),revision:next,createdBy:existing?.createdBy||who.uid,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId});
-        tx.set(operationPath,{actorId:who.uid,collection:name,recordId:id,fingerprint,revision:next,createdAt:at});
-        tx.set(auditPath,{actorId:who.uid,action:'upsert',collection:name,recordId:id,operationId,revision:next,createdAt:at});
-        return {revision:next,replayed:false};
+        if(writes.length>30)throw Error('Transaction too large');
+        if(!writes.length&&!legacyAudits.length)return result;
+        const at=driver.timestamp();
+        for(let i=0;i<writes.length;i++){
+          const w=writes[i],auditId=operationId+'_'+i;
+          tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
+          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId});
+        }
+        for(const a of legacyAudits)tx.set(`${base}/auditLogs/${a.id}`,{userId:who.uid,timestamp:at,entityType:'auditLogs',entityId:a.id,action:'migration',before:null,after:{legacy:a.legacy},operationId});
+        tx.set(opPath,{actorId:who.uid,fingerprint,result:JSON.parse(canonical(result)),createdAt:at});
+        return result;
       });
-      if(who.generation!==generation)throw Error('ログイン状態が変更されました。操作履歴を確認してください。');
-      return result;
+      if(who.generation!==generation)throw Error('ログイン状態が変更されました。');return result;
     }
-    return {start,signIn,signOut,listen,put,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
+    async function put(name,id,payload,{operationId,expectedRevision=0}={}){
+      if(identity().role!=='admin'||name==='auditLogs')throw Error('この操作は許可されていません。');
+      return transact(operationId,{name,id,payload,expectedRevision},async({read,write})=>{
+        const old=await read(name,id);const revision=await write(name,id,payload,undefined,expectedRevision);return {revision,replayed:!!old&&canonical(old.payload)===canonical(payload)};
+      });
+    }
+    return {start,signIn,signOut,listen,put,transact,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
   }
   return {COLLECTIONS,STAFF_READ,LOCAL_KEYS,validateConfig,readLegacy,backupLegacy,canonical,createClient};
 });
