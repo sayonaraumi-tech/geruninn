@@ -38,6 +38,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
    const event=(id,summary,date='2026-09-10')=>({id,iCalUID:'same-recurring-uid',summary,start:{date},end:{date:'2026-09-11'}});
    return route.fulfill({json:u.searchParams.has('pageToken')?{items:[event('event2','小野田、genovia浅草1002、68.8米')]}:{items:[event('event1',eventTitle),event('off','Off'),event('holiday','敬老の日'),event('desc','現場作業'),{...event('cancelled','取消'),status:'cancelled'}],nextPageToken:'events-next'}});
   });
+  await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false,companyId:'tsukinowa',firebase:{}}}));
   await page.goto(base);await page.waitForTimeout(200);
   assert.equal(await page.evaluate(()=>localStorage.getItem('tsukinowa_unrelated_preserved')),'yes');
   assert.equal(await page.evaluate(()=>loadConfirmedHistory()[0].customerName),'既存顧客');

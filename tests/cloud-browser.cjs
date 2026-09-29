@@ -9,6 +9,7 @@ const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'}),page=await context.newPage(),errors=[];let sdkCalls=0;
   page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>{sdkCalls++;return r.fulfill({body:''});});
   await page.addInitScript(()=>{localStorage.setItem('tsukinowa_business_v1',JSON.stringify({sales:[{id:'old',amount:100}],payments:[],expenses:[],bank:[],calendar:[],audit:[],estimates:[],projects:[]}));});
+  await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false,companyId:'tsukinowa',firebase:{}}}));
   await page.goto(base);await page.locator('#cloudStatus').filter({hasText:'クラウド未設定'}).waitFor({state:'attached'});
   const backup=await page.evaluate(()=>localStorage.getItem('tsukinowa_business_v1'));
   await page.locator('#bizCloudAccountButton').click();assert(await page.locator('#cloudDialog').isVisible());assert(await page.locator('#cloudLogin').isDisabled());

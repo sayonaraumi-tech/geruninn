@@ -1,12 +1,12 @@
 {
-  "enabled": false,
+  "enabled": true,
   "companyId": "tsukinowa",
   "firebase": {
-    "apiKey": "",
-    "authDomain": "",
-    "projectId": "",
-    "storageBucket": "",
-    "messagingSenderId": "",
-    "appId": ""
+    "apiKey": "AIzaSyBggL4F0T2BOF7dfmscBdTLJpp7G3vtSrI",
+    "authDomain": "tsukinowa-business.firebaseapp.com",
+    "projectId": "tsukinowa-business",
+    "storageBucket": "tsukinowa-business.firebasestorage.app",
+    "messagingSenderId": "383946564949",
+    "appId": "1:383946564949:web:3f32f702521d3054803bdc"
   }
 }
