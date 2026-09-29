@@ -1,6 +1,6 @@
-(function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaBusiness=api;})(globalThis,function(core){
+(function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./accounting.js'):root.TsukinowaAccounting,typeof module==='object'&&module.exports?require('./accounting-domain.js'):root.TsukinowaAccountingDomain);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaBusiness=api;})(globalThis,function(core,A,AD){
 'use strict';
-const COLLECTIONS=['estimates','projects','documents','sales','payments','calendarLinks','auditLogs'];
+const COLLECTIONS=['estimates','projects','documents','sales','payments','calendarLinks','auditLogs',...A.COLLECTIONS];
 const clone=x=>JSON.parse(JSON.stringify(x));
 function cleanSnapshot(s){const out=clone(s);for(const k of ['savedAt','scrollY','cloudRevision','historyId','version','_cloudIdentity'])delete out[k];return out;}
 function total(s){if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0,nonTax=0;(s.items||[]).forEach(i=>{const a=(Number(i.qty)||0)*(Number(i.price)||0);subtotal+=a;if(s.docType==='onoda'&&i.taxable===false)nonTax+=a;});if(s.docType!=='onoda')subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+(subtotal-nonTax)*.1);}
@@ -8,7 +8,9 @@ function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'�
 function createService(client){
  const stable=async(prefix,value)=>prefix+'_'+(await client.digest(String(value))).slice(0,48);
  const eventId=event=>stable('cal',event.googleEventId||event.id);
- async function execute(cmd){return client.transact(cmd.operationId,cmd,async({read,write,who,archiveAudit})=>{
+ async function execute(cmd){return client.transact(cmd.operationId,cmd,async({read,write:rawWrite,who,archiveAudit})=>{
+  const write=async(name,id,payload,action,expectedRevision)=>{const revision=await rawWrite(name,id,payload,action,expectedRevision);await AD.mirrorCash(name,id,payload,read,rawWrite);return revision;};
+  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable});
   const refs={};
   if(cmd.type==='calendar'){
     const e=clone(cmd.event),id=await eventId(e),row=await read('calendarLinks',id),old=row?.payload||{};
@@ -42,7 +44,7 @@ function createService(client){
       if(!s.saleId)throw Error('領収書の対象請求書を選択してください。顧客名だけでは自動照合しません。');
       sale=await read('sales',s.saleId);if(!sale)throw Error('対象請求書が見つかりません。');
       if(amount<=0||!s.paymentDate)throw Error('入金額と入金日を確認してください。');
-      payment=await read('payments','pay_'+id);if(payment?.payload.confirmation==='bank-confirmed'&&(payment.payload.amount!==amount||payment.payload.saleId!==s.saleId||payment.payload.paymentDate!==s.paymentDate))throw Error('銀行確認済の入金額・対象・日付は領収書から変更できません。');
+      payment=await read('payments','pay_'+id);if(payment?.payload.deletedAt)throw Error('取消済み入金に関連する領収書です。管理者に確認してください。');if(payment?.payload.confirmation==='bank-confirmed'&&(payment.payload.amount!==amount||payment.payload.saleId!==s.saleId||payment.payload.paymentDate!==s.paymentDate))throw Error('銀行確認済の入金額・対象・日付は領収書から変更できません。');
     }
     const revision=await write('documents',id,document,undefined,cmd.expectedRevision);
     if(s.docType==='estimate'){

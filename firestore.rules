@@ -4,23 +4,32 @@ service cloud.firestore {
   function member(c) { return request.auth != null && request.auth.token.companyId == c && request.auth.token.role in ['admin','staff']; }
   function admin(c) { return member(c) && request.auth.token.role == 'admin'; }
   function core(n) { return n in ['calendarLinks','estimates','projects','documents','sales','payments']; }
-  function business(n) { return core(n) || n in ['expenses','suppliers','cashLedger','settings','bankTransactions','migrations']; }
+  function business(n) { return core(n) || n in ['expenses','suppliers','cashLedger','settings','bankTransactions','supplierTransactions','migrations']; }
   function before(c,n,id) { return exists(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)) ? get(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)).data.payload : null; }
   function valid(c,n,id) {
    let d=request.resource.data;
    let op=getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(d.lastOperationId)).data;
    let a=getAfter(/databases/$(database)/documents/companies/$(c)/auditLogs/$(d.lastAuditId)).data;
-   return d.keys().hasOnly(['schemaVersion','companyId','payload','revision','createdBy','updatedBy','updatedAt','lastOperationId','lastAuditId'])
+   return d.keys().hasOnly(['schemaVersion','companyId','payload','revision','createdBy','updatedBy','updatedAt','createdAt','lastOperationId','lastAuditId'])
     && d.schemaVersion==2 && d.companyId==c && d.payload is map && d.revision is int && d.revision>0
+    && d.createdAt is timestamp
     && d.updatedBy==request.auth.uid && d.updatedAt==request.time
     && (n!='documents' || (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id)) || (d.payload.documentId==resource.data.payload.documentId && d.payload.docType==resource.data.payload.docType)))
     && op.actorId==request.auth.uid && op.createdAt==request.time
     && a.userId==request.auth.uid && a.timestamp==request.time && a.entityType==n && a.entityId==id
     && a.operationId==d.lastOperationId && a.after==d.payload && a.before==before(c,n,id);
   }
+  function cashMirror(c,id,p) {
+   let payment=getAfter(/databases/$(database)/documents/companies/$(c)/payments/$(p.linkedPaymentId)).data.payload;
+   return p.linkedPaymentId!='' && id=='cash_'+p.linkedPaymentId && p.cashTxnId==id
+    && p.linkedExpenseId=='' && p.linkedSupplierTransactionId==''
+    && ((p.deletedAt==null && payment.confirmation=='cash-received' && payment.get('deletedAt',null)==null && p.amount==payment.amount && p.date==payment.paymentDate && p.type=='income')
+      || (p.deletedAt is string && (payment.confirmation!='cash-received' || payment.get('deletedAt',null)!=null)));
+  }
   function staffWrite(c,n,id) {
    let p=request.resource.data.payload;
-   return n in ['calendarLinks','estimates','projects']
+   return (n=='cashLedger' && cashMirror(c,id,p))
+    || n in ['calendarLinks','estimates','projects']
     || (n=='documents' && p.documentId==id && p.confirmed==true && p.docType in ['invoice','onoda','estimate','receipt'] && p.snapshot.documentId==id && p.snapshot.docType==p.docType)
     || (n=='sales' && id=='sale_'+p.documentId
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.docType in ['invoice','onoda']
@@ -35,9 +44,12 @@ service cloud.firestore {
   }
   match /companies/{c}/{n}/{id} {
    allow read: if business(n) && (admin(c) || (member(c) && (core(n) || (n=='settings' && id=='system'))));
-   allow create: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && valid(c,n,id) && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid;
-   allow update: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && valid(c,n,id) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy;
+   allow create: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && valid(c,n,id) && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+   allow update: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && valid(c,n,id) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy && (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt==resource.data.createdAt);
    allow delete: if false;
+  }
+  match /companies/{c}/cashLedger/{id} {
+   allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
   }
   match /companies/{c}/operations/{id} {
    allow read: if member(c);
@@ -45,7 +57,7 @@ service cloud.firestore {
    allow update,delete: if false;
   }
   match /companies/{c}/auditLogs/{id} {
-   allow read: if member(c);
+   allow read: if admin(c);
    allow create: if member(c)
     && request.resource.data.keys().hasOnly(['userId','timestamp','entityType','entityId','action','before','after','operationId'])
     && request.resource.data.userId==request.auth.uid && request.resource.data.timestamp==request.time
@@ -53,7 +65,7 @@ service cloud.firestore {
       && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.actorId==request.auth.uid
       && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.createdAt==request.time)
     || (business(request.resource.data.entityType)
-    && request.resource.data.action in ['create','update','status change','payment','migration']
+    && request.resource.data.action in ['create','update','status change','payment','migration','expense create','expense update','expense delete','cash transaction','supplier transaction','bank csv import','bank match confirm','payment confirm','adjustment']
     && (request.resource.data.action!='migration'||admin(c))
     && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.lastAuditId==id
     && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.updatedAt==request.time

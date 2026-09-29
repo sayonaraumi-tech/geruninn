@@ -5,8 +5,8 @@
   else root.TsukinowaCloudCore=api;
 })(typeof globalThis==='object'?globalThis:this,function(){
   'use strict';
-  const COLLECTIONS=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','expenses','suppliers','cashLedger','auditLogs','settings','bankTransactions','migrations']);
-  const STAFF_READ=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','auditLogs']);
+  const COLLECTIONS=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','expenses','suppliers','cashLedger','auditLogs','settings','bankTransactions','supplierTransactions','migrations']);
+  const STAFF_READ=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments']);
   const LOCAL_KEYS=Object.freeze({business:'tsukinowa_business_v1',documents:'tsukinowa_chohyo_confirmed_history_v1',settings:'tsukinowa_business_settings_v1'});
   function segment(value){if(typeof value!=='string'||!value||value.length>200||/[\/\x00-\x1f]/.test(value)||value==='.'||value==='..')throw Error('Invalid record ID');return value;}
   function validateConfig(config){
@@ -104,7 +104,7 @@
         const at=driver.timestamp();
         for(let i=0;i<writes.length;i++){
           const w=writes[i],auditId=operationId+'_'+i;
-          tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
+          tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,createdAt:w.old?.createdAt||w.old?.updatedAt||at,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
           tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId});
         }
         for(const a of legacyAudits)tx.set(`${base}/auditLogs/${a.id}`,{userId:who.uid,timestamp:at,entityType:'auditLogs',entityId:a.id,action:'migration',before:null,after:{legacy:a.legacy},operationId});

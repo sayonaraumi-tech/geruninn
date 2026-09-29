@@ -24,8 +24,8 @@ const snapshot=(id,type='invoice')=>({documentId:id,docType:type,customerName:'�
 const exec=(service,cmd)=>service.execute({operationId:crypto.randomUUID(),...cmd});
 test('unauthenticated, cross-company and out-of-scope staff reads denied',async()=>{
  await assertFails(getDoc(ref(env.unauthenticatedContext().firestore(),'documents')));await assertFails(getDoc(ref(db('admin','other'),'documents')));
- for(const n of ['documents','estimates','projects','sales','payments','calendarLinks','auditLogs'])await assertSucceeds(getDocs(collection(db('staff'),`companies/${company}/${n}`)));
- for(const n of ['expenses','suppliers','cashLedger','settings','migrations'])await assertFails(getDocs(collection(db('staff'),`companies/${company}/${n}`)));
+ for(const n of ['documents','estimates','projects','sales','payments','calendarLinks'])await assertSucceeds(getDocs(collection(db('staff'),`companies/${company}/${n}`)));
+ for(const n of ['expenses','suppliers','cashLedger','settings','migrations','auditLogs','supplierTransactions'])await assertFails(getDocs(collection(db('staff'),`companies/${company}/${n}`)));
 });
 test('unaudited writes and self-promotion denied',async()=>{await assertFails(setDoc(ref(db('admin'),'sales'),{payload:{amount:1}}));await assertFails(setDoc(doc(db('staff'),'users/uid-staff'),{role:'admin'}));});
 test('two devices: estimate/acceptance, invoice/download idempotency, partial payments, Calendar protection, offline recovery',async()=>{
@@ -63,4 +63,47 @@ test('receipt only records payment; bank confirmation preserves invoice and cann
  await exec(a,{type:'confirmBank',bankId:'bank1',saleId:'sale_inv',amount:20000,paymentDate:'2026-09-22',pendingPaymentId:'pay_receipt'});await exec(a,{type:'confirmBank',bankId:'bank1',saleId:'sale_inv',amount:20000,paymentDate:'2026-09-22',pendingPaymentId:'pay_receipt'});
  const pays=await getDocs(collection(db('admin'),`companies/${company}/payments`));assert.equal(pays.docs.reduce((n,d)=>n+d.data().payload.amount,0),20000);assert.equal((await getDoc(ref(db('admin'),'payments','pay_receipt'))).data().payload.confirmation,'bank-confirmed');
  await assert.rejects(exec(s,{type:'saveDocument',snapshot:{...receipt,receiptTotal:30000},expectedRevision:1}));admin.dispose();staff.dispose();
+});
+const A=require('../js/accounting.js');
+async function records(name){return (await getDocs(collection(db('admin'),`companies/${company}/${name}`))).docs.map(d=>({...d.data().payload,id:d.id,createdAt:d.data().createdAt,createdBy:d.data().createdBy,updatedAt:d.data().updatedAt,updatedBy:d.data().updatedBy}));}
+test('cash collection and expense are atomic, idempotent and auditable; soft deletion recomputes cash',async()=>{
+ const staff=await clientFor('staff'),admin=await clientFor('admin'),s=createService(staff),a=createService(admin);await exec(a,{type:'saveDocument',snapshot:snapshot('cash-invoice'),expectedRevision:0});
+ const c={type:'payment',operationId:'cash-once',paymentId:'cash-payment',saleId:'sale_cash-invoice',amount:20000,paymentDate:'2026-10-02',method:'現金'};await s.execute(c);await s.execute(c);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);assert.equal(A.receivables(await records('sales'),await records('payments'),'2026-10-31')[0].outstanding,80000);
+ await exec(a,{type:'saveExpense',expenseId:'e1',expense:{expenseDate:'2026-10-03',category:'交通費',amount:3000,paymentMethod:'現金',vendor:'現場',description:'交通'},expectedRevision:0});let cash=A.cashRows(await records('cashLedger'));assert.equal(cash.at(-1).runningBalance,17000);assert(cash.every(c=>c.createdAt&&c.createdBy));
+ await exec(a,{type:'saveExpense',expenseId:'e1',expense:{expenseDate:'2026-10-03',category:'交通費',amount:4000,paymentMethod:'現金'},expectedRevision:1});assert.equal(A.cashRows(await records('cashLedger')).at(-1).runningBalance,16000);
+ await exec(a,{type:'deleteExpense',expenseId:'e1',expectedRevision:2,reason:'取消テスト'});assert((await records('expenses'))[0].deletedAt);assert.equal(A.cashRows(await records('cashLedger')).at(-1).runningBalance,20000);
+ await assertFails(deleteDoc(ref(db('staff'),'cashLedger','cash_cash-payment')));await assertFails(getDocs(collection(db('staff'),`companies/${company}/cashLedger`)));
+ await assert.rejects(exec(s,{type:'saveExpense',expenseId:'forbidden',expense:{},expectedRevision:0}),/管理者/);
+ const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));for(const action of ['cash transaction','expense create','expense update','expense delete'])assert(audits.docs.some(d=>d.data().action===action));admin.dispose();staff.dispose();
+});
+test('bank CSV twice, bank 50,000 + cash 20,000 leaves 30,000; pending payment is confirmed once and can be reversed',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);await exec(a,{type:'saveDocument',snapshot:snapshot('bank-invoice'),expectedRevision:0});
+ const csv='日付,摘要,入金,出金,取引ID\r\n2026/10/05,"共有テスト, 振込","50,000",,txn-one\r\n',parsed=await A.parseBank(csv,'GMO',admin.digest);for(let n=0;n<2;n++)for(const bank of parsed)await exec(a,{type:'importBank',bank});assert.equal((await records('bankTransactions')).length,1);
+ await exec(a,{type:'payment',paymentId:'pending50',saleId:'sale_bank-invoice',amount:50000,paymentDate:'2026-10-04',method:'銀行振込'});
+ const b=parsed[0];assert(A.suggestions(b,{sales:await records('sales'),payments:await records('payments')}).some(x=>x.paymentId==='pending50'));
+ const match={type:'bankMatch',bankTxnId:b.bankTxnId,targetType:'sale',targetId:'sale_bank-invoice',paymentId:'pending50',expectedRevision:1};await exec(a,match);await exec(a,match);assert.equal((await records('payments')).length,1);assert.equal((await records('payments'))[0].paymentDate,'2026-10-05');
+ await exec(s,{type:'payment',paymentId:'cash20',saleId:'sale_bank-invoice',amount:20000,paymentDate:'2026-10-07',method:'現金'});assert.equal(A.receivables(await records('sales'),await records('payments'),'2026-10-31')[0].outstanding,30000);
+ const m=A.monthly({sales:await records('sales'),payments:await records('payments'),cashLedger:await records('cashLedger')},'2026-10');assert.equal(m.bankIncome,50000);assert.equal(m.cashIncome,20000);assert.equal(m.receivables,30000);assert.equal(m.sales,0);assert.equal(A.monthly({sales:await records('sales'),payments:await records('payments')},'2026-09').sales,100000);
+ await assert.rejects(exec(s,{...match}),/管理者/);await assertFails(getDocs(collection(db('staff'),`companies/${company}/bankTransactions`)));
+ await exec(a,{type:'bankUnmatch',bankTxnId:b.bankTxnId,reason:'確認し直し',expectedRevision:2});assert.equal((await records('payments')).find(p=>p.id==='pending50').confirmation,'pending-bank');assert.equal(A.receivables(await records('sales'),await records('payments'),'2026-10-31')[0].outstanding,80000);
+ await exec(a,{...match,expectedRevision:3});assert.equal((await records('payments')).length,2);admin.dispose();staff.dispose();
+});
+test('supplier prepayments 1m + 1m minus 1,438,620; material expense once, category/month summaries and staff restrictions',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);await exec(a,{type:'saveSupplier',supplierId:'supplier1',supplier:{supplierName:'材料商',openingDate:'2026-10-01',openingBalance:0},expectedRevision:0});
+ for(const [id,date,type,amount] of [['pre1','2026-10-05','prepayment',1000000],['pre2','2026-10-20','prepayment',1000000],['bill','2026-10-31','monthlyInvoice',1438620]])await exec(a,{type:'supplierTransaction',transactionId:id,transaction:{supplierId:'supplier1',date,type,amount,description:'月結材料',invoiceMonth:'2026-10',paymentMethod:'銀行振込'},expectedRevision:0});
+ let suppliers=await records('suppliers'),ts=await records('supplierTransactions');assert.equal(suppliers[0].currentBalance,561380);assert.equal(A.supplierBalance(suppliers[0],ts),561380);assert.equal((await records('expenses')).length,1);
+ await exec(a,{type:'saveExpense',expenseId:'rent',expense:{expenseDate:'2026-10-01',category:'家賃',amount:100000,paymentMethod:'銀行振込'},expectedRevision:0});await exec(a,{type:'saveExpense',expenseId:'nextmonth',expense:{expenseDate:'2026-11-01',category:'通信費',amount:5000,paymentMethod:'銀行振込'},expectedRevision:0});
+ const m=A.monthly({suppliers,supplierTransactions:ts,expenses:await records('expenses')},'2026-10');assert.equal(m.supplierPrepayment,2000000);assert.equal(m.supplierInvoice,1438620);assert.equal(m.categories['材料費'],1438620);assert.equal(m.categories['家賃'],100000);assert.equal(m.categories['通信費'],0);assert.equal(m.expenseTotal,1538620);assert.equal(m.cashFlowDifference,-1538620);
+ await assert.rejects(exec(s,{type:'saveSupplier',supplierId:'supplier1',supplier:{supplierName:'改ざん',openingDate:'2026-10-01',openingBalance:999},expectedRevision:4}),/管理者/);await assertFails(getDocs(collection(db('staff'),`companies/${company}/suppliers`)));
+ await exec(a,{type:'deleteSupplierTransaction',transactionId:ts.find(t=>t.type==='monthlyInvoice').id,expectedRevision:1,reason:'訂正'});suppliers=await records('suppliers');assert.equal(suppliers[0].currentBalance,2000000);assert.equal((await records('expenses')).filter(A.live).length,2);admin.dispose();staff.dispose();
+});
+test('CSV validation, duplicate equal rows, same account identity and Excel export BOM',async()=>{
+ const digest=async s=>crypto.createHash('sha256').update(s).digest('hex'),text='日付,摘要,入金,出金\n2026/10/01,"A\nB",1000,\n2026/10/01,"A\nB",1000,\n';const first=await A.parseBank(text,'銀行',digest),second=await A.parseBank(text,'銀行',digest);assert.equal(first.length,2);assert.notEqual(first[0].bankTxnId,first[1].bankTxnId);assert.deepEqual(first,second);await assert.rejects(A.parseBank('日付,摘要,入金,出金\n2026/02/30,X,1,','銀行',digest));await assert.rejects(A.parseBank('日付,摘要,入金,出金\n2026/10/01,X,no,','銀行',digest));const out=A.csv([['日本語','=1+1','1,000']]);assert.equal(Buffer.from(out).subarray(0,3).toString('hex'),'efbbbf');assert(out.includes("'=1+1"));assert(A.csv([[-10]]).includes('"-10"'));assert(!A.csv([[-10]]).includes("'-10"));
+});
+
+test('security rules deny forged audited staff bank/supplier writes and cash rows without matching payment',async()=>{
+ const staff=await clientFor('staff');
+ for(const name of ['bankTransactions','suppliers','supplierTransactions','expenses'])await assert.rejects(staff.transact('forged-'+name,{name},async({write})=>{await write(name,'forged',{amount:1},'create',0);return {id:'forged'};}));
+ await assert.rejects(staff.transact('forged-cash',{name:'cashLedger'},async({write})=>{await write('cashLedger','cash_unknown',{cashTxnId:'cash_unknown',linkedPaymentId:'unknown',linkedExpenseId:'',linkedSupplierTransactionId:'',amount:999,date:'2026-10-01',type:'income',deletedAt:null},'cash transaction',0);return {id:'cash_unknown'};}));
+ for(const n of ['bankTransactions','suppliers','cashLedger'])assert.equal((await records(n)).length,0);staff.dispose();
 });

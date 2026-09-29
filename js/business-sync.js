@@ -1,13 +1,13 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./business-domain.js'):root.TsukinowaBusiness);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaSync=api;})(globalThis,function(core,domain){
 'use strict';
 function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},online=()=>true}){
- const who=client.getState(),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
+ const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
  let stopped=false,running=null,error=null;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
- queue=load(queueKey,[]);for(const name of domain.COLLECTIONS)rows[name]=load(prefix+name,[]);
- function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<domain.COLLECTIONS.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===domain.COLLECTIONS.length});}
+ queue=load(queueKey,[]);for(const name of collections)rows[name]=load(prefix+name,[]);
+ function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
- function start(){onData(rows);for(const name of domain.COLLECTIONS)stops.push(client.listen(name,null,(value,meta)=>{
+ function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
    if(stopped)return;
    if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
    else if(value.length){rows[name]=value;onData(rows);}

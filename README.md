@@ -36,3 +36,7 @@ See [the code/data review, permission model, setup steps and phased migration pl
 ## Firebase realtime business sync (phase 2)
 
 The existing pages now connect to realtime estimates, projects, documents, sales, payments, Calendar links and audit logs. Stable document IDs, transactional accounting, partial receipts, offline outbox, conflict protection and backup-first migration are implemented. Firebase remains disabled until a project is created and configured. See [activation, data model, migration and test details](docs/FIREBASE-PHASE-2.md). Phase-two behavior supersedes the phase-one rollout notes when shared mode is enabled.
+
+## Accounting and reconciliation (phase 3)
+
+Shared expenses, derived cash ledger, supplier monthly settlement, bank CSV reconciliation, receivables, monthly summaries and UTF-8 BOM exports are implemented. Existing desktop pages are extended; mobile keeps its four core tabs. See [accounting behavior, safe migration, limits and verification](docs/FIREBASE-PHASE-3.md). Deploy the updated Firestore rules before enabling the cloud configuration. Firebase remains disabled until a project is configured.
