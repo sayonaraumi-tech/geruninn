@@ -2,10 +2,11 @@
   "name": "tsukinowa-business-system",
   "private": true,
   "scripts": {
-    "test": "node tests/static-and-sw.cjs && node --test tests/cloud-core.cjs",
+    "test": "node tests/static-and-sw.cjs && node --test tests/cloud-core.cjs tests/set-tsukinowa-claims.cjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node --test tests/firestore-rules.cjs\"",
     "test:browser": "node tests/calendar-sync.cjs && node tests/cloud-browser.cjs",
-    "test:business-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/business-browser.cjs\""
+    "test:business-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/business-browser.cjs\"",
+    "claims:tsukinowa": "node scripts/set-tsukinowa-claims.cjs"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.1",

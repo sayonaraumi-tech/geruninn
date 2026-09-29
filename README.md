@@ -40,3 +40,7 @@ The existing pages now connect to realtime estimates, projects, documents, sales
 ## Accounting and reconciliation (phase 3)
 
 Shared expenses, derived cash ledger, supplier monthly settlement, bank CSV reconciliation, receivables, monthly summaries and UTF-8 BOM exports are implemented. Existing desktop pages are extended; mobile keeps its four core tabs. See [accounting behavior, safe migration, limits and verification](docs/FIREBASE-PHASE-3.md). Deploy the updated Firestore rules before enabling the cloud configuration. Firebase remains disabled until a project is configured.
+
+## Initial user roles
+
+Run the ADC-only [one-time Custom Claims script](docs/FIREBASE-CUSTOM-CLAIMS.md) in Cloud Shell to assign the two designated users to `tsukinowa` as admin/staff and print their verified claims. No service account key is committed or required by the script.
