@@ -120,7 +120,7 @@ root.TsukinowaBusinessUI={
   if((next&&next!==previousIdentity)||(!next&&state.phase!=='authorizing'))clearView();el('cloudMigration').hidden=state.role!=='admin';
   for(const b of document.querySelectorAll('#bizNav button'))b.hidden=state.role==='staff'&&!['calendar','estimates','chohyo','savedDocs'].includes(b.dataset.page);
   if(next)el('bizSyncState').textContent='クラウド共有';
-  if(!next){if(state.phase!=='authorizing')identity='';el('coreSyncStatus').textContent=state.phase==='error'?'同期エラー':'ログイン待ち';return;}
+  if(!next){if(state.phase!=='authorizing')identity='';el('coreSyncStatus').textContent=state.phase==='error'?'同期エラー':['initializing','authorizing'].includes(state.phase)?'ログイン状態確認中':'ログイン待ち';return;}
   try{const local=JSON.parse(localStorage.getItem(`tsukinowa_cloud_local_${state.projectId}_${state.companyId}_${state.user.uid}`)||'{}');bizState.expenses=[];bizState.bank=[];
    sync=root.TsukinowaSync.createSync({client,storage:localStorage,online:()=>navigator.onLine,onData:hydrate,onStatus:status,onCommitted:(cmd,result)=>{
     if(cmd.type==='saveDocument'&&result.documentId===docId){docRevision=result.revision;revisionSource=null;}

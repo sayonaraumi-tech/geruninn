@@ -7,12 +7,14 @@
     return {
       async initialize(config){
         const existing=appSDK.getApps().find(a=>a.name==='tsukinowa-cloud');
-        if(existing&&existing.options.projectId!==config.projectId)throw Error('Firebase設定を変更した場合はページを再読込してください。');
+        if(existing&&['projectId','apiKey','authDomain','appId'].some(key=>existing.options[key]!==config[key]))throw Error('Firebase設定を変更した場合はページを再読込してください。');
         const app=existing||appSDK.initializeApp(config,'tsukinowa-cloud');
         auth=authSDK.getAuth(app);
         // No persistent Firestore cache: switching accounts must not expose another role's cached records.
         db=existing?dbSDK.getFirestore(app):dbSDK.initializeFirestore(app,{localCache:dbSDK.memoryLocalCache()});
-        await authSDK.setPersistence(auth,authSDK.browserSessionPersistence);
+        // Migrate an existing session and persist future logins across Web/PWA restarts.
+        // Do not silently fall back to session/in-memory auth if storage is unavailable.
+        await authSDK.setPersistence(auth,authSDK.browserLocalPersistence);
       },
       observeAuth:(next,error)=>authSDK.onIdTokenChanged(auth,next,error),
       claims:async user=>(await authSDK.getIdTokenResult(user)).claims,

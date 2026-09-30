@@ -9,9 +9,10 @@
     el('cloudError').textContent=state.error||'';
     el('cloudLogin').disabled=!client||!['signed-out','denied','error'].includes(state.phase)||!!state.user;
     el('cloudLogout').hidden=!state.user;
-    el('cloudAuthFields').hidden=!!state.user;
+    const restoring=['initializing','authorizing'].includes(state.phase);
+    el('cloudAuthFields').hidden=!!state.user||restoring;
     el('cloudConfigRetry').hidden=state.phase!=='error';
-    el('bizUserLabel').textContent=state.role?(state.role==='admin'?'管理者':'スタッフ'):'未ログイン';
+    el('bizUserLabel').textContent=state.role?(state.role==='admin'?'管理者':'スタッフ'):restoring?'ログイン状態確認中':'未ログイン';
     el('cloudRealtime').textContent='';
     root.TsukinowaBusinessUI?.auth(state,client);
   }
