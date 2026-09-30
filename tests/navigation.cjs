@@ -33,6 +33,8 @@ async function checkPage(page,route){
    await page.locator('#cloudEmail').fill(role+'@example.com');await page.locator('#cloudPassword').fill('test');await page.locator('#cloudLogin').click();
    await page.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});
    await page.locator('#cloudDialog').press('Escape');
+   if(role==='admin'&&width===1440){await page.locator('#bizNav [data-page="monthly"]').click();await page.locator('[data-year-tab="1"]').click();assert(await page.locator('#annualRows').isVisible());await page.locator('[data-year-tab="3"]').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.locator('[data-year-tab="0"]').click();}
+   if(role==='staff'){assert.equal(await page.locator('#cloudExport').isVisible(),false);for(const fn of ['exportBackup','yearEndExport','importBackup']){const dialog=page.waitForEvent('dialog');const attempt=page.evaluate(fn=>window[fn]('年間集計.csv'),fn);const denied=await dialog;assert(denied.message().includes('管理者'));await denied.dismiss();await attempt;}}
    const allowed=width===390||role==='staff'?mobileRoutes:Object.keys(routes);
    const before=await page.evaluate(()=>JSON.stringify({business:bizState,history:loadConfirmedHistory()}));
    for(const route of allowed){
