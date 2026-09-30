@@ -1,4 +1,4 @@
-const CACHE='tsukinowa-pwa-monthly-calendar-20260930-1';
+const CACHE='tsukinowa-pwa-navigation-20260930-1';
 const APP_SHELL=['./index.html','./manifest.webmanifest','./js/cloud-core.js','./js/firebase-driver.js','./js/cloud-ui.js','./js/business-domain.js','./js/business-sync.js','./js/business-ui.js','./js/accounting.js','./js/accounting-domain.js','./js/accounting-ui.js','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);

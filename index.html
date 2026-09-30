@@ -3519,22 +3519,12 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
     const badge=document.getElementById('pwaOfflineBadge');
     const updateNet=()=>{ if(!badge)return; badge.classList.toggle('show',!navigator.onLine); };
     window.addEventListener('online',updateNet); window.addEventListener('offline',updateNet); updateNet();
-    const page=new URLSearchParams(location.search).get('page');
-    if(page && typeof bizSwitchPage==='function') setTimeout(()=>bizSwitchPage(page),200);
     setTimeout(()=>{if(typeof bizOpenDeepLinkedEvent==='function')bizOpenDeepLinkedEvent();},350);
   });
 })();
 </script>
 
 
-<script>
-// PWA v2: mobile starts at Schedule; desktop keeps full back office home.
-window.addEventListener('load',()=>{
-  if(window.matchMedia('(max-width: 800px)').matches){
-    setTimeout(()=>bizSwitchPage('calendar'),80);
-  }
-});
-</script>
 <script src="./js/cloud-core.js"></script>
 <script src="./js/firebase-driver.js"></script>
 <script src="./js/accounting.js"></script>
@@ -3544,5 +3534,14 @@ window.addEventListener('load',()=>{
 <script src="./js/business-ui.js"></script>
 <script src="./js/accounting-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
+<script>
+// Choose the initial page once, after all navigation extensions are initialized.
+// Late third-party loads must never overwrite a user's navigation or a deep link.
+document.addEventListener('DOMContentLoaded',()=>{
+  const page=new URLSearchParams(location.search).get('page');
+  if(page)bizSwitchPage(page);
+  else if(window.matchMedia('(max-width: 800px)').matches)bizSwitchPage('calendar');
+});
+</script>
 </body>
 </html>
