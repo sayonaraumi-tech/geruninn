@@ -2142,7 +2142,7 @@ function recalc() {
   document.getElementById('dTotalHero').textContent  = fmtNum(total);
 
   const iso = document.getElementById('invoiceDate').value;
-  document.getElementById('dCustomer').textContent = document.getElementById('customerName').value || '';
+  document.getElementById('dCustomer').textContent = [document.getElementById('customerCompany')?.value,document.getElementById('customerName').value,document.getElementById('customerAddress')?.value].filter(Boolean).join(' ／ ');
   document.getElementById('dNo').textContent       = document.getElementById('invoiceNo').value || '';
   document.getElementById('dDate').textContent     = fmtDateJP(iso);
   updateRegNo();

@@ -15,6 +15,7 @@ async function clientFor(role){
  const store=db(role);let callback;
  const client=createClient({initialize:async()=>{},observeAuth:f=>{callback=f;return()=>{}},claims:async u=>u.claims,
   listen:(path,many,next,error)=>onSnapshot(many?collection(store,path):doc(store,path),{includeMetadataChanges:true},s=>next(many?s.docs.map(d=>({id:d.id,...d.data()})):s.exists()?{id:s.id,...s.data()}:null,{fromCache:s.metadata.fromCache}),error),
+  list:async path=>(await getDocs(collection(store,path))).docs.map(d=>({id:d.id,...d.data()})),
   digest:async s=>crypto.createHash('sha256').update(s).digest('hex'),timestamp:serverTimestamp,
   transaction:fn=>runTransaction(store,tx=>fn({get:async p=>{const s=await tx.get(doc(store,p));return s.exists()?s.data():null},set:(p,v)=>tx.set(doc(store,p),v)}))});
  await client.start({enabled:true,companyId:company,firebase:{apiKey:'x',authDomain:'x',projectId:'demo-tsukinowa',appId:'x'}});await callback({uid:'uid-'+role,claims:{role,companyId:company}});return client;
@@ -106,4 +107,78 @@ test('security rules deny forged audited staff bank/supplier writes and cash row
  for(const name of ['bankTransactions','suppliers','supplierTransactions','expenses'])await assert.rejects(staff.transact('forged-'+name,{name},async({write})=>{await write(name,'forged',{amount:1},'create',0);return {id:'forged'};}));
  await assert.rejects(staff.transact('forged-cash',{name:'cashLedger'},async({write})=>{await write('cashLedger','cash_unknown',{cashTxnId:'cash_unknown',linkedPaymentId:'unknown',linkedExpenseId:'',linkedSupplierTransactionId:'',amount:999,date:'2026-10-01',type:'income',deletedAt:null},'cash transaction',0);return {id:'cash_unknown'};}));
  for(const n of ['bankTransactions','suppliers','cashLedger'])assert.equal((await records(n)).length,0);staff.dispose();
+});
+
+test('formal revisions transfer a stable sale, preserve paid amounts and immutable snapshots; two devices see status',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),phone=createSync({client:staff,storage:storage()});phone.start();
+ try{
+ const inv=snapshot('person');await exec(a,{type:'saveDocument',snapshot:inv,expectedRevision:0});
+ await exec(a,{type:'payment',paymentId:'partial',saleId:'sale_person',amount:20000,paymentDate:'2026-09-22',method:'現金'});
+ await assert.rejects(exec(a,{type:'documentStatus',documentId:'person',status:'void',reason:'mistake',expectedRevision:1}),/確認済み入金/);
+ await exec(a,{type:'saveDocument',snapshot:{...inv,documentId:'company',customerName:'法人担当',customerCompany:'会社',customerAddress:'東京'},expectedRevision:0,revisedFromDocumentId:'person',expectedParentRevision:1,reason:'法人名義に訂正'});
+ const docs=await records('documents'),sales=await records('sales'),ps=await records('payments');
+ assert.equal(docs.find(x=>x.id==='person').status,'revised');assert.deepEqual(docs.find(x=>x.id==='person').snapshot,inv);assert.equal(docs.find(x=>x.id==='company').status,'active');assert.equal(sales.length,1);assert.equal(sales[0].id,'sale_person');assert.equal(sales[0].documentId,'company');assert.equal(ps[0].saleId,'sale_person');assert.equal(A.receivables(sales,ps,'2026-09-30')[0].outstanding,80000);assert.equal(A.monthly({sales,payments:ps},'2026-09').sales,100000);
+ await until(()=>phone.getRows().documents.some(r=>r.id==='person'&&r.payload.status==='revised'));
+ await assert.rejects(exec(a,{type:'saveDocument',snapshot:{...inv,customerName:'overwrite'},expectedRevision:2}),/上書き/);
+ const current=docs.find(x=>x.id==='company').snapshot;
+ await exec(a,{type:'saveDocument',snapshot:{...current,documentId:'amount',items:[{content:'施工',qty:1,price:100000}]},expectedRevision:0,revisedFromDocumentId:'company',expectedParentRevision:1,reason:'金額訂正'});
+ assert.equal((await records('sales')).length,1);assert.equal((await records('sales'))[0].amount,110000);
+ await assert.rejects(exec(a,{type:'saveDocument',snapshot:{...current,documentId:'too-low',items:[]},expectedRevision:0,revisedFromDocumentId:'amount',expectedParentRevision:1,reason:'減額'}),/下回/);
+ const logs=await getDocs(collection(db('admin'),'companies/tsukinowa/auditLogs'));const log=logs.docs.map(x=>x.data()).find(x=>x.documentId==='person'&&x.newStatus==='revised');assert.equal(log.oldStatus,'active');assert.equal(log.reason,'法人名義に訂正');assert(log.before.snapshot&&log.after.snapshot);
+ }finally{phone.stop();admin.dispose();staff.dispose();}
+});
+test('duplicates/voids excluded from monthly, receivables, bank matching; reasons, targets and payments guarded',async()=>{
+ const admin=await clientFor('admin'),a=createService(admin);
+ try{
+ for(const id of ['first','duplicate','void','cancel'])await exec(a,{type:'saveDocument',snapshot:snapshot(id),expectedRevision:0});
+ await assert.rejects(exec(a,{type:'documentStatus',documentId:'void',status:'void',reason:'',expectedRevision:1}),/理由/);
+ await assert.rejects(exec(a,{type:'documentStatus',documentId:'duplicate',status:'duplicate',reason:'重複',duplicateOfDocumentId:'duplicate',expectedRevision:1}),/有効/);
+ for(const [id,status] of [['duplicate','duplicate'],['void','void'],['cancel','cancelled']])await exec(a,{type:'documentStatus',documentId:id,status,reason:'誤発行',duplicateOfDocumentId:'first',expectedRevision:1});
+ const sales=await records('sales');assert.equal(A.monthly({sales},'2026-09').sales,100000);assert.equal(A.receivables(sales,[],'2026-09-30').length,1);
+ const b={bankTxnId:'life-bank',bankTransactionDate:'2026-09-20',incoming:100000,outgoing:0,amount:100000,description:'共有テスト',bankAccount:'銀行'};
+ assert.deepEqual([...new Set(A.suggestions(b,{sales,payments:[]}).map(x=>x.id))],['sale_first']);
+ await exec(a,{type:'importBank',bank:b});await assert.rejects(exec(a,{type:'bankMatch',bankTxnId:b.bankTxnId,targetType:'sale',targetId:'sale_duplicate'}),/請求書/);
+ await assert.rejects(exec(a,{type:'payment',saleId:'sale_void',paymentId:'no',amount:1,paymentDate:'2026-09-20',method:'現金'}),/有効/);
+ assert.equal((await records('documents')).length,4);
+ }finally{admin.dispose();}
+});
+test('staff cannot manage formal documents, forge lifecycle or overwrite snapshots; admin cannot physically delete',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ try{
+ await exec(a,{type:'saveDocument',snapshot:snapshot('protected'),expectedRevision:0});
+ for(const status of ['void','duplicate','cancelled'])await assert.rejects(exec(s,{type:'documentStatus',documentId:'protected',status,reason:'no',duplicateOfDocumentId:'other',expectedRevision:1}),/管理者/);
+ await assert.rejects(exec(s,{type:'saveDocument',snapshot:snapshot('forged'),expectedRevision:0,revisedFromDocumentId:'protected',expectedParentRevision:1,reason:'no'}),/管理者/);
+ const original=(await getDoc(ref(db('admin'),'documents','protected'))).data().payload;
+ for(const payload of [{...original,status:'void',reason:'forged'},{...original,snapshot:{...original.snapshot,customerName:'changed'}}])await assertFails(staff.transact(crypto.randomUUID(),{payload},async({write})=>{await write('documents','protected',payload,'status change');return {};}));
+ await assertFails(deleteDoc(ref(db('admin'),'documents','protected')));
+ }finally{admin.dispose();staff.dispose();}
+});
+test('receipt and estimate revisions retain payment/project identities and Onoda tax snapshots',async()=>{
+ const admin=await clientFor('admin'),a=createService(admin);
+ try{
+ await exec(a,{type:'saveDocument',snapshot:snapshot('invoice'),expectedRevision:0});
+ const receipt={...snapshot('receipt-old','receipt'),saleId:'sale_invoice',receiptTotal:20000,paymentDate:'2026-09-21',paymentMethod:'現金'};
+ await exec(a,{type:'saveDocument',snapshot:receipt,expectedRevision:0});
+ await exec(a,{type:'saveDocument',snapshot:{...receipt,documentId:'receipt-new',customerName:'会社'},expectedRevision:0,revisedFromDocumentId:'receipt-old',expectedParentRevision:1,reason:'宛名'});
+ assert.equal((await records('payments')).length,1);assert.equal((await records('payments'))[0].id,'pay_receipt-old');assert.equal((await records('cashLedger')).length,1);
+ await assert.rejects(exec(a,{type:'documentStatus',documentId:'receipt-new',status:'void',reason:'no',expectedRevision:1}),/確認済み/);
+ const e=snapshot('est-old','estimate');await exec(a,{type:'saveDocument',snapshot:e,expectedRevision:0});await exec(a,{type:'acceptEstimate',estimateId:'est_est-old',expectedRevision:1});
+ await exec(a,{type:'saveDocument',snapshot:{...e,documentId:'est-new',customerName:'会社'},expectedRevision:0,revisedFromDocumentId:'est-old',expectedParentRevision:1,reason:'宛名'});
+ assert.equal((await records('estimates')).length,1);assert.equal((await records('projects')).length,1);
+ const o={...snapshot('onoda-old','onoda'),items:[{content:'課税',qty:1,price:100000,taxable:true},{content:'非課税',qty:1,price:5000,taxable:false}]};await exec(a,{type:'saveDocument',snapshot:o,expectedRevision:0});await exec(a,{type:'saveDocument',snapshot:{...o,documentId:'onoda-new',remarks:'訂正'},expectedRevision:0,revisedFromDocumentId:'onoda-old',expectedParentRevision:1,reason:'備考'});
+ assert.equal((await records('sales')).find(x=>x.id==='sale_onoda-old').amount,115000);
+ }finally{admin.dispose();}
+});
+test('concurrent payment and void cannot both commit; repeated revision downloads remain read-only',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ try{
+ await exec(a,{type:'saveDocument',snapshot:snapshot('race'),expectedRevision:0});
+ const result=await Promise.allSettled([exec(a,{type:'documentStatus',documentId:'race',status:'void',reason:'race',expectedRevision:1}),exec(s,{type:'payment',saleId:'sale_race',paymentId:'race-pay',amount:1000,paymentDate:'2026-09-20',method:'現金'})]);
+ assert.equal(result.filter(r=>r.status==='fulfilled').length,1);
+ await exec(a,{type:'saveDocument',snapshot:snapshot('e1','estimate'),expectedRevision:0});
+ await exec(a,{type:'saveDocument',snapshot:snapshot('e2','estimate'),expectedRevision:0,revisedFromDocumentId:'e1',expectedParentRevision:1,reason:'訂正'});
+ const revised=(await records('documents')).find(d=>d.id==='e2').snapshot;
+ for(let i=0;i<3;i++)assert((await exec(a,{type:'saveDocument',snapshot:revised,expectedRevision:1})).unchanged);
+ assert.equal((await records('estimates')).length,1);
+ }finally{admin.dispose();staff.dispose();}
 });

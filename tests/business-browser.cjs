@@ -7,6 +7,7 @@ const driver=`window.createTsukinowaFirebaseDriver=async()=>{
  return {initialize:async()=>{},observeAuth:next=>{cb=next;next(null);return()=>{}},claims:async u=>u.claims,
  signIn:async email=>{const role=email.startsWith('admin')?'admin':'staff';db=f.getFirestore(a.initializeApp({projectId:'demo-tsukinowa'},crypto.randomUUID()));f.connectFirestoreEmulator(db,'127.0.0.1',8080,{mockUserToken:{sub:'ui-'+role,role,companyId:'tsukinowa'}});await cb({uid:'ui-'+role,email,claims:{role,companyId:'tsukinowa'}})},signOut:async()=>cb(null),
  listen:(p,m,next,error)=>f.onSnapshot(m?f.collection(db,p):f.doc(db,p),{includeMetadataChanges:true},s=>next(m?s.docs.map(d=>({id:d.id,...d.data()})):s.exists()?{id:s.id,...s.data()}:null,{fromCache:s.metadata.fromCache}),error),
+ list:async p=>(await f.getDocsFromServer(f.collection(db,p))).docs.map(d=>({id:d.id,...d.data()})),
  transaction:fn=>f.runTransaction(db,tx=>fn({get:async p=>{const s=await tx.get(f.doc(db,p));return s.exists()?s.data():null},set:(p,v)=>tx.set(f.doc(db,p),v)})),timestamp:f.serverTimestamp,
  digest:async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value))),b=>b.toString(16).padStart(2,'0')).join('')};};`;
 const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;try{
@@ -31,8 +32,18 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  for(const amount of [50000,20000]){await phone.evaluate(amount=>{selectSaleForPayment(bizState.sales[0].id);document.getElementById('receiptTotal').value=amount;recalc();saveConfirmedHistory();},amount);await phone.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);}
  await desktop.waitForFunction(()=>bizState.payments.length===2);assert.deepEqual(await desktop.evaluate(()=>[bizState.sales[0].amount,bizPaid(bizState.sales[0]),bizOutstanding(bizState.sales[0])]),[100000,70000,30000]);
  await phone.context().setOffline(true);await phone.evaluate(()=>{selectSaleForPayment(bizState.sales[0].id);document.getElementById('receiptTotal').value=1000;saveConfirmedHistory();});assert.equal(await phone.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),1);await phone.context().setOffline(false);await desktop.waitForFunction(()=>bizState.payments.length===3);
- // Conflicting edits retain the cloud original and the blocked local command.
- await phone.evaluate(id=>applyFormState(loadConfirmedHistory().find(s=>s.documentId===id)),invoiceId);await desktop.evaluate(id=>{applyFormState(loadConfirmedHistory().find(s=>s.documentId===id));document.getElementById('customerName').value='管理者訂正';saveConfirmedHistory();},invoiceId);await desktop.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);await phone.evaluate(()=>{document.getElementById('customerName').value='古い編集';saveConfirmedHistory();});await phone.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue()[0]?.blocked);assert.equal(await desktop.evaluate(()=>bizState.sales[0].customer),'管理者訂正');
+ // Formal originals cannot be overwritten; admin creates a revision through the saved-doc UI.
+ await desktop.evaluate(()=>bizSwitchPage('savedDocs'));
+ await desktop.locator('#allSavedDocsList').getByRole('button',{name:'訂正版を作成',exact:true}).first().waitFor();
+ await desktop.evaluate(id=>manageFormalDocument(loadConfirmedHistory().findIndex(x=>x.documentId===id),'revision'),invoiceId);
+ await desktop.locator('#customerName').fill('管理者訂正');await desktop.locator('#customerCompany').fill('法人テスト');await desktop.locator('#customerAddress').fill('東京都');
+ await desktop.getByRole('button',{name:'正式保存',exact:true}).click();
+ await phone.waitForFunction(id=>loadConfirmedHistory().some(d=>d.documentId===id&&d.documentStatus==='revised'),invoiceId);
+ assert.equal(await desktop.evaluate(()=>bizState.sales.length),1);assert.equal(await desktop.evaluate(()=>bizState.sales[0].customer),'管理者訂正');
+ assert.equal(await desktop.evaluate(()=>bizOutstanding(bizState.sales[0])),29000);
+ await phone.evaluate(()=>bizSwitchPage('savedDocs'));assert.equal(await phone.getByRole('button',{name:'訂正版を作成',exact:true}).count(),0);assert((await phone.locator('#allSavedDocsList').innerText()).includes('訂正済'));
+ await phone.evaluate(id=>{applyFormState(loadConfirmedHistory().find(s=>s.documentId===id));document.getElementById('customerName').value='古い編集';saveConfirmedHistory();},invoiceId);
+ assert.equal(await phone.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),0);
 
  // Phase three: actual accounting controls and all six export paths.
  await desktop.evaluate(()=>{bizSwitchPage('expenses');document.getElementById('expDate').value='2026-10-02';document.getElementById('expCategory').value='交通費';document.getElementById('expMethod').value='現金';document.getElementById('expAmount').value='10000';document.getElementById('expVendor').value='交通テスト';return addExpense();});

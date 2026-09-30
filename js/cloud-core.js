@@ -105,7 +105,7 @@
         for(let i=0;i<writes.length;i++){
           const w=writes[i],auditId=operationId+'_'+i;
           tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,createdAt:w.old?.createdAt||w.old?.updatedAt||at,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
-          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId});
+          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId,...(w.name==='documents'?{documentId:w.id,oldStatus:w.old?.payload.status|| (w.old?'active':null),newStatus:w.payload.status||'active',reason:w.payload.reason||'',revisedFromDocumentId:w.payload.revisedFromDocumentId||'',duplicateOfDocumentId:w.payload.duplicateOfDocumentId||''}:{})});
         }
         for(const a of legacyAudits)tx.set(`${base}/auditLogs/${a.id}`,{userId:who.uid,timestamp:at,entityType:'auditLogs',entityId:a.id,action:'migration',before:null,after:{legacy:a.legacy},operationId});
         tx.set(opPath,{actorId:who.uid,fingerprint,result:JSON.parse(canonical(result)),createdAt:at});
@@ -113,13 +113,14 @@
       });
       if(who.generation!==generation)throw Error('ログイン状態が変更されました。');return result;
     }
+    async function listRecords(name){const who=readable(name,null);if(!driver.list)throw Error('安全確認のため最新データを取得できません。再読込してください。');return driver.list(`companies/${who.companyId}/${name}`);}
     async function put(name,id,payload,{operationId,expectedRevision=0}={}){
       if(identity().role!=='admin'||name==='auditLogs')throw Error('この操作は許可されていません。');
       return transact(operationId,{name,id,payload,expectedRevision},async({read,write})=>{
         const old=await read(name,id);const revision=await write(name,id,payload,undefined,expectedRevision);return {revision,replayed:!!old&&canonical(old.payload)===canonical(payload)};
       });
     }
-    return {start,signIn,signOut,listen,put,transact,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
+    return {start,signIn,signOut,listen,listRecords,put,transact,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
   }
   return {COLLECTIONS,STAFF_READ,LOCAL_KEYS,validateConfig,readLegacy,backupLegacy,canonical,createClient};
 });

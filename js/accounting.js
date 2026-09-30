@@ -2,7 +2,7 @@
 'use strict';
 const COLLECTIONS=['expenses','cashLedger','suppliers','supplierTransactions','bankTransactions'];
 const CATEGORIES=['材料費','給与','家賃','交通費','車両費','通信費','消耗品費','外注費','その他'];
-const live=r=>!r.deletedAt,amount=r=>Number(r.amount)||0,sum=rs=>rs.reduce((n,r)=>n+amount(r),0);
+const live=r=>!r.deletedAt&&!['void','cancelled','duplicate','revised'].includes(r.documentStatus||r.status),amount=r=>Number(r.amount)||0,sum=rs=>rs.reduce((n,r)=>n+amount(r),0);
 const confirmed=p=>live(p)&&['cash-received','bank-confirmed'].includes(p.confirmation);
 function date(value){const m=String(value||'').trim().normalize('NFKC').match(/^(\d{4})[-/.年]?(\d{1,2})[-/.月]?(\d{1,2})日?$/);if(!m)throw Error('日付は YYYY-MM-DD で指定してください。');const s=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;if(new Date(s+'T00:00:00Z').toISOString().slice(0,10)!==s)throw Error('日付が不正です。');return s;}
 function money(v,signed=false){const n=Number(String(v??'').normalize('NFKC').replace(/[¥￥,\s円]/g,''));if(!Number.isSafeInteger(n)||(!signed&&n<=0))throw Error('金額は整数の円で入力してください。');return n;}
@@ -23,7 +23,7 @@ async function parseBank(text,account,digest){if(!account.trim())throw Error('�
  if(!result.length)throw Error('取引明細がありません。');return result;
 }
 function suggestions(bank,data){if(['照合済','除外'].includes(bank.status))return [];const results=[];const add=(kind,id,targetAmount,targetDate,name,paymentId='')=>{let score=0;const reasons=[];if(targetAmount===bank.amount){score+=50;reasons.push('金額一致');}const days=Math.abs(Date.parse(bank.bankTransactionDate)-Date.parse(targetDate))/86400000;if(days<=7){score+=20;reasons.push('日付7日以内');}const a=normalize(name),b=normalize(bank.description);if(a.length>=2&&(b.includes(a)||a.includes(b)&&b.length>=2)){score+=30;reasons.push('名称一致');}if(score>=30)results.push({kind,id,paymentId,score,reasons});};
- if(bank.incoming){for(const s of receivables(data.sales||[],data.payments||[],'9999-12-31'))if(s.outstanding>0)add('sale',s.id,s.outstanding,s.invoiceDate,s.customer);for(const p of data.payments||[])if(live(p)&&p.confirmation==='pending-bank'){const s=(data.sales||[]).find(s=>s.id===p.saleId);if(s)add('sale',s.id,p.amount,p.paymentDate,s.customer,p.id);}}
+ if(bank.incoming){for(const s of receivables(data.sales||[],data.payments||[],'9999-12-31'))if(s.outstanding>0)add('sale',s.id,s.outstanding,s.invoiceDate,s.customer);for(const p of data.payments||[])if(live(p)&&p.confirmation==='pending-bank'){const s=(data.sales||[]).find(s=>s.id===p.saleId);if(s&&live(s))add('sale',s.id,p.amount,p.paymentDate,s.customer,p.id);}}
  else{for(const e of data.expenses||[])if(live(e)&&e.paymentMethod!=='現金'&&e.paymentMethod!=='月締'&&!e.bankTxnId)add('expense',e.expenseId,e.amount,e.expenseDate,e.vendor);for(const t of data.supplierTransactions||[])if(live(t)&&['prepayment','payment'].includes(t.type)&&t.paymentMethod!=='現金'&&!t.bankTxnId)add('supplier',t.transactionId,t.amount,t.date,(data.suppliers||[]).find(s=>s.supplierId===t.supplierId)?.supplierName);}
  return results.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
 }

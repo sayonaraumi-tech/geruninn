@@ -22,6 +22,7 @@
         const ref=isCollection?dbSDK.collection(db,path):dbSDK.doc(db,path);
         return dbSDK.onSnapshot(ref,{includeMetadataChanges:true},snapshot=>next(isCollection?snapshot.docs.map(d=>({id:d.id,...d.data()})):(snapshot.exists()?{id:snapshot.id,...snapshot.data()}:null),{fromCache:snapshot.metadata.fromCache,hasPendingWrites:snapshot.metadata.hasPendingWrites}),error);
       },
+      list:async path=>(await dbSDK.getDocsFromServer(dbSDK.collection(db,path))).docs.map(d=>({id:d.id,...d.data()})),
       transaction:fn=>dbSDK.runTransaction(db,tx=>fn({get:async path=>{const snap=await tx.get(dbSDK.doc(db,path));return snap.exists()?snap.data():null;},set:(path,value)=>tx.set(dbSDK.doc(db,path),value)})),
       timestamp:()=>dbSDK.serverTimestamp(),
       async digest(value){const bytes=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(value));return Array.from(new Uint8Array(bytes),b=>b.toString(16).padStart(2,'0')).join('');}
