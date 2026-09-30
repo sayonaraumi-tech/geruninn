@@ -20,7 +20,7 @@ The existing navigation and accounting/document logic remain local. A small clou
 
 The independent repository `TsukinowaCloud.getClient()` supports:
 
-- Firebase email/password authentication with session persistence; no password is stored by application code. Google Calendar OAuth remains separate.
+- Firebase email/password authentication with `browserLocalPersistence`: login survives refresh and browser/PWA restarts until explicit logout. Initialization waits for the Firebase token observer before deciding signed-out, then restores admin/staff from custom claims. No password is stored by application code. Google Calendar OAuth remains separate.
 - Trusted custom claims `companyId` and `role` (`admin` or `staff`). Users cannot choose their own role. Unknown roles or wrong companies fail closed.
 - Real-time subscriptions to individual records or allowed collections; all subscriptions are removed on signout, token changes, auth errors and account changes. Late results from prior identities are ignored.
 - Explicit per-record writes with optimistic revisions, deterministic caller-supplied operation IDs, SHA-256 payload fingerprints, and an atomic record + operation + audit transaction. A failed transaction leaves no partial writes. Offline writes are rejected by Firestore transactions, not silently treated as synced.

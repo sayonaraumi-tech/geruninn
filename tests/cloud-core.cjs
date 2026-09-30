@@ -49,3 +49,12 @@ test('failed transaction, offline write and invalid path do not change local or 
  h.driver.transaction=async()=>{throw Error('offline');};await assert.rejects(h.client.put('sales','d',{amount:1},{operationId:'op'}),/offline/);assert.equal(h.records.size,0);
 });
 test('auth error clears role and removes all active subscriptions',async()=>{const h=await ready();h.client.listen('documents',null,()=>{});h.error(Error('expired'));assert.equal(h.client.getState().role,null);assert(h.listeners[0].stopped);});
+test('startup stays initializing until Firebase restores auth, then waits for trusted role claims',async()=>{
+ const h=harness();let finish;h.driver.claims=()=>new Promise(resolve=>finish=resolve);
+ await h.client.start(config);assert.equal(h.client.getState().phase,'initializing');assert.throws(()=>h.client.listen('sales',null,()=>{}));
+ const restoring=h.auth(user('staff'));assert.equal(h.client.getState().phase,'authorizing');assert.equal(h.client.getState().role,null);assert.throws(()=>h.client.listen('sales',null,()=>{}));
+ finish(user('staff').claims);await restoring;assert.equal(h.client.getState().phase,'ready');assert.equal(h.client.getState().role,'staff');assert.throws(()=>h.client.listen('bankTransactions',null,()=>{}));
+});
+test('disposing the app unsubscribes without signing out or changing persistence',async()=>{
+ const h=await ready();let signouts=0;h.driver.signOut=async()=>signouts++;h.client.dispose();assert.equal(signouts,0);
+});
