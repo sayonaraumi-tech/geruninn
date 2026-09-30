@@ -1133,31 +1133,16 @@ body{padding-top:72px}
 </div>
 
 <div id="pageCalendar" class="biz-page app-page">
- <div class="biz-title"><div><h1>日程・Google Calendar</h1><div class="biz-muted">Google Calendar APIで直接同期します。帳票確定後は客户名・正式金额・状態を元のGoogle Calendar予定へ反映できます。</div></div></div>
+ <div class="biz-title"><div><h1>日程</h1></div></div>
  <div class="biz-section">
-  <div class="biz-section-head"><h2>① Google Calendar API 接続</h2><div id="googleCalendarStatus" class="biz-badge warn">未接続</div></div>
-  <div class="biz-alert">初回だけGoogleの許可画面が出ます。許可後は「Google日程を同期」で対象月を直接取得します。祝日・従業員の休み（休み／有休／公休／OFF 等）は業務日程から自動除外します。</div>
-  <div class="biz-form-grid" style="margin-top:12px">
-   <div class="biz-field"><label>対象月</label><input type="month" id="calendarMonth"></div>
-   <div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="bizGoogleConnect()">Googleに接続</button></div>
-   <div class="biz-field"><label>同期カレンダー</label><select id="googleCalendarSelect" onchange="bizGoogleSelectCalendar(this.value)"><option value="">Google接続後に自動選択</option></select></div>
-   <div class="biz-field"><label>&nbsp;</label><button class="biz-btn" style="width:100%" onclick="bizGoogleLoadCalendars()">カレンダー一覧を取得</button></div>
-   <div class="biz-field"><label>&nbsp;</label><button class="biz-btn ok" style="width:100%" onclick="bizGoogleSyncMonth()">Google日程を同期</button></div>
-   <div class="biz-field span2"><label>検索キーワード（任意）</label><input id="calendarKeyword" placeholder="例：小野田"></div>
-   <div class="biz-field"><label>&nbsp;</label><button class="biz-btn" style="width:100%" onclick="renderCalendarEvents()">絞り込み</button></div>
+  <div class="biz-form-grid">
+   <div class="biz-field"><label for="calendarMonth">対象月</label><input type="month" id="calendarMonth" onchange="renderCalendarEvents()"></div>
+   <div class="biz-field"><label>&nbsp;</label><button id="googleCalendarSync" class="biz-btn ok" style="width:100%" onclick="bizGoogleSyncMonth()">Google日程を同期</button></div>
+   <div class="biz-field span2"><label for="calendarKeyword">検索 / 絞り込み</label><input id="calendarKeyword" placeholder="例：小野田" oninput="renderCalendarEvents()"></div>
   </div>
-  <div class="biz-muted" style="margin-top:10px">Googleの予定IDで同じ予定を更新するため、再同期しても原則二重登録しません。APIが使えない時だけ下のICS取込を予備として使えます。</div>
+  <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
  </div>
- <details class="biz-section" style="padding:0">
-  <summary style="padding:16px 18px;cursor:pointer;font-weight:700">予備：ICSファイルから取込</summary>
-  <div style="padding:0 18px 18px">
-   <div class="biz-form-grid">
-    <div class="biz-field span2"><label>Google Calendar (.ics)</label><input type="file" id="icsFile" accept=".ics,text/calendar"></div>
-    <div class="biz-field"><label>&nbsp;</label><button class="biz-btn" style="width:100%" onclick="importIcsCalendar()">ICSを読込</button></div>
-   </div>
-  </div>
- </details>
- <div class="biz-section"><div class="biz-section-head"><h2>② 同期済み日程</h2><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
+ <div class="biz-section"><div class="biz-section-head"><h2>同期済み日程</h2><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
 </div>
 
 
@@ -1211,12 +1196,29 @@ body{padding-top:72px}
 <div id="pageSettings" class="biz-page app-page">
  <div class="biz-title"><div><h1>Google Calendar API 接続設定</h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
  <div class="biz-section">
+  <div class="biz-section-head"><h2>Google Calendar 接続</h2><div id="googleCalendarStatus" class="biz-badge warn">未接続</div></div>
+  <div class="biz-form-grid">
+   <div class="biz-field"><button class="biz-btn primary" onclick="bizGoogleConnect()">Googleに接続</button></div>
+   <div class="biz-field"><label>同期カレンダー</label><select id="googleCalendarSelect" onchange="bizGoogleSelectCalendar(this.value)"><option value="">Google接続後に自動選択</option></select></div>
+   <div class="biz-field"><button class="biz-btn" onclick="bizGoogleLoadCalendars()">カレンダー一覧を取得</button></div>
+  </div>
+ </div>
+ <details class="biz-section" style="padding:0">
+  <summary style="padding:16px 18px;cursor:pointer;font-weight:700">予備：ICSファイルから取込</summary>
+  <div style="padding:0 18px 18px">
+   <div class="biz-form-grid">
+    <div class="biz-field span2"><label>Google Calendar (.ics)</label><input type="file" id="icsFile" accept=".ics,text/calendar"></div>
+    <div class="biz-field"><label>&nbsp;</label><button class="biz-btn" style="width:100%" onclick="importIcsCalendar()">ICSを読込</button></div>
+   </div>
+  </div>
+ </details>
+ <div class="biz-section">
   <div class="biz-section-head"><h2>現在の保存方式</h2></div>
   <div class="biz-alert"><b>業務データ：ローカル保存</b>　現在は見積・案件・帳票・入金などの業務データをこのブラウザ内に保存します。Google Calendar との連動は API で行います。スマホ・PC間の業務データ共有は Firestore 接続後に有効になります。</div>
  </div>
  <div class="biz-section">
   <div class="biz-section-head"><h2>Google Calendar API 連動</h2></div>
-  <div class="biz-muted" style="line-height:1.9">1. 「日程」→「Googleに接続」で Google アカウントを許可<br>2. 「Google日程を同期」で対象月を直接取得<br>3. 祝日・従業員の休みは自動除外<br>4. 見積・請求・領収の正式情報を保存すると、連携済みの元 Google Calendar イベントへ顧客名・正式金額・状態・システムリンクを反映<br>5. ICS取込は API が使えない場合の予備機能です</div>
+  <div class="biz-muted" style="line-height:1.9">1. 「設定」→「Googleに接続」で Google アカウントを許可<br>2. 「Google日程を同期」で対象月を直接取得<br>3. 祝日・従業員の休みは自動除外<br>4. 見積・請求・領収の正式情報を保存すると、連携済みの元 Google Calendar イベントへ顧客名・正式金額・状態・システムリンクを反映<br>5. ICS取込は API が使えない場合の予備機能です</div>
  </div>
  <div class="biz-section">
   <div class="biz-section-head"><h2>クラウド接続（段階導入）</h2></div>
@@ -2881,6 +2883,24 @@ let bizDb=null,bizUnsub=null,bizCloudReady=false,bizRemoteApplying=false;
 function bizId(p='id'){return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7)}
 function bizMoney(n){return '¥'+Math.round(Number(n)||0).toLocaleString('ja-JP')}
 function bizMonth(d){return String(d||'').slice(0,7)}
+// Month selection is view state only: never persist or remove business records here.
+let bizCalendarObservedMonth='';
+function bizCalendarCheckMonth(){
+  const month=bizNowMonth(),el=document.getElementById('calendarMonth');
+  if(el&&(!bizCalendarObservedMonth||bizCalendarObservedMonth!==month)){
+    el.value=month;
+    if(bizCalendarObservedMonth)document.getElementById('calendarKeyword').value='';
+    bizCalendarObservedMonth=month;
+    renderCalendarEvents();
+  }
+  bizGoogleRefreshAuthUI();
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  bizCalendarCheckMonth();
+  setInterval(bizCalendarCheckMonth,30000);
+});
+window.addEventListener('focus',bizCalendarCheckMonth);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)bizCalendarCheckMonth();});
 function bizNowMonth(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function bizEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function bizLoad(){if(window.TsukinowaCloudCore){const old=TsukinowaCloudCore.readLegacy(localStorage);bizState=Object.assign(bizState,old.business);bizSettings=Object.assign(bizSettings,old.settings);if(old.errors.length)console.warn('一部の端末内データを読み込めませんでした。元データは保持されています。');return;}try{const x=JSON.parse(localStorage.getItem(BIZ_KEY)||'null');if(x)bizState=Object.assign(bizState,x)}catch(_){} try{const x=JSON.parse(localStorage.getItem(BIZ_SETTINGS_KEY)||'null');if(x)bizSettings=Object.assign(bizSettings,x)}catch(_){}}
@@ -2980,7 +3000,6 @@ async function importIcsCalendar(){
     let added=0,updated=0;
     events.forEach(x=>{if(window.TsukinowaBusinessUI?.isEnabled()){bizGoogleMergeEvent({...x,source:'ics'});added++;return;}const i=bizState.calendar.findIndex(a=>a.id===x.id);if(i>=0){const old=bizState.calendar[i];if(!bizHasFormalData(old))bizState.calendar[i]=Object.assign({},old,x);updated++}else{bizState.calendar.push(x);added++}});
     bizAudit('ICS日程取込',`${f.name} ${events.length}件（新規${added}・更新${updated}・除外${ignored.length}・既存整理${cleaned}）`);bizPersist();renderCalendarEvents();
-    const months=[...new Set(events.map(e=>bizMonth(e.date)))].sort(); if(months.length){const el=document.getElementById('calendarMonth');if(el&&months.includes(bizNowMonth()))el.value=bizNowMonth();else if(el)el.value=months[months.length-1];renderCalendarEvents()}
     alert(`${events.length}件の業務日程を読み込みました。\n新規 ${added}件 / 更新 ${updated}件\n祝日・休み等を ${ignored.length}件除外しました${cleaned?`（以前の取込分も${cleaned}件整理）`:''}`);
   }catch(e){alert('ICS読込に失敗しました: '+e.message)}
 }
@@ -3085,6 +3104,11 @@ let bizGoogleAccessToken='';
 let bizGoogleTokenExpiresAt=0;
 let bizGoogleTokenRequest=null;
 let bizGoogleSyncing=false;
+let bizGoogleAuthFailed=false;
+function bizGoogleRefreshAuthUI(){
+  const button=document.getElementById('googleCalendarReconnect');
+  if(button)button.hidden=!(bizGoogleAuthFailed||(bizGoogleTokenExpiresAt>0&&bizGoogleNeedToken()));
+}
 const bizGooglePatchJobs=new Map();
 function bizGoogleSetStatus(text,ok=false){
   const el=document.getElementById('googleCalendarStatus');
@@ -3110,10 +3134,11 @@ function bizGoogleRequestToken(promptMode=''){
       bizGoogleAccessToken=resp.access_token;
       bizGoogleTokenExpiresAt=Date.now()+(Number(resp.expires_in)||3600)*1000;
       bizGoogleCalendarsLoaded=false;
+      bizGoogleAuthFailed=false;bizGoogleRefreshAuthUI();
       resolve(resp);
     };
     try{bizGoogleTokenClient.requestAccessToken({prompt:promptMode});}catch(e){reject(e);}
-  }).finally(()=>{bizGoogleTokenRequest=null;});
+  }).catch(err=>{bizGoogleAuthFailed=true;bizGoogleRefreshAuthUI();throw err;}).finally(()=>{bizGoogleTokenRequest=null;});
   return bizGoogleTokenRequest;
 }
 async function bizGoogleConnect(){
@@ -3122,7 +3147,7 @@ async function bizGoogleConnect(){
     await bizGoogleRequestToken('consent');await bizGoogleLoadCalendars(true);
     bizGoogleSetStatus('接続済',true);
     alert('Google Calendar に接続しました。\n同期対象カレンダーと対象月を確認して「Google日程を同期」を押してください。');
-  }catch(e){bizGoogleSetStatus('接続失敗');alert('Google Calendar 接続に失敗しました：'+e.message);}
+  }catch(e){bizGoogleSetStatus('接続失敗');alert('Googleに接続できませんでした。もう一度お試しください。');}
 }
 async function bizGoogleEnsureToken(){if(bizGoogleNeedToken())await bizGoogleRequestToken('');return bizGoogleAccessToken;}
 async function bizGoogleFetch(url,options={}){
@@ -3131,6 +3156,7 @@ async function bizGoogleFetch(url,options={}){
   let res=await fetch(url,{...options,headers,cache:'no-store'});
   if(res.status===401){bizGoogleAccessToken='';await bizGoogleEnsureToken();headers.Authorization='Bearer '+bizGoogleAccessToken;res=await fetch(url,{...options,headers,cache:'no-store'});}
   if(!res.ok){
+    if(res.status===401){bizGoogleAccessToken='';bizGoogleAuthFailed=true;bizGoogleRefreshAuthUI();}
     let msg='HTTP '+res.status;try{msg=(await res.json())?.error?.message||msg;}catch(_){}
     const err=new Error(res.status===403?msg+'（カレンダーの共有権限とOAuthの許可を確認してください）':msg);err.status=res.status;throw err;
   }
@@ -3191,6 +3217,7 @@ function bizGoogleMergeEvent(x){
 async function bizGoogleSyncMonth(){
   if(bizGoogleSyncing)return;
   bizGoogleSyncing=true;
+  const syncButton=document.getElementById('googleCalendarSync');if(syncButton)syncButton.disabled=true;
   const month=document.getElementById('calendarMonth')?.value||bizNowMonth();
   try{
     await bizGoogleEnsureToken();if(!bizGoogleCalendarsLoaded)await bizGoogleLoadCalendars(true);
@@ -3209,14 +3236,14 @@ async function bizGoogleSyncMonth(){
     // Filtering only applies to incoming data. Never delete prior business records.
     bizAudit('Google日程同期',`${month} 新規${added}・更新${updated}・除外${normalized.length-events.length}`);
     bizPersist();renderCalendarEvents();
-    const pending=bizState.calendar.filter(e=>e.googlePatchPending&&e.googleCalendarId===calendarId);
+    const pending=bizState.calendar.filter(e=>e.googlePatchPending&&e.googleCalendarId===calendarId&&bizMonth(e.date)===month);
     for(const e of pending)await bizGooglePatchEvent(e);
     const failures=pending.filter(e=>e.googlePatchPending).length;
     bizGoogleSetStatus(failures?'反映待ち '+failures+'件':'同期済',!failures);
     alert(`${month} のGoogle日程を同期しました。\n新規 ${added}件 / 更新 ${updated}件\n祝日・休み等 ${normalized.length-events.length}件除外\n同期先: ${calendarId}`+(failures?`\n帳票の反映待ち ${failures}件。共有の編集権限を確認し、再同期してください。`:''));
     bizOpenDeepLinkedEvent();
-  }catch(e){bizGoogleSetStatus('同期失敗');alert('Google日程の同期に失敗しました：'+e.message);}
-  finally{bizGoogleSyncing=false;}
+  }catch(e){bizGoogleSetStatus('同期失敗');alert(bizGoogleAuthFailed?'Googleに再接続してから、もう一度同期してください。':'同期できませんでした。時間をおいて再度お試しください。接続先は設定で確認できます。');}
+  finally{bizGoogleSyncing=false;if(syncButton)syncButton.disabled=false;bizGoogleRefreshAuthUI();}
 }
 function bizGoogleSystemDescription(e,description=e.googleOriginalDescription??e.description??''){
   const base=String(description).replace(/\n?--- 月輪システム ---[\s\S]*?(?:--- 月輪システム終了 ---|$)/g,'').trim();
@@ -3460,7 +3487,7 @@ const _oldBizSwitchPageV5=bizSwitchPage;
 bizSwitchPage=function(page){
   document.querySelectorAll('.app-page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('#bizNav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));
   const map={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',projects:'pageProjects',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',monthly:'pageMonthly',settings:'pageSettings'};
-  document.getElementById(map[page]||'pageDashboard')?.classList.add('active');if(page==='chohyo')window.scrollTo({top:0});bizRefreshAll();
+  document.getElementById(map[page]||'pageDashboard')?.classList.add('active');if(page==='chohyo')window.scrollTo({top:0});if(page==='calendar')bizCalendarCheckMonth();bizRefreshAll();
 };
 const _oldRefreshV5=bizRefreshAll;
 bizRefreshAll=function(){bizEnsureV5State();_oldRefreshV5();renderEstimates();renderProjects();renderAllSavedDocs()};

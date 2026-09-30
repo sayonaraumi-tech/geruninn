@@ -11,7 +11,7 @@ const ctx=vm.createContext({URL,Request:class{constructor(url,options){this.url=
 vm.runInContext(fs.readFileSync(path.join(root,'sw.js'),'utf8'),ctx);
 (async()=>{
  let pending;handlers.install({waitUntil:p=>pending=p});await pending;assert(skipped);assert.equal(added.length,14);assert(added.every(r=>r.cache==='reload'));
- handlers.activate({waitUntil:p=>pending=p});await pending;assert(claimed);assert.deepEqual(deleted,['tsukinowa-pwa-trial-v5.2','tsukinowa-pwa-accounting-20260929-3','tsukinowa-pwa-firebase-live-20260929-1']);
+ handlers.activate({waitUntil:p=>pending=p});await pending;assert(claimed);assert.deepEqual(deleted,['tsukinowa-pwa-trial-v5.2','tsukinowa-pwa-accounting-20260929-3','tsukinowa-pwa-firebase-live-20260929-1','tsukinowa-pwa-document-lifecycle-20260929-1']);
  for(const url of ['https://www.googleapis.com/calendar/v3/events','https://accounts.google.com/gsi/client','https://example.com/other-app/','https://example.com/geruninn/firebase-config.json']){let intercepted=false;handlers.fetch({request:{method:'GET',url,headers:new Headers()},respondWith:()=>intercepted=true});assert(!intercepted);}
  const request={method:'GET',url:scope+'?event=123',mode:'navigate',headers:new Headers()};handlers.fetch({request,respondWith:p=>pending=p});assert.equal(await (await pending).text(),'shell');assert.equal(writes[0],scope+'index.html');
  online=false;handlers.fetch({request,respondWith:p=>pending=p});assert.equal(await (await pending).text(),'shell');
