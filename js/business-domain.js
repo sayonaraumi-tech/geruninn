@@ -11,10 +11,24 @@ function createService(client){
  async function execute(cmd){
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
  const paymentSeed=lifecycle?await client.listRecords('payments'):[];
+ const cleanup=typeof module==='object'&&module.exports?require('./test-data-cleanup.js'):globalThis.TsukinowaTestCleanup;
+ const cleanupPlan=cmd.type==='cleanTestData'?cleanup.plan(Object.fromEntries(await Promise.all(cleanup.COLLECTIONS.map(async n=>[n,await client.listRecords(n)])))):null;
  return client.transact(cmd.operationId,cmd,async({read,write:rawWrite,who,archiveAudit})=>{
   const paymentSales=new Map();
   const write=async(name,id,payload,action,expectedRevision)=>{if(name==='payments'&&payload.saleId){const sale=await read('sales',payload.saleId);if(sale){if(!A.live(sale.payload)&&!payload.deletedAt)throw Error('無効な請求書には入金できません。');const ids=paymentSales.get(payload.saleId)||new Set(sale.payload.paymentIds||[]);ids.add(id);paymentSales.set(payload.saleId,ids);}}const revision=await rawWrite(name,id,payload,action,expectedRevision);await AD.mirrorCash(name,id,payload,read,rawWrite);return revision;};
   const result=await (async()=>{
+  if(cmd.type==='cleanTestData'){
+    if(who.role!=='admin')throw Error('テスト清理は管理者のみです。');
+    for(const entry of cleanupPlan){const row=await read(entry.collection,entry.id);if(!row||row.revision!==entry.revision||core.canonical(row.payload)!==core.canonical(entry.payload))throw Error('関連データが変更されました。再確認してください。');}
+    const at=cmd.deletedAt;
+    if(!/^\d{4}-\d{2}-\d{2}T/.test(at||''))throw Error('清理日時が不正です。');
+    for(const entry of cleanupPlan){
+      const p=entry.payload,next=entry.collection==='documents'?{...p,status:'void',reason:cleanup.REASON}:{...p,deletedAt:at,deleteReason:cleanup.REASON,...(['sales','estimates'].includes(entry.collection)?{documentStatus:'void'}:{}),...(entry.collection==='calendarLinks'?{googlePatchPending:false}:{})};
+      if(entry.collection==='sales'){next.paymentIds=Array.from(new Set([...(p.paymentIds||[]),...cleanupPlan.filter(e=>e.collection==='payments'&&e.payload.saleId===entry.id).map(e=>e.id)]));next.paymentVersion=(p.paymentVersion||0)+1;}
+      await rawWrite(entry.collection,entry.id,next,'status change',entry.revision);
+    }
+    return {cleaned:cleanupPlan.map(e=>e.collection+'/'+e.id)};
+  }
   if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable});
   const refs={};
   if(cmd.type==='calendar'){
@@ -23,7 +37,7 @@ function createService(client){
     const formal=!!(old.documentId||old.linkedInvoiceId||old.linkedEstimateId||old.projectId);
     const incoming={id,googleEventId:e.googleEventId||'',calendarId:e.googleCalendarId||old.calendarId||'',googleCalendarId:e.googleCalendarId||old.calendarId||'',source:e.source||(e.googleEventId?'google':'ics')};
     for(const k of ['date','start','end','updated','htmlLink','uid'])incoming[k]=e[k]||'';
-    incoming.googleLatestTitle=e.title||'';incoming.googleOriginalDescription=e.description||'';
+    incoming.googleLatestTitle=e.title||'';incoming.googleOriginalDescription=e.description||'';incoming.googleStatus=e.googleStatus||'confirmed';
     if(!formal)for(const k of ['title','originalTitle','description'])incoming[k]=e[k]||'';
     const revision=await write('calendarLinks',id,{...old,...incoming});return {id,revision};
   }

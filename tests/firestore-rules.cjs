@@ -182,3 +182,27 @@ test('concurrent payment and void cannot both commit; repeated revision download
  assert.equal((await records('estimates')).length,1);
  }finally{admin.dispose();staff.dispose();}
 });
+
+// Exact-ID, audited cleanup against the deployed document/payment guards.
+test('test cleanup is atomic audited and preserves formal records and Onoda',async()=>{
+ const a=await clientFor('admin'),service=createService(a),C=require('../js/test-data-cleanup.js');
+ await env.withSecurityRulesDisabled(async context=>{const store=context.firestore(),seed=(n,id,payload)=>setDoc(ref(store,n,id),{schemaVersion:2,companyId:company,revision:1,createdBy:'uid-admin',updatedBy:'uid-admin',createdAt:new Date(),updatedAt:new Date(),payload});
+ await seed('documents',C.SEEDS[0],{...snapshot(C.SEEDS[0],'estimate'),snapshot:{...snapshot(C.SEEDS[0],'estimate'),customerName:'Test'},customerName:'Test',amount:0,confirmed:true,estimateId:'estimate'});
+ await seed('estimates','estimate',{customer:'Test',documentId:C.SEEDS[0]});
+ await seed('documents',C.SEEDS[1],{...snapshot(C.SEEDS[1]),snapshot:{...snapshot(C.SEEDS[1]),customerName:'test'},customerName:'test',amount:0,confirmed:true});
+ await seed('sales','sale',{customer:'test',documentId:C.SEEDS[1],amount:0});
+ await seed('documents','receipt',{documentId:'receipt',docType:'receipt',snapshot:{...snapshot('receipt','receipt'),remarks:'test',saleId:'sale'},customerName:'Customer',amount:89540,confirmed:true});
+ await seed('payments','pay',{paymentId:'pay',documentId:'receipt',saleId:'sale',amount:89540,confirmation:'pending-bank',deletedAt:'2026-09-29',deleteReason:'test'});
+ await seed('calendarLinks','event',{documentId:'receipt',customerName:'test',officialAmount:0,title:'test｜換壁紙 / 巣鴨｜0｜領収済'});
+ });
+ await exec(service,{type:'saveDocument',snapshot:snapshot('formal'),expectedRevision:0});
+ await exec(service,{type:'saveDocument',snapshot:snapshot('formal-onoda','onoda'),expectedRevision:0});
+ const before=(await getDoc(ref(db('admin'),'documents','formal'))).data();
+ const result=await exec(service,{type:'cleanTestData',deletedAt:'2026-09-30T07:00:00.000Z'});assert.equal(result.cleaned.length,7);
+ for(const id of [...C.SEEDS,'receipt']){const p=(await getDoc(ref(db('admin'),'documents',id))).data().payload;assert.equal(p.status,'void');assert.equal(p.reason,C.REASON);}
+ assert.deepEqual((await getDoc(ref(db('admin'),'documents','formal'))).data(),before);
+ assert.equal((await getDoc(ref(db('admin'),'documents','formal-onoda'))).data().payload.status,'active');
+ const audit=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert.equal(audit.docs.filter(d=>d.data().after?.reason===C.REASON||d.data().after?.deleteReason===C.REASON).length,7);
+ assert.equal((await exec(service,{type:'cleanTestData',deletedAt:'2026-09-30T07:01:00.000Z'})).cleaned.length,0);
+ await assert.rejects(exec(createService(await clientFor('staff')),{type:'cleanTestData',deletedAt:'2026-09-30T07:01:00.000Z'}));
+});
