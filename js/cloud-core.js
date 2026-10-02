@@ -86,7 +86,7 @@
         if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
         const opPath=`${base}/operations/${operationId}`,previous=await tx.get(opPath);
         if(previous){if(previous.fingerprint!==fingerprint||previous.actorId!==who.uid)throw Error('Operation ID conflict');return previous.result;}
-        const cache=new Map(),writes=[],legacyAudits=[];
+        const cache=new Map(),writes=[],legacyAudits=[],numberReservations=[];
         const read=async(name,id)=>{scope(name);segment(id);const path=`${base}/${name}/${id}`;if(!cache.has(path))cache.set(path,await tx.get(path));return cache.get(path);};
         const write=async(name,id,payload,action,expectedRevision)=>{
           if(name==='auditLogs')throw Error('Audit records are append-only');
@@ -97,7 +97,17 @@
           const revision=(old?.revision||0)+1;writes.push({name,id,payload:clean,old,revision,action:action||(old?'update':'create')});return revision;
         };
         const archiveAudit=async(id,legacy)=>{if(who.role!=='admin')throw Error('管理者のみ');if(await read('auditLogs',id))return;legacyAudits.push({id,legacy:JSON.parse(canonical(legacy))});};
-        const result=await planner({read,write,who,archiveAudit});
+        const reserveDocumentNumber=async(minute,documentId)=>{
+          if(!/^\d{8}-\d{4}$/.test(minute))throw Error('Invalid numbering minute');
+          segment(documentId);
+          let sequence=1,invoiceNo,path;
+          // Existing immutable operations provide a company-wide reservation namespace.
+          // The reservation and formal snapshot commit in the same transaction.
+          do{invoiceNo=minute+'-'+String(sequence).padStart(2,'0');path=`${base}/operations/documentNumber_${invoiceNo}`;if(!await tx.get(path))break;sequence++;}while(true);
+          numberReservations.push({path,result:{documentId,invoiceNo,numberingMinute:minute,numberingSequence:sequence}});
+          return {invoiceNo,numberingMinute:minute,numberingSequence:sequence};
+        };
+        const result=await planner({read,write,who,archiveAudit,reserveDocumentNumber});
         if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
         if(writes.length>30)throw Error('Transaction too large');
         if(!writes.length&&!legacyAudits.length)return result;
@@ -107,11 +117,16 @@
           tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,createdAt:w.old?.createdAt||w.old?.updatedAt||at,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
           tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId,...(w.name==='documents'?{documentId:w.id,oldStatus:w.old?.payload.status|| (w.old?'active':null),newStatus:w.payload.status||'active',reason:w.payload.reason||'',revisedFromDocumentId:w.payload.revisedFromDocumentId||'',duplicateOfDocumentId:w.payload.duplicateOfDocumentId||''}:{})});
         }
+        for(const reservation of numberReservations)tx.set(reservation.path,{actorId:who.uid,fingerprint,result:reservation.result,createdAt:at});
         for(const a of legacyAudits)tx.set(`${base}/auditLogs/${a.id}`,{userId:who.uid,timestamp:at,entityType:'auditLogs',entityId:a.id,action:'migration',before:null,after:{legacy:a.legacy},operationId});
         tx.set(opPath,{actorId:who.uid,fingerprint,result:JSON.parse(canonical(result)),createdAt:at});
         return result;
       });
       if(who.generation!==generation)throw Error('ログイン状態が変更されました。');return result;
+    }
+    async function isDocumentNumberReserved(invoiceNo){
+      const who=identity();segment(invoiceNo);
+      return driver.transaction(async tx=>!!await tx.get(`companies/${who.companyId}/operations/documentNumber_${invoiceNo}`));
     }
     async function listRecords(name){const who=readable(name,null);if(!driver.list)throw Error('安全確認のため最新データを取得できません。再読込してください。');return driver.list(`companies/${who.companyId}/${name}`);}
     async function put(name,id,payload,{operationId,expectedRevision=0}={}){
@@ -120,7 +135,7 @@
         const old=await read(name,id);const revision=await write(name,id,payload,undefined,expectedRevision);return {revision,replayed:!!old&&canonical(old.payload)===canonical(payload)};
       });
     }
-    return {start,signIn,signOut,listen,listRecords,put,transact,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
+    return {start,signIn,signOut,listen,listRecords,put,transact,isDocumentNumberReserved,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
   }
   return {COLLECTIONS,STAFF_READ,LOCAL_KEYS,validateConfig,readLegacy,backupLegacy,canonical,createClient};
 });

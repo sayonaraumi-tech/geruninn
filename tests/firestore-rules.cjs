@@ -112,12 +112,12 @@ test('security rules deny forged audited staff bank/supplier writes and cash row
 test('formal revisions transfer a stable sale, preserve paid amounts and immutable snapshots; two devices see status',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),phone=createSync({client:staff,storage:storage()});phone.start();
  try{
- const inv=snapshot('person');await exec(a,{type:'saveDocument',snapshot:inv,expectedRevision:0});
+ const inv=snapshot('person');await exec(a,{type:'saveDocument',snapshot:inv,expectedRevision:0});const original=(await records('documents')).find(x=>x.documentId==='person').snapshot;
  await exec(a,{type:'payment',paymentId:'partial',saleId:'sale_person',amount:20000,paymentDate:'2026-09-22',method:'現金'});
  await assert.rejects(exec(a,{type:'documentStatus',documentId:'person',status:'void',reason:'mistake',expectedRevision:1}),/確認済み入金/);
  await exec(a,{type:'saveDocument',snapshot:{...inv,documentId:'company',customerName:'法人担当',customerCompany:'会社',customerAddress:'東京'},expectedRevision:0,revisedFromDocumentId:'person',expectedParentRevision:1,reason:'法人名義に訂正'});
  const docs=await records('documents'),sales=await records('sales'),ps=await records('payments');
- assert.equal(docs.find(x=>x.id==='person').status,'revised');assert.deepEqual(docs.find(x=>x.id==='person').snapshot,inv);assert.equal(docs.find(x=>x.id==='company').status,'active');assert.equal(sales.length,1);assert.equal(sales[0].id,'sale_person');assert.equal(sales[0].documentId,'company');assert.equal(ps[0].saleId,'sale_person');assert.equal(A.receivables(sales,ps,'2026-09-30')[0].outstanding,80000);assert.equal(A.monthly({sales,payments:ps},'2026-09').sales,100000);
+ assert.equal(docs.find(x=>x.id==='person').status,'revised');assert.deepEqual(docs.find(x=>x.id==='person').snapshot,original);assert.equal(docs.find(x=>x.id==='company').status,'active');assert.equal(sales.length,1);assert.equal(sales[0].id,'sale_person');assert.equal(sales[0].documentId,'company');assert.equal(ps[0].saleId,'sale_person');assert.equal(A.receivables(sales,ps,'2026-09-30')[0].outstanding,80000);assert.equal(A.monthly({sales,payments:ps},'2026-09').sales,100000);
  await until(()=>phone.getRows().documents.some(r=>r.id==='person'&&r.payload.status==='revised'));
  await assert.rejects(exec(a,{type:'saveDocument',snapshot:{...inv,customerName:'overwrite'},expectedRevision:2}),/上書き/);
  const current=docs.find(x=>x.id==='company').snapshot;
@@ -205,4 +205,27 @@ test('test cleanup is atomic audited and preserves formal records and Onoda',asy
  const audit=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert.equal(audit.docs.filter(d=>d.data().after?.reason===C.REASON||d.data().after?.deleteReason===C.REASON).length,7);
  assert.equal((await exec(service,{type:'cleanTestData',deletedAt:'2026-09-30T07:01:00.000Z'})).cleaned.length,0);
  await assert.rejects(exec(createService(await clientFor('staff')),{type:'cleanTestData',deletedAt:'2026-09-30T07:01:00.000Z'}));
+});
+
+test('Japan minute numbering is global, atomic across devices and immutable on retries/revisions',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff');
+ let time=new Date('2026-10-02T03:59:59Z');const now=()=>time,a=createService(admin,{now}),b=createService(staff,{now});
+ const first=await exec(a,{type:'saveDocument',snapshot:{...snapshot('number-a','estimate'),invoiceNo:'draft-number'},expectedRevision:0});
+ assert.equal(first.invoiceNo,'20261002-1259-01');
+ time=new Date('2026-10-02T04:06:00Z');
+ const results=await Promise.all([exec(a,{type:'saveDocument',snapshot:snapshot('number-b'),expectedRevision:0}),exec(b,{type:'saveDocument',snapshot:snapshot('number-c','onoda'),expectedRevision:0})]);
+ assert.deepEqual(results.map(r=>r.invoiceNo).sort(),['20261002-1306-01','20261002-1306-02']);
+ const original=(await records('documents')).find(d=>d.documentId==='number-b').snapshot;
+ time=new Date('2026-10-03T15:01:00Z');
+ for(let i=0;i<3;i++){const replay=await exec(b,{type:'saveDocument',snapshot:original,expectedRevision:1});assert.equal(replay.invoiceNo,original.invoiceNo);assert(replay.unchanged);}
+ const revised=await exec(a,{type:'saveDocument',snapshot:{...original,documentId:'number-revised'},expectedRevision:0,revisedFromDocumentId:'number-b',expectedParentRevision:1,reason:'訂正'});
+ assert.equal(revised.invoiceNo,'20261004-0001-01');
+ const docs=await records('documents');assert.deepEqual(docs.find(d=>d.documentId==='number-b').snapshot,original);assert.equal(docs.find(d=>d.documentId==='number-revised').revisedFromDocumentId,'number-b');
+ // Failed formal save consumes no sequence; a later valid receipt uses the first number.
+ time=new Date('2026-10-04T15:02:00Z');
+ await assert.rejects(exec(a,{type:'saveDocument',snapshot:snapshot('bad-receipt','receipt'),expectedRevision:0}));
+ const receipt=await exec(b,{type:'saveDocument',snapshot:{...snapshot('good-receipt','receipt'),saleId:'sale_number-b',receiptTotal:100,paymentDate:'2026-10-05'},expectedRevision:0});
+ assert.equal(receipt.invoiceNo,'20261005-0002-01');
+ await assertFails(deleteDoc(ref(db('admin'),'operations','documentNumber_20261002-1306-01')));
+ await assertFails(updateDoc(ref(db('admin'),'operations','documentNumber_20261002-1306-01'),{'result.invoiceNo':'reused'}));
 });

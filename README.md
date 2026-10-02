@@ -44,3 +44,7 @@ Shared expenses, derived cash ledger, supplier monthly settlement, bank CSV reco
 ## Initial user roles
 
 Run the ADC-only [one-time Custom Claims script](docs/FIREBASE-CUSTOM-CLAIMS.md) in Cloud Shell to assign the two designated users to `tsukinowa` as admin/staff and print their verified claims. No service account key is committed or required by the script.
+
+## Formal document numbering and registration layout
+
+New formal documents share Japan-time minute numbers across all document types, allocated atomically in Firestore and stored permanently. See [number reservations, drafts, revisions and verification](docs/DOCUMENT-NUMBERING.md).

@@ -7,7 +7,8 @@
     "test:browser": "node tests/onoda-browser.cjs && node tests/navigation.cjs && node tests/calendar-sync.cjs && node tests/cloud-browser.cjs",
     "test:business-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/business-browser.cjs\"",
     "claims:tsukinowa": "node scripts/set-tsukinowa-claims.cjs",
-    "test:auth-persistence": "node tests/auth-persistence.cjs"
+    "test:auth-persistence": "node tests/auth-persistence.cjs",
+    "test:document-numbering-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/document-numbering-browser.cjs\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.1",
