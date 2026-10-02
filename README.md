@@ -48,3 +48,7 @@ Run the ADC-only [one-time Custom Claims script](docs/FIREBASE-CUSTOM-CLAIMS.md)
 ## Formal document numbering and registration layout
 
 New formal documents share Japan-time minute numbers across all document types, allocated atomically in Firestore and stored permanently. See [number reservations, drafts, revisions and verification](docs/DOCUMENT-NUMBERING.md).
+
+## Outstanding invoice balances
+
+Saved invoice views now derive payment history and outstanding balances from the existing payments collection. Partial and final payments use existing audited transactions; balance PDFs are read-only and never post sales or tax. Estimates omit the registration number. See [data, permissions, reconciliation, PDF and compatibility details](docs/OUTSTANDING-BALANCE.md).

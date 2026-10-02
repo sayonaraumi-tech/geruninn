@@ -8,7 +8,7 @@
 
 オフラインの共有草稿は既存 outbox に保持され、接続回復後の正式コミット時に採番します。正式保存と同期が完了するまではPDF・印刷を開始しません。Firebase を明示的に無効化した旧ローカルモードの採番は端末内だけの互換動作で、端末間の一意性は共有モードで保証します。現在の本番 firebase-config.json は共有モードが有効です。
 
-登録番号は既存の会社設定・適用日条件のまま、帳票右上の No.・発行日・有効期限欄に一度だけ表示します。住所・TEL・MAIL・印章は維持します。
+見積書は登録番号を表示しません。請求書・領収書・小野田請求書の登録番号は会社設定と2026-10-01からの適用日条件を使い、帳票右上の No.・発行日・支払期限欄に一度だけ表示します。編集入力欄は表示せず、旧正式snapshotの値は保持します。住所・TEL・MAIL・印章は維持します。
 
 検証: `pnpm test`、`pnpm test:rules`、`pnpm test:browser`、`pnpm test:business-browser`、`pnpm test:document-numbering-browser`、`pnpm test:auth-persistence`。番号用ブラウザテストは独立した390px/1280pxのブラウザ、実際のFirestore emulatorとルールを使用し、同時保存、正式snapshot一致、翌日再ダウンロード、訂正関係、会計件数、四種類の出力版面を確認します。PDFコールバックでは描画ライブラリをテスト用adapterに置換し、実際の出力用HTMLを画像で検証します。認証・Google APIの本番データには書き込みません。
 

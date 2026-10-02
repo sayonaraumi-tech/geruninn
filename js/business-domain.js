@@ -152,8 +152,10 @@ function createService(client,{now=()=>new Date()}={}){
   }
   if(cmd.type==='payment'){
     const sale=await read('sales',cmd.saleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
-    if(!(Number(cmd.amount)>0)||!cmd.paymentDate)throw Error('入金額と日付を確認してください。');
-    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount:Number(cmd.amount),paymentDate:cmd.paymentDate,date:cmd.paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':'pending-bank',memo:cmd.memo||'',documentId:''};
+    const amount=A.money(cmd.amount),paymentDate=A.date(cmd.paymentDate);
+    if(!['現金','銀行振込','その他','オンライン決済'].includes(cmd.method||'現金'))throw Error('入金方法を確認してください。');
+    if(cmd.documentId&&sale.payload.documentId!==cmd.documentId)throw Error('対象請求書が訂正されています。読み込み直してください。');
+    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':'pending-bank',memo:cmd.memo||'',documentId:''};
     if(old){if(core.canonical(old.payload)!==core.canonical(payload))throw Error('入金IDが既存の入金と競合しています。');return {paymentId:cmd.paymentId,unchanged:true};}
     await write('payments',cmd.paymentId,payload,'payment',0);return {paymentId:cmd.paymentId};
   }

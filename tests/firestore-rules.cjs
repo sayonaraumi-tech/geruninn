@@ -229,3 +229,22 @@ test('Japan minute numbering is global, atomic across devices and immutable on r
  await assertFails(deleteDoc(ref(db('admin'),'operations','documentNumber_20261002-1306-01')));
  await assertFails(updateDoc(ref(db('admin'),'operations','documentNumber_20261002-1306-01'),{'result.invoiceNo':'reused'}));
 });
+
+test('outstanding balance: staff partial/final payments, idempotency, immutable old invoice, notice never posts sales/tax',async()=>{
+ const O=require('../js/outstanding.js'),a=createService(await clientFor('admin')),s=createService(await clientFor('staff'));
+ const form={...snapshot('dynast'),customerName:'dynast合同会社',invoiceDate:'2026-08-01',salesDate:'2026-07-31',remarks:'2026年7月分請求書',items:[{qty:1,price:708526.36,content:'7月工事'}]};
+ await exec(a,{type:'saveDocument',snapshot:form,expectedRevision:0});
+ const original=(await getDoc(ref(db('admin'),'documents','dynast'))).data(),saleBefore=(await getDoc(ref(db('admin'),'sales','sale_dynast'))).data().payload;
+ const cmd={type:'payment',operationId:'partial-dynast',paymentId:'dynast-partial',saleId:'sale_dynast',documentId:'dynast',amount:770379,paymentDate:'2026-08-25',method:'銀行振込'};
+ await s.execute(cmd);await s.execute(cmd);
+ const records=async name=>(await getDocs(collection(db('admin'),`companies/${company}/${name}`))).docs.map(r=>({...r.data().payload,id:r.id}));
+ const v=O.view(original,saleBefore,await records('payments'));assert.deepEqual([v.invoiceAmount,v.paidAmount,v.outstandingAmount,v.paymentStatus],[779379,770379,9000,'一部入金']);
+ const state=JSON.stringify([await records('sales'),await records('payments'),await records('documents')]);for(let i=0;i<3;i++)O.notice(v,'2026-10-02');assert.equal(JSON.stringify([await records('sales'),await records('payments'),await records('documents')]),state);
+ for(const bad of [{amount:1.5},{amount:Infinity},{paymentDate:'2026-02-31'},{method:'invalid'},{documentId:'different'}])await assert.rejects(exec(s,{...cmd,...bad,operationId:crypto.randomUUID(),paymentId:crypto.randomUUID()}));
+ await exec(s,{...cmd,operationId:crypto.randomUUID(),paymentId:'dynast-final',amount:9000,method:'現金',paymentDate:'2026-10-02'});
+ const final=O.view(original,saleBefore,await records('payments'));assert.deepEqual([final.paidAmount,final.outstandingAmount,final.paymentStatus],[779379,0,'入金済']);
+ assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,1);
+ assert.deepEqual((await getDoc(ref(db('admin'),'documents','dynast'))).data(),original);
+ await exec(s,{type:'payment',paymentId:'existing-online-method',saleId:'sale_dynast',amount:1,paymentDate:'2026-10-03',method:'オンライン決済'});
+ const after=(await getDoc(ref(db('admin'),'sales','sale_dynast'))).data().payload;for(const k of Object.keys(saleBefore))if(!['paymentIds','paymentVersion'].includes(k))assert.deepEqual(after[k],saleBefore[k]);
+});
