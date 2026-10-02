@@ -48,7 +48,7 @@ async function handle(cmd,{read,write,who,stable}){
   const row=await read('bankTransactions',cmd.bankTxnId);if(!row)throw Error('銀行取引がありません。');const b=row.payload;if(b.status==='照合済'){if(b.matchId===cmd.targetId&&b.matchType===cmd.targetType)return {unchanged:true};throw Error('別の記録と照合済みです。先に解除してください。');}if(b.status==='除外')throw Error('除外を解除してください。');
   let paymentId='',pendingBefore=null;
   if(cmd.targetType==='sale'){
-   if(!b.incoming)throw Error('入金取引を選択してください。');const sale=await read('sales',cmd.targetId);if(!sale||!A.live(sale.payload))throw Error('請求書がありません。');paymentId=cmd.paymentId||'pay_'+b.bankTxnId;const p=await read('payments',paymentId);
+   if(!b.incoming)throw Error('入金取引を選択してください。');const sale=await read(String(cmd.targetId).startsWith('receivable_')?'receivables':'sales',cmd.targetId);if(!sale||!A.live(sale.payload))throw Error('請求書がありません。');paymentId=cmd.paymentId||'pay_'+b.bankTxnId;const p=await read('payments',paymentId);
    if(cmd.paymentId){if(!p||p.payload.saleId!==cmd.targetId||p.payload.amount!==b.incoming||p.payload.confirmation!=='pending-bank'||p.payload.deletedAt)throw Error('仮入金の金額・対象・状態が一致しません。');pendingBefore=p.payload;}
    else if(p&&!p.payload.deletedAt)throw Error('この銀行取引の入金は登録済みです。');
    await write('payments',paymentId,{...(p?.payload||{}),id:paymentId,paymentId,saleId:cmd.targetId,amount:b.incoming,paymentDate:b.bankTransactionDate,date:b.bankTransactionDate,bankTransactionDate:b.bankTransactionDate,method:'銀行振込',bankAccount:b.bankAccount,bankTxnId:b.bankTxnId,confirmation:'bank-confirmed',memo:b.description,deletedAt:null},'payment confirm');

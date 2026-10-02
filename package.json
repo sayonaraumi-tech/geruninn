@@ -2,11 +2,12 @@
   "name": "tsukinowa-business-system",
   "private": true,
   "scripts": {
-    "test": "node tests/static-and-sw.cjs && node --test tests/onoda-repair.cjs tests/test-data-cleanup.cjs && node --test tests/outstanding.cjs tests/year-end.cjs tests/cloud-core.cjs tests/set-tsukinowa-claims.cjs",
+    "test": "node tests/static-and-sw.cjs && node --test tests/onoda-repair.cjs tests/test-data-cleanup.cjs && node --test tests/historical-import.cjs tests/outstanding.cjs tests/year-end.cjs tests/cloud-core.cjs tests/set-tsukinowa-claims.cjs",
     "test:rules": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node --test tests/firestore-rules.cjs\"",
     "test:browser": "node tests/onoda-browser.cjs && node tests/navigation.cjs && node tests/calendar-sync.cjs && node tests/cloud-browser.cjs",
     "test:business-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/business-browser.cjs\"",
     "test:outstanding-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/outstanding-browser.cjs\"",
+    "test:historical-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/historical-import-browser.cjs\"",
     "claims:tsukinowa": "node scripts/set-tsukinowa-claims.cjs",
     "test:auth-persistence": "node tests/auth-persistence.cjs",
     "test:document-numbering-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/document-numbering-browser.cjs\""

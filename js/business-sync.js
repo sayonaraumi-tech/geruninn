@@ -12,7 +12,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
    if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
    else if(value.length){rows[name]=value;onData(rows);}
    status();
- },e=>{if(!stopped){error=e.message;status();}}));status();flush();}
+ },e=>{if(!stopped){if(name==='receivables'&&String(e.code||'').includes('permission-denied')){rows[name]=[];serverSeen.add(name);onData(rows);status();return;}error=e.message;status();}}));status();flush();}
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
    if(queue.some(x=>x.command.operationId===command.operationId))return command.operationId;

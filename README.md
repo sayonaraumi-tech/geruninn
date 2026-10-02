@@ -52,3 +52,7 @@ New formal documents share Japan-time minute numbers across all document types, 
 ## Outstanding invoice balances
 
 Saved invoice views now derive payment history and outstanding balances from the existing payments collection. Partial and final payments use existing audited transactions; balance PDFs are read-only and never post sales or tax. Estimates omit the registration number. See [data, permissions, reconciliation, PDF and compatibility details](docs/OUTSTANDING-BALANCE.md).
+
+## Historical invoice PDF import
+
+Admins can import previously issued PDFs from 保存帳票 without reissuing or renumbering them. The default creates only the document and a non-sales receivable; existing sales are linked and historical sales require explicit selection. See [review workflow, original-file limitations, rules deployment and validation](docs/HISTORICAL-PDF-IMPORT.md).

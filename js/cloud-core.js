@@ -5,8 +5,8 @@
   else root.TsukinowaCloudCore=api;
 })(typeof globalThis==='object'?globalThis:this,function(){
   'use strict';
-  const COLLECTIONS=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments','expenses','suppliers','cashLedger','auditLogs','settings','bankTransactions','supplierTransactions','migrations']);
-  const STAFF_READ=Object.freeze(['calendarLinks','estimates','projects','documents','sales','payments']);
+  const COLLECTIONS=Object.freeze(['calendarLinks','estimates','projects','documents','sales','receivables','payments','expenses','suppliers','cashLedger','auditLogs','settings','bankTransactions','supplierTransactions','migrations']);
+  const STAFF_READ=Object.freeze(['calendarLinks','estimates','projects','documents','sales','receivables','payments']);
   const LOCAL_KEYS=Object.freeze({business:'tsukinowa_business_v1',documents:'tsukinowa_chohyo_confirmed_history_v1',settings:'tsukinowa_business_settings_v1'});
   function segment(value){if(typeof value!=='string'||!value||value.length>200||/[\/\x00-\x1f]/.test(value)||value==='.'||value==='..')throw Error('Invalid record ID');return value;}
   function validateConfig(config){
@@ -97,6 +97,7 @@
           const revision=(old?.revision||0)+1;writes.push({name,id,payload:clean,old,revision,action:action||(old?'update':'create')});return revision;
         };
         const archiveAudit=async(id,legacy)=>{if(who.role!=='admin')throw Error('管理者のみ');if(await read('auditLogs',id))return;legacyAudits.push({id,legacy:JSON.parse(canonical(legacy))});};
+        const reserveUnique=async(key,result)=>{segment(key);const path=`${base}/operations/${key}`;if(await tx.get(path))throw Error("重複する旧請求書が既に取り込まれています。");numberReservations.push({path,result});};
         const reserveDocumentNumber=async(minute,documentId)=>{
           if(!/^\d{8}-\d{4}$/.test(minute))throw Error('Invalid numbering minute');
           segment(documentId);
@@ -107,7 +108,7 @@
           numberReservations.push({path,result:{documentId,invoiceNo,numberingMinute:minute,numberingSequence:sequence}});
           return {invoiceNo,numberingMinute:minute,numberingSequence:sequence};
         };
-        const result=await planner({read,write,who,archiveAudit,reserveDocumentNumber});
+        const result=await planner({read,write,who,archiveAudit,reserveDocumentNumber,reserveUnique});
         if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
         if(writes.length>30)throw Error('Transaction too large');
         if(!writes.length&&!legacyAudits.length)return result;
@@ -115,7 +116,7 @@
         for(let i=0;i<writes.length;i++){
           const w=writes[i],auditId=operationId+'_'+i;
           tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,createdAt:w.old?.createdAt||w.old?.updatedAt||at,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
-          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId,...(w.name==='documents'?{documentId:w.id,oldStatus:w.old?.payload.status|| (w.old?'active':null),newStatus:w.payload.status||'active',reason:w.payload.reason||'',revisedFromDocumentId:w.payload.revisedFromDocumentId||'',duplicateOfDocumentId:w.payload.duplicateOfDocumentId||''}:{})});
+          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId,...(w.name==='documents'?{documentId:w.id,oldStatus:w.old?.payload.status|| (w.old?'active':null),newStatus:w.payload.status||'active',reason:w.payload.reason||'',revisedFromDocumentId:w.payload.revisedFromDocumentId||'',duplicateOfDocumentId:w.payload.duplicateOfDocumentId||'',...(w.action==='historicalPdfImport'?{invoiceNo:w.payload.snapshot.invoiceNo,sourceFileName:w.payload.sourceFileName,sourceHash:w.payload.sourceHash,linkedSaleId:w.payload.saleId||'',whetherCreatedSale:w.payload.whetherCreatedSale}: {})}:{})});
         }
         for(const reservation of numberReservations)tx.set(reservation.path,{actorId:who.uid,fingerprint,result:reservation.result,createdAt:at});
         for(const a of legacyAudits)tx.set(`${base}/auditLogs/${a.id}`,{userId:who.uid,timestamp:at,entityType:'auditLogs',entityId:a.id,action:'migration',before:null,after:{legacy:a.legacy},operationId});

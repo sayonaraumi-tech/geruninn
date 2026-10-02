@@ -4,7 +4,7 @@
 const active=r=>!!r&&!r.deletedAt&&!['void','cancelled','duplicate','revised'].includes(r.documentStatus||r.status);
 function view(document,sale,paymentRows=[]){
  const d=document.payload||document,s=d.snapshot||d,id=d.documentId||s.documentId||s.historyId;
- const saleId=d.saleId||sale?.id||s.saleId||'sale_'+id;
+ const saleId=d.saleId||d.receivableId||sale?.id||s.saleId||'sale_'+id;
  const invoiceAmount=Number(d.amount??sale?.amount??0);
  const payments=paymentRows.map(r=>r.payload?{...r.payload,id:r.id}:r).filter(p=>active(p)&&p.confirmation!=='bank-marker'&&Number(p.amount)>0&&(p.saleId===saleId||(!p.saleId&&p.documentId===id)))
  .map(p=>({...p,date:p.paymentDate||p.date||'',amount:Number(p.amount),method:p.method||'',note:p.memo||p.note||''})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));

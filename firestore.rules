@@ -3,7 +3,7 @@ service cloud.firestore {
  match /databases/{database}/documents {
   function member(c) { return request.auth != null && request.auth.token.companyId == c && request.auth.token.role in ['admin','staff']; }
   function admin(c) { return member(c) && request.auth.token.role == 'admin'; }
-  function core(n) { return n in ['calendarLinks','estimates','projects','documents','sales','payments']; }
+  function core(n) { return n in ['calendarLinks','estimates','projects','documents','sales','receivables','payments']; }
   function business(n) { return core(n) || n in ['expenses','suppliers','cashLedger','settings','bankTransactions','supplierTransactions','migrations']; }
   function before(c,n,id) { return exists(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)) ? get(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)).data.payload : null; }
   function valid(c,n,id) {
@@ -31,13 +31,14 @@ service cloud.firestore {
    let p=request.resource.data.payload;
    return n!='documents' || (p.documentId==id && p.get('status','active') in ['active','void','cancelled','duplicate','revised']
     && (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id))
-      ? (p.get('status','active')=='active' && (admin(c)||p.get('revisedFromDocumentId','')==''))
+      ? (p.get('status','active')=='active' && (admin(c)||(p.get('revisedFromDocumentId','')=='' && p.get('sourceType','')!='historicalPdfImport')))
       : (admin(c) && p.snapshot==resource.data.payload.snapshot && p.diff(resource.data.payload).affectedKeys().hasOnly(['status','reason','revisedToDocumentId','duplicateOfDocumentId'])
         && resource.data.payload.get('status','active')=='active' && p.status in ['void','cancelled','duplicate','revised'] && p.reason is string && p.reason.size()>0)));
   }
   function paymentGuard(c,n,id) {
    let p=request.resource.data.payload;
-   let sale=getAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId));
+   let targetCollection=p.saleId.matches('receivable_.*')?'receivables':'sales';
+   let sale=getAfter(/databases/$(database)/documents/companies/$(c)/$(targetCollection)/$(p.saleId));
    return sale.data.payload.paymentIds.hasAny([id]) && sale.data.lastOperationId==request.resource.data.lastOperationId
      && (p.get('deletedAt',null)!=null || active(sale.data.payload));
   }
@@ -45,7 +46,8 @@ service cloud.firestore {
    let p=request.resource.data.payload;
    return (n=='cashLedger' && cashMirror(c,id,p))
     || n in ['calendarLinks','estimates','projects']
-    || (n=='documents' && p.documentId==id && p.confirmed==true && p.docType in ['invoice','onoda','estimate','receipt'] && p.snapshot.documentId==id && p.snapshot.docType==p.docType)
+    || (n=='documents' && p.documentId==id && p.confirmed==true && p.docType in ['invoice','onoda','estimate','receipt'] && p.snapshot.documentId==id && p.snapshot.docType==p.docType && p.get('sourceType','')!='historicalPdfImport' && p.snapshot.get('sourceType','')!='historicalPdfImport')
+    || (n=='receivables' && exists(/databases/$(database)/documents/companies/$(c)/receivables/$(id)) && active(p) && p.diff(resource.data.payload).affectedKeys().hasOnly(['paymentIds','paymentVersion']) && p.paymentIds.hasAll(resource.data.payload.get('paymentIds',[])) && p.paymentVersion==resource.data.payload.get('paymentVersion',0)+1)
     || (n=='sales' && active(p) && ((exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && p.diff(resource.data.payload).affectedKeys().hasOnly(['paymentIds','paymentVersion']) && p.paymentIds.hasAll(resource.data.payload.get('paymentIds',[])) && p.paymentVersion==resource.data.payload.get('paymentVersion',0)+1) || (id=='sale_'+p.documentId
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.docType in ['invoice','onoda']
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.amount==p.amount
@@ -53,7 +55,7 @@ service cloud.firestore {
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.salesDate==p.salesDate
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.invoiceDate==p.invoiceDate)))
     || (n=='payments' && p.paymentId==id && p.amount>0 && p.confirmation in ['cash-received','pending-bank']
-      && exists(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId))
+      && (exists(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)) || exists(/databases/$(database)/documents/companies/$(c)/receivables/$(p.saleId)))
       && !exists(/databases/$(database)/documents/companies/$(c)/payments/$(id)));
   }
   match /companies/{c}/{n}/{id} {
@@ -67,20 +69,20 @@ service cloud.firestore {
   }
   match /companies/{c}/operations/{id} {
    allow read: if member(c);
-   allow create: if member(c) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
+   allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
   }
   match /companies/{c}/auditLogs/{id} {
    allow read: if admin(c);
    allow create: if member(c)
-    && request.resource.data.keys().hasOnly(['userId','timestamp','entityType','entityId','action','before','after','operationId','documentId','oldStatus','newStatus','reason','revisedFromDocumentId','duplicateOfDocumentId'])
+    && request.resource.data.keys().hasOnly(['userId','timestamp','entityType','entityId','action','before','after','operationId','documentId','oldStatus','newStatus','reason','revisedFromDocumentId','duplicateOfDocumentId','invoiceNo','sourceFileName','sourceHash','linkedSaleId','whetherCreatedSale'])
     && request.resource.data.userId==request.auth.uid && request.resource.data.timestamp==request.time
     && ((admin(c) && request.resource.data.entityType=='auditLogs' && request.resource.data.entityId==id && request.resource.data.action=='migration' && request.resource.data.before==null && request.resource.data.after.legacy is map
       && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.actorId==request.auth.uid
       && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.createdAt==request.time)
     || (business(request.resource.data.entityType)
-    && request.resource.data.action in ['create','update','status change','payment','migration','expense create','expense update','expense delete','cash transaction','supplier transaction','bank csv import','bank match confirm','payment confirm','adjustment']
-    && (request.resource.data.action!='migration'||admin(c))
+    && request.resource.data.action in ['create','update','status change','payment','migration','expense create','expense update','expense delete','cash transaction','supplier transaction','bank csv import','bank match confirm','payment confirm','adjustment','historicalPdfImport']
+    && (!(request.resource.data.action in ['migration','historicalPdfImport'])||admin(c))
     && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.lastAuditId==id
     && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.updatedAt==request.time
     && request.resource.data.before==before(c,request.resource.data.entityType,request.resource.data.entityId)

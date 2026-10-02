@@ -248,3 +248,26 @@ test('outstanding balance: staff partial/final payments, idempotency, immutable 
  await exec(s,{type:'payment',paymentId:'existing-online-method',saleId:'sale_dynast',amount:1,paymentDate:'2026-10-03',method:'オンライン決済'});
  const after=(await getDoc(ref(db('admin'),'sales','sale_dynast'))).data().payload;for(const k of Object.keys(saleBefore))if(!['paymentIds','paymentVersion'].includes(k))assert.deepEqual(after[k],saleBefore[k]);
 });
+
+test('historical import: admin only, atomic original number/hash locks, non-sale receivable, staff payment and bank match',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ const draft={customerName:'dynast合同会社',invoiceNo:'20260801-001',issueDate:'2026-08-01',dueDate:'2026-09-01',invoiceAmount:779379,billingMonth:'2026-07',remarks:'2026年7月分',items:[]};
+ const cmd={type:'historicalPdfImport',documentId:'historical-one',sourceHash:'a'.repeat(64),sourceFileName:'old.pdf',draft,createSale:false,linkedSaleId:''};
+ await assert.rejects(exec(s,cmd),/管理者/);
+ const raced=await Promise.allSettled([exec(a,cmd),exec(a,{...cmd,documentId:'historical-two'})]);assert.equal(raced.filter(r=>r.status==='fulfilled').length,1);
+ const result=raced.find(r=>r.status==='fulfilled').value,id=result.documentId,anchor=result.receivableId;
+ assert.equal((await getDocs(collection(db('admin'),`companies/${company}/sales`))).size,0);
+ const docBefore=(await getDoc(ref(db('admin'),'documents',id))).data();assert.equal(docBefore.payload.snapshot.invoiceNo,'20260801-001');assert.equal(docBefore.payload.amount,779379);assert.equal(docBefore.payload.issueDate,'2026-08-01');
+ await assertSucceeds(getDocs(collection(db('staff'),`companies/${company}/receivables`)));
+ // Bypass the service to verify Security Rules reject a forged staff import with a valid audit envelope.
+ await assert.rejects(staff.transact('forged-old',{},async({write})=>write('documents','forged-old',{...docBefore.payload,documentId:'forged-old',snapshot:{...docBefore.payload.snapshot,documentId:'forged-old'}},'create',0)),/permission|PERMISSION/i);
+ await exec(s,{type:'payment',paymentId:'historical-partial',documentId:id,saleId:anchor,amount:770379,paymentDate:'2026-08-25',method:'銀行振込'});
+ const O=require('../js/outstanding'),pays=(await getDocs(collection(db('admin'),`companies/${company}/payments`))).docs.map(d=>({id:d.id,...d.data()}));const v=O.view(docBefore,null,pays);assert.equal(v.outstandingAmount,9000);assert.equal(v.paymentStatus,'一部入金');
+ await exec(a,{type:'importBank',bank:{bankTxnId:'bank-old',bankAccount:'test',bankTransactionDate:'2026-08-25',incoming:770379,outgoing:0,amount:770379,description:'dynast'}});
+ await exec(a,{type:'bankMatch',bankTxnId:'bank-old',targetType:'sale',targetId:anchor,paymentId:'historical-partial',expectedRevision:1});
+ assert.equal((await getDoc(ref(db('admin'),'payments','historical-partial'))).data().payload.confirmation,'bank-confirmed');
+ assert.deepEqual((await getDoc(ref(db('admin'),'documents',id))).data(),docBefore);
+ await assert.rejects(exec(a,{...cmd,documentId:'again',draft:{...draft,invoiceNo:'changed',invoiceAmount:1}}),/重複/);
+ const audit=(await getDocs(collection(db('admin'),`companies/${company}/auditLogs`))).docs.map(d=>d.data()).find(r=>r.action==='historicalPdfImport');assert.equal(audit.whetherCreatedSale,false);assert.equal(audit.sourceHash,cmd.sourceHash);
+ admin.dispose();staff.dispose();
+});
