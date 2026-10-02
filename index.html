@@ -1285,12 +1285,8 @@ body{padding-top:72px}
         <input type="text" id="tadashi" value="クロス張替">
       </div>
     </div>
-    <div class="form-row">
-      <div class="form-group full">
-        <label>インボイス登録番号（発行日が2026年10月1日以降に自動表示）</label>
-        <input type="text" id="invoiceRegNo" placeholder="T1234567890123" value="T7040003023888">
-      </div>
-    </div>
+    <!-- Formal snapshots retain their historical registration value. Drafts use company configuration. -->
+    <input type="hidden" id="invoiceRegNo">
     <div class="form-row" id="paymentMethodRow" style="display:none">
       <div class="form-group full">
         <label>お支払方法</label>
@@ -1540,6 +1536,8 @@ const DOC_CONFIGS = {
   }
 };
 
+const COMPANY_INVOICE_REG_NO = 'T7040003023888';
+let registrationSnapshotLocked = false;
 let docType = 'invoice';
 let items = [{ content: 'クロス張替', qty: 24.4, unit: 'm', unitAuto: true, price: 1300, taxable: true }];
 
@@ -1547,6 +1545,7 @@ let items = [{ content: 'クロス張替', qty: 24.4, unit: 'm', unitAuto: true,
 // 小野田で入力した内容を通常帳票へ持ち込まず、通常帳票は毎回空欄から開始する。
 function resetNormalFormBlank() {
   if (docType === 'onoda') return;
+  registrationSnapshotLocked = false;
   const iso = todayISO();
   const setv = (id, value) => {
     const el = document.getElementById(id);
@@ -1555,7 +1554,7 @@ function resetNormalFormBlank() {
   setv('customerName', '');
   setv('invoiceDate', iso);
   setv('invoiceNo', genNo(iso));
-  setv('invoiceRegNo', 'T7040003023888');
+  setv('invoiceRegNo', COMPANY_INVOICE_REG_NO);
   setv('paymentMethod', '銀行振込');
   setv('remarks', '');
   setv('tadashi', '');
@@ -1718,7 +1717,9 @@ function checkInvoiceEra(iso) {
 }
 function updateRegNo() {
   const iso = document.getElementById('invoiceDate').value;
-  const reg = (document.getElementById('invoiceRegNo').value || '').trim();
+  const field = document.getElementById('invoiceRegNo');
+  if (!registrationSnapshotLocked) field.value = COMPANY_INVOICE_REG_NO;
+  const reg = (field.value || '').trim();
   const el = document.getElementById('dRegNo');
   if (!el) return;
   if (checkInvoiceEra(iso) && reg) {
@@ -1738,6 +1739,7 @@ function setDocType(type) {
   if (!_simpleRestoring) bizClearDocLink();
   const oldType = docType;
   if (oldType === 'onoda' && type !== 'onoda') saveOnodaDraft();
+  if (!_simpleRestoring) registrationSnapshotLocked = false;
   docType = type;
   saveActiveTab(type);
   const cfg = DOC_CONFIGS[type];
@@ -1856,14 +1858,14 @@ function setDocType(type) {
   const taxTh = document.querySelector('.items-classic thead .c-tax');
   if (taxTh) taxTh.style.display = cfg.showTaxCategory ? 'table-cell' : 'none';
 
-  // 有効期限は見積書の右上にだけ表示。
+  // 請求書・小野田は支払期限、見積書は有効期限。領収書には表示しない。
   const topExpiry = document.getElementById('topExpiryLine');
-  if (topExpiry) topExpiry.style.display = (type === 'estimate') ? '' : 'none';
+  if (topExpiry) topExpiry.style.display = isReceipt ? 'none' : '';
 
   // expiry 标签按抬头不同
   const expiryLabel = document.querySelector('#topExpiryLine .expiry-label');
   if (expiryLabel) {
-    expiryLabel.textContent = '有効期限';
+    expiryLabel.textContent = cfg.lblExpiry;
   }
 
   // 编辑器：重新渲染
@@ -2623,7 +2625,7 @@ function collectFormState() {
     salesDate: v('salesDate'),
     bizJobMemo: v('bizJobMemo'),
     invoiceNo: v('invoiceNo'),
-    invoiceRegNo: v('invoiceRegNo'),
+    invoiceRegNo: registrationSnapshotLocked ? v('invoiceRegNo') : COMPANY_INVOICE_REG_NO,
     paymentMethod: v('paymentMethod'),
     remarks: v('remarks'),
     tadashi: v('tadashi'),
@@ -2651,7 +2653,8 @@ function applyFormState(state, forceType) {
     setv('salesDate', state.salesDate);
     setv('bizJobMemo', state.bizJobMemo);
     setv('invoiceNo', state.invoiceNo);
-    setv('invoiceRegNo', state.invoiceRegNo);
+    registrationSnapshotLocked = !!(state.historyId || state.cloudRevision);
+    setv('invoiceRegNo', registrationSnapshotLocked ? (state.invoiceRegNo ?? '') : COMPANY_INVOICE_REG_NO);
     setv('paymentMethod', state.paymentMethod);
     setv('remarks', state.remarks);
     setv('tadashi', state.tadashi);
@@ -2671,13 +2674,14 @@ function applyFormState(state, forceType) {
   }
 }
 function makeBlankOnodaMonth() {
+  registrationSnapshotLocked = false;
   _simpleRestoring = true;
   try {
     const iso = todayISO();
     document.getElementById('customerName').value = 'dynast合同会社';
     document.getElementById('invoiceDate').value = iso;
     document.getElementById('invoiceNo').value = genNo(iso);
-    document.getElementById('invoiceRegNo').value = 'T7040003023888';
+    document.getElementById('invoiceRegNo').value = COMPANY_INVOICE_REG_NO;
     document.getElementById('paymentMethod').value = '銀行振込';
     document.getElementById('remarks').value = '';
     items = [{ content: '', qty: 1, unit: 'm', unitAuto: true, price: 1000, taxable: true }];
