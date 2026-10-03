@@ -376,30 +376,35 @@ body {
 .bottom-totals-wrap .totals-classic {
   width: 50%;
 }
-/* 見積書：底部左右两栏 - 备考在左，合計在右 */
+/* 見積書：備考を左半分、合計を右半分に固定する。 */
 .invoice.estimate-mode .bottom-classic {
-  display: flex;
-  flex-direction: row-reverse;
-  align-items: flex-start;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
   gap: 4mm;
 }
 .invoice.estimate-mode .bottom-totals-wrap {
-  flex: 1;
+  grid-column: 2;
+  grid-row: 1;
   display: block;
 }
 .invoice.estimate-mode .bottom-totals-wrap .totals-classic {
   width: 100%;
 }
 .invoice.estimate-mode .bottom-cards {
-  flex: 1;
+  grid-column: 1;
+  grid-row: 1;
+  display: block;
 }
 .bottom-cards {
   display: flex;
   gap: 4mm;
   align-items: stretch;
+  min-width: 0;
 }
 .bottom-cards > * {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 /* 振込先 / お見積条件 卡片 */
@@ -485,6 +490,10 @@ body {
 }
 .remarks-card-classic .remarks-text {
   line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-break: break-all; /* html2canvas also wraps long unspaced references. */
+  writing-mode: horizontal-tb;
 }
 
 /* === 領収書 (A4 縦向) 整体调整 - 按图片3布局 === */
@@ -1275,7 +1284,8 @@ body{padding-top:72px}
       <div id="bizLinkedSource" class="biz-alert" style="display:none;margin-bottom:10px"></div>
       <div class="biz-form-grid">
         <div class="biz-field"><label>売上日（施工完了日）</label><input type="date" id="salesDate"></div>
-        <div class="biz-field"><label>帳票メモ / 現場名</label><input type="text" id="bizJobMemo" placeholder="現場名・住所など"></div>
+        <!-- Retain historical/internal memo values without exposing a second customer field. -->
+        <input type="hidden" id="bizJobMemo">
       </div>
       <div class="biz-muted" style="margin-top:7px">見積書は売上計上しません。請求書・小野田請求を正式PDF保存した時だけ売上台帳へ反映します。</div>
     </div>
@@ -2129,7 +2139,7 @@ function recalc() {
   document.getElementById('dTotalHero').textContent  = fmtNum(total);
 
   const iso = document.getElementById('invoiceDate').value;
-  document.getElementById('dCustomer').textContent = [document.getElementById('customerCompany')?.value,document.getElementById('customerName').value,document.getElementById('customerAddress')?.value].filter(Boolean).join(' ／ ');
+  document.getElementById('dCustomer').textContent = document.getElementById('customerName').value;
   document.getElementById('dNo').textContent       = document.getElementById('invoiceNo').value || '';
   document.getElementById('dDate').textContent     = fmtDateJP(iso);
   updateRegNo();

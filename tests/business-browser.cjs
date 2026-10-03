@@ -36,7 +36,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>bizSwitchPage('savedDocs'));
  await desktop.locator('#allSavedDocsList').getByRole('button',{name:'訂正版を作成',exact:true}).first().waitFor();
  await desktop.evaluate(id=>manageFormalDocument(loadConfirmedHistory().findIndex(x=>x.documentId===id),'revision'),invoiceId);
- await desktop.locator('#customerName').fill('管理者訂正');await desktop.locator('#customerCompany').fill('法人テスト');await desktop.locator('#customerAddress').fill('東京都');
+ await desktop.locator('#customerName').fill('管理者訂正');await desktop.evaluate(()=>{document.getElementById('customerCompany').value='法人テスト';document.getElementById('customerAddress').value='東京都';});
  await desktop.getByRole('button',{name:'正式保存',exact:true}).click();
  await phone.waitForFunction(id=>loadConfirmedHistory().some(d=>d.documentId===id&&d.documentStatus==='revised'),invoiceId);
  assert.equal(await desktop.evaluate(()=>bizState.sales.length),1);assert.equal(await desktop.evaluate(()=>bizState.sales[0].customer),'管理者訂正');
