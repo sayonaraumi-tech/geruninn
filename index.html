@@ -3228,7 +3228,7 @@ async function bizGoogleLoadCalendars(silent=false){
 function bizGoogleNormalizeEvent(g,calendarId){
   const start=g?.start?.dateTime||g?.start?.date||'',end=g?.end?.dateTime||g?.end?.date||'';
   const date=g?.start?.date|| (start?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(start)):'');
-  return {id:'g_'+encodeURIComponent(calendarId)+'_'+g.id,googleEventId:g.id,googleCalendarId:calendarId,uid:g.iCalUID||'',date,start,end,title:g.summary||'(無題)',originalTitle:g.summary||'(無題)',description:g.description||'',googleOriginalDescription:g.description||'',updated:g.updated||'',htmlLink:g.htmlLink||'',source:'google',googleStatus:g.status||'confirmed'};
+  return {id:'g_'+encodeURIComponent(calendarId)+'_'+g.id,googleEventId:g.id,googleCalendarId:calendarId,uid:g.iCalUID||'',date,start,end,title:g.summary||'(無題)',originalTitle:g.summary||'(無題)',location:g.location||'',description:g.description||'',googleOriginalDescription:g.description||'',updated:g.updated||'',htmlLink:g.htmlLink||'',source:'google',googleStatus:g.status||'confirmed'};
 }
 function bizHasFormalData(e){return !!(e.linkedInvoiceId||e.linkedReceiptId||e.linkedEstimateId||e.projectId||e.customerName||e.officialAmount!==undefined&&e.officialAmount!=='');}
 function bizGoogleMergeEvent(x){
@@ -3267,6 +3267,7 @@ async function bizGoogleSyncMonth(){
     const normalized=all.filter(g=>g.status!=='cancelled'&&g.id&&g.start).map(g=>bizGoogleNormalizeEvent(g,calendarId));
     const events=normalized.filter(e=>!bizShouldIgnoreCalendarEvent(e));let added=0,updated=0;
     for(const e of events)bizGoogleMergeEvent(e)==='added'?added++:updated++;
+    if(window.TsukinowaBusinessUI?.isEnabled()){const sync=TsukinowaBusinessUI.getSync();await sync?.flush();if(sync?.getQueue().some(x=>x.command.type==='calendar'))throw Error('日程のクラウド同期が未完了です。同期エラーを確認してください。');}
     // Filtering only applies to incoming data. Never delete prior business records.
     bizAudit('Google日程同期',`${month} 新規${added}・更新${updated}・除外${normalized.length-events.length}`);
     bizPersist();renderCalendarEvents();
@@ -3280,7 +3281,7 @@ async function bizGoogleSyncMonth(){
   finally{bizGoogleSyncing=false;if(syncButton)syncButton.disabled=false;bizGoogleRefreshAuthUI();}
 }
 function bizGoogleSystemDescription(e,description=e.googleOriginalDescription??e.description??''){
-  const base=String(description).replace(/\n?--- 月輪システム ---[\s\S]*?(?:--- 月輪システム終了 ---|$)/g,'').trim();
+  const base=String(e.googleNotesPending?e.systemNote??'':description).replace(/\n?--- 月輪システム ---[\s\S]*?(?:--- 月輪システム終了 ---|$)/g,'').trim();
   const deep=new URL(location.href);deep.search='';deep.hash='';
   for(const [k,v] of Object.entries({page:'calendar',event:e.googleEventId||e.id,calendar:e.googleCalendarId||'',month:bizMonth(e.date)}))deep.searchParams.set(k,v);
   const amount=e.officialAmount!==undefined&&e.officialAmount!=='';
@@ -3306,7 +3307,7 @@ async function bizGoogleCreatePending(e){
   }else{e.googleCalendarId=e.googleCalendarId||bizGoogleCalendarId;e.calendarId=e.googleCalendarId;bizPersist();}
   if(!e.googleCalendarId)throw Error('同期カレンダーを選択してください。');
   const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(e.googleCalendarId)+'/events';
-  let remote;try{remote=await bizGoogleFetch(url,{method:'POST',body:JSON.stringify({id:e.googleEventId,summary:e.title,description:bizGoogleSystemDescription(e),start:{date:e.date},end:{date:e.end},extendedProperties:{private:{estimateId:e.linkedEstimateId,projectId:e.projectId,calendarLinkId:e.id}}})});}
+  let remote;try{remote=await bizGoogleFetch(url,{method:'POST',body:JSON.stringify({id:e.googleEventId,summary:e.title,location:e.location||'',description:bizGoogleSystemDescription(e),start:{date:e.date},end:{date:e.end},extendedProperties:{private:{estimateId:e.linkedEstimateId,projectId:e.projectId,calendarLinkId:e.id}}})});}
   catch(err){if(err.status!==409)throw err;remote=await bizGoogleFetch(url+'/'+encodeURIComponent(e.googleEventId));}
   if(ui?.isEnabled())await ui.getSync().service.execute({type:'calendarCreated',id:e.id,googleEventId:e.googleEventId,calendarId:e.googleCalendarId,htmlLink:remote.htmlLink||'',operationId:crypto.randomUUID()});
   const current=bizState.calendar.find(x=>x.id===e.id);if(current)Object.assign(current,{googleCalendarId:e.googleCalendarId,calendarId:e.googleCalendarId,googleCreatePending:false});
@@ -3325,14 +3326,14 @@ async function bizGooglePatchNow(id){
       const remote=await bizGoogleFetch(url);
       if(remote.status==='cancelled')throw new Error('元の予定は削除されています。帳票はローカルに保存されています。');
       try{
-        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,remote.description||''),...(snapshot.workDate?{start:{date:snapshot.workDate},end:{date:snapshot.end}}:{})})});
+        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,location:snapshot.googleLocationPending?snapshot.location||'':remote.location??snapshot.location??'',description:bizGoogleSystemDescription(snapshot,remote.description||''),...(snapshot.workDate?{start:snapshot.start?.includes('T')?{dateTime:snapshot.start}:{date:snapshot.workDate},end:snapshot.end?.includes('T')?{dateTime:snapshot.end}:{date:snapshot.end}}:{})})});
         break;
       }catch(err){if(err.status!==412||attempt===1)throw err;}
     }
     const current=bizState.calendar.find(x=>x.id===id)||e;
     current.googlePatchedAt=new Date().toISOString();delete current.googlePatchError;
-    if(current.title===snapshot.title&&current.systemNote===snapshot.systemNote&&current.workDate===snapshot.workDate)current.googlePatchPending=false;
-    bizGoogleSetStatus('反映済',true);bizPersist();
+    if(current.title===snapshot.title&&current.systemNote===snapshot.systemNote&&current.workDate===snapshot.workDate&&current.location===snapshot.location&&current.end===snapshot.end)current.googlePatchPending=false;
+    bizGoogleSetStatus('反映済',true);bizPersist();return {snapshot};
   }catch(err){
     const current=bizState.calendar.find(x=>x.id===id)||e;
     current.googlePatchPending=true;current.googlePatchError=err.message;bizPersist();bizGoogleSetStatus('帳票保存済・Google反映待ち');
@@ -3404,7 +3405,7 @@ function openEventModal(id){
   bizCurrentCalendarId=id;
   const p=bizParseShortTitle(e.title||e.originalTitle||'');
   document.getElementById('eventModalTitle').textContent=`${bizFmtDate(e.date)} ${e.title||''}`;
-  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
+  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br>${window.TsukinowaBusinessUI?.isEnabled()&&e.workDate?`<button class="biz-btn" onclick="editSchedule('${e.id}')">施工日・住所・備考を編集</button><br>`:''}<b>系统状态</b>：${bizEsc(bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
   document.getElementById('bizEventModal').classList.remove('biz-hidden');
 }
 function closeEventModal(){document.getElementById('bizEventModal')?.classList.add('biz-hidden')}
