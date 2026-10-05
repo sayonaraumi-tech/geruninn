@@ -7,7 +7,7 @@ function current(){if(account!==root.TsukinowaBusinessUI.getClient()?.getState()
 function text(parent,tag,value){const node=document.createElement(tag);node.textContent=value;parent.append(node);return node;}
 function refresh(){
  const v=current(),box=el('balanceSummary');box.replaceChildren();
- text(box,'p',`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`);
+ text(box,'p',v.active?`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`:`統計対象外の帳票 ｜ 原請求額 ${bizMoney(v.invoiceAmount)} ｜ 記録入金 ${bizMoney(v.paidAmount)}`);
  const table=document.createElement('table');table.className='biz-table';const head=table.createTHead().insertRow();for(const t of ['入金日','入金額','方法','備考','照合状態'])text(head,'th',t);
  const body=table.createTBody();for(const p of v.payments){const row=body.insertRow();for(const t of [p.date,bizMoney(p.amount),p.method,p.note,p.confirmation==='pending-bank'?'銀行照合待ち':p.confirmation==='bank-confirmed'?'銀行確認済':'登録済'])text(row,'td',t);}
  box.append(table);if(!v.payments.length)text(box,'p','入金履歴はありません。');

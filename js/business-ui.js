@@ -135,7 +135,7 @@ function renderDocuments(boxId,kind){
   if(client?.getState().role==='admin'&&h.documentStatus==='active'&&h.docType==='receipt'&&h.paymentMethod==='現金'&&!h.saleId&&!(rows.payments||[]).some(r=>r.payload.documentId===h.documentId))add('現金売上・入金を登録',()=>root.reconcileCashReceipt(h.documentId));
   if(['invoice','onoda'].includes(h.docType)){
    const v=invoiceBalance(h.documentId);
-   const summary=document.createElement('p');summary.textContent=`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`;row.append(summary);
+   const summary=document.createElement('p');summary.textContent=v.active?`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`:`統計対象外の帳票 ｜ 原請求額 ${bizMoney(v.invoiceAmount)} ｜ 記録入金 ${bizMoney(v.paidAmount)}`;row.append(summary);
    if(v.active)add('入金登録',()=>root.openInvoiceBalance(h.documentId,'payment'));
    add('入金履歴',()=>root.openInvoiceBalance(h.documentId));
    if(v.active&&v.outstandingAmount>0)add('未入金残高請求書',()=>root.openInvoiceBalance(h.documentId,'pdf'));
