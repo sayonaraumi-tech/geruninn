@@ -9,3 +9,7 @@ test('backup contains collections metadata excludes nested secrets and validates
 test('checks missing paymentDate category abnormal cash and duplicate documentId',()=>{const d=fixture();d.payments.push({id:'missing',confirmation:'bank-confirmed',amount:1});d.expenses.push({id:'zero',amount:0,expenseDate:'2026-01-01'});d.cashLedger.push({cashTxnId:'negative',date:'2026-08-01',type:'expense',amount:10000});d.documents.push({...d.documents[0]});const types=Y.checks(d,2025).map(c=>c.type);for(const t of ['入金日未設定','分類未設定','金額0・異常金額','現金残高異常','同一 documentId 重複','無効・重複帳票の関連記録'])assert(types.includes(t),t);});
 
 test('audit fiscal boundary uses Japan time',()=>{const d={auditLogs:[{timestamp:'2025-09-30T15:00:00Z',userId:'u'},{timestamp:'2026-09-30T15:00:00Z',userId:'u'}]};assert.equal(Y.audit(d,2025).length,1);});
+
+test('invalid invoice anchors exclude both sales and income even for legacy inconsistent sale status',()=>{
+ const A=require('../js/accounting');const data={documents:[{id:'invalid',status:'void'}],sales:[{id:'sale',documentId:'invalid',documentStatus:'active',amount:1000,salesDate:'2026-10-05',invoiceDate:'2026-10-05'}],payments:[{id:'pay',saleId:'sale',amount:1000,paymentDate:'2026-10-05',confirmation:'cash-received'}]};const m=A.monthly(data,'2026-10');assert.equal(m.sales,0);assert.equal(m.income,0);const y=require('../js/year-end').annual(data,2026);assert.equal(y.sales,0);assert.equal(y.income,0);
+});

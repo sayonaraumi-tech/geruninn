@@ -38,3 +38,22 @@ test('preexisting Google calendar event updates original row without creating Go
  await h.execute({type:'saveDocument',snapshot:{...snapshot,calendarEventId:'existing'},expectedRevision:0});await h.execute({type:'acceptEstimate',estimateId:'est_estimate',workDate:'2026-10-30'});
  const e=h.list('calendarLinks')[0];assert.equal(h.list('calendarLinks').length,1);assert.equal(e.id,'existing');assert.equal(e.payload.googleEventId,'existinggoogle');assert.equal(e.payload.googleCreatePending,false);assert.equal(e.payload.googlePatchPending,true);assert.equal(e.payload.date,'2026-10-30');
 });
+
+test('schedule location and notes synchronize both ways without mutating formal estimate, stale imports or acknowledging a newer edit',async()=>{
+ const h=await saved();await h.execute({type:'acceptEstimate',estimateId:'est_estimate',workDate:'2026/10/10'});let e=h.list('calendarLinks')[0];assert.equal(e.payload.workDate,'2026-10-10');
+ await h.execute({type:'calendarPrepareCreate',id:e.id,calendarId:'shared'});await h.execute({type:'calendarCreated',id:e.id,googleEventId:e.payload.googleEventId,calendarId:'shared'});
+ await h.execute({type:'calendarPatched',id:e.id,expectedRevision:h.list('calendarLinks')[0].revision,at:'now'});
+ const formal=JSON.stringify(h.list('documents')[0].payload.snapshot);
+ await h.execute({type:'updateSchedule',id:e.id,expectedRevision:h.list('calendarLinks')[0].revision,workDate:'2026-10-12',location:'東京',systemNote:'鍵は受付'});e=h.list('calendarLinks')[0];const sent={...e.payload};
+ await h.execute({type:'updateSchedule',id:e.id,expectedRevision:e.revision,workDate:'2026-10-13',location:'横浜',systemNote:'新しい備考'});
+ await h.execute({type:'calendarPatched',id:e.id,snapshot:sent,at:'old'});assert(h.list('calendarLinks')[0].payload.googlePatchPending);
+ await h.execute({type:'calendar',event:{googleEventId:e.payload.googleEventId,googleCalendarId:'shared',date:'2026-10-01',location:'古い住所',description:'古い備考'}});assert.equal(h.list('projects')[0].payload.location,'横浜');
+ await h.execute({type:'calendarPatched',id:e.id,snapshot:h.list('calendarLinks')[0].payload,at:'now'});
+ const event={googleEventId:e.payload.googleEventId,googleCalendarId:'shared',date:'2026-11-02',start:'2026-11-02T09:00:00+09:00',end:'2026-11-02T10:00:00+09:00',location:'大阪',description:'入口で連絡\n--- 月輪システム ---\n状態: 施工予定\n--- 月輪システム終了 ---',updated:'2026-10-05T10:00:00Z'};
+ await h.execute({type:'calendar',event});assert.equal(h.list('projects')[0].payload.location,'大阪');assert.equal(h.list('projects')[0].payload.systemNote,'入口で連絡');assert.equal(h.list('estimates')[0].payload.workDate,'2026-11-02');assert.equal(h.list('calendarLinks')[0].payload.googlePatchPending,false);
+ const revision=h.list('projects')[0].revision;await h.execute({type:'calendar',event});assert.equal(h.list('projects')[0].revision,revision);await h.execute({type:'calendar',event:{...event,date:'2026-10-01',updated:'2026-10-04T10:00:00Z'}});assert.equal(h.list('projects')[0].payload.workDate,'2026-11-02');assert.equal(JSON.stringify(h.list('documents')[0].payload.snapshot),formal);
+});
+test('same Google event ID in another calendar cannot hijack a linked schedule',async()=>{
+ const h=await saved();await h.execute({type:'acceptEstimate',estimateId:'est_estimate',workDate:'2026-10-10'});const e=h.list('calendarLinks')[0];await h.execute({type:'calendarPrepareCreate',id:e.id,calendarId:'shared'});
+ await h.execute({type:'calendar',event:{googleEventId:e.payload.googleEventId,googleCalendarId:'other',date:'2026-10-15'}});assert.equal(h.list('calendarLinks').length,2);assert.equal(h.list('projects')[0].payload.workDate,'2026-10-10');
+});

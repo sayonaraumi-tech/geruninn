@@ -41,11 +41,11 @@ test('two devices: estimate/acceptance, invoice/download idempotency, partial pa
   for(const [id,amount] of [['p1',50000],['p2',20000]])await exec(s,{type:'payment',paymentId:id,saleId:'sale_invoice-1',amount,paymentDate:'2026-09-22',method:'現金'});
   const sale=(await getDoc(ref(db('admin'),'sales','sale_invoice-1'))).data().payload,pays=await getDocs(collection(db('admin'),`companies/${company}/payments`));assert.equal(sale.amount,100000);assert.equal(sale.amount-pays.docs.reduce((n,d)=>n+d.data().payload.amount,0),30000);assert.equal(sale.salesDate,'2026-09-10');assert.equal(sale.invoiceDate,'2026-09-20');
   await assertFails(deleteDoc(ref(db('staff'),'sales','sale_invoice-1')));
-  const event={googleEventId:'google-1',googleCalendarId:'shared',title:'仮の予定',date:'2026-09-10'};const link=await exec(s,{type:'calendar',event});await exec(s,{type:'calendar',event});assert.equal((await getDocs(collection(db('admin'),`companies/${company}/calendarLinks`))).size,1);
+  const priorCalendarSize=(await getDocs(collection(db('admin'),`companies/${company}/calendarLinks`))).size;const event={googleEventId:'google-1',googleCalendarId:'shared',title:'仮の予定',date:'2026-09-10'};const link=await exec(s,{type:'calendar',event});await exec(s,{type:'calendar',event});assert.equal((await getDocs(collection(db('admin'),`companies/${company}/calendarLinks`))).size,priorCalendarSize+1);
   await exec(s,{type:'saveDocument',snapshot:{...snapshot('linked'),calendarEventId:link.id},expectedRevision:0});await exec(s,{type:'calendar',event:{...event,title:'変更 1円'}});assert.equal((await getDoc(ref(db('admin'),'documents','linked'))).data().payload.amount,100000);
   await assert.rejects(exec(a,{type:'saveDocument',snapshot:{...inv,customerName:'stale'},expectedRevision:0}),/別の端末/);
   online=false;phone.enqueue({type:'payment',paymentId:'offline',saleId:'sale_invoice-1',amount:1000,paymentDate:'2026-09-23',method:'現金',operationId:'offline-payment'});await phone.flush();assert.equal(phone.getQueue().length,1);online=true;await phone.flush();await until(()=>desktop.getRows().payments.some(r=>r.id==='offline'));assert.equal(phone.getQueue().length,0);
-  const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().action==='status change'&&d.data().before.status==='見積済'&&d.data().after.status==='受注'));
+  const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().action==='status change'&&d.data().before?.status==='見積済'&&d.data().after.status==='受注'));
   for(const d of audits.docs.slice(0,1)){await assertFails(deleteDoc(d.ref));await assertFails(updateDoc(d.ref,{action:'forged'}));}
  }finally{phone.stop();desktop.stop();admin.dispose();staff.dispose();}
 });
@@ -270,4 +270,35 @@ test('historical import: admin only, atomic original number/hash locks, non-sale
  await assert.rejects(exec(a,{...cmd,documentId:'again',draft:{...draft,invoiceNo:'changed',invoiceAmount:1}}),/重複/);
  const audit=(await getDocs(collection(db('admin'),`companies/${company}/auditLogs`))).docs.map(d=>d.data()).find(r=>r.action==='historicalPdfImport');assert.equal(audit.whetherCreatedSale,false);assert.equal(audit.sourceHash,cmd.sourceHash);
  admin.dispose();staff.dispose();
+});
+
+test('staff standalone cash receipt atomically creates sale/payment/cash and replay cannot duplicate',async()=>{
+ const c=await clientFor('staff'),s=createService(c),cmd={type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('cash-receipt','receipt'),receiptTotal:1100}};
+ const r=await exec(s,cmd);assert.equal(r.saleId,'sale_cash-receipt');assert.equal(r.paymentId,'pay_cash-receipt');
+ const sale=(await getDoc(ref(db('admin'),'sales',r.saleId))).data().payload,payment=(await getDoc(ref(db('admin'),'payments',r.paymentId))).data().payload,cash=(await getDoc(ref(db('admin'),'cashLedger','cash_'+r.paymentId))).data().payload;
+ assert.equal(sale.amount,1100);assert.deepEqual(sale.paymentIds,[r.paymentId]);assert.equal(payment.confirmation,'cash-received');assert.equal(cash.amount,1100);
+ for(let i=0;i<3;i++)await exec(s,{...cmd,expectedRevision:r.revision,snapshot:r.snapshot});assert.equal((await getDocs(collection(db('admin'),`companies/${company}/payments`))).size,1);
+ const e=await exec(s,{type:'calendar',event:{googleEventId:'cash-event',googleCalendarId:'shared',date:'2026-09-20'}});await exec(s,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('event-receipt','receipt'),receiptTotal:1000,calendarEventId:e.id}});await exec(s,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('event-invoice'),calendarEventId:e.id}});assert.equal((await getDoc(ref(db('admin'),'documents','event-invoice'))).data().payload.saleId,'sale_event-receipt');assert.equal((await getDoc(ref(db('admin'),'sales','sale_event-receipt'))).data().payload.documentId,'event-invoice');
+ c.dispose();
+});
+test('admin void cancels pending payments atomically, retains audit and excludes all statistics; staff and subsequent payment denied',async()=>{
+ const a=createService(await clientFor('admin')),s=createService(await clientFor('staff'));
+ const r=await exec(s,{type:'saveDocument',snapshot:snapshot('wrong-invoice'),expectedRevision:0});await exec(s,{type:'payment',paymentId:'pending',saleId:r.saleId,amount:1000,paymentDate:'2026-09-22',method:'銀行振込'});
+ await assert.rejects(exec(s,{type:'documentStatus',documentId:r.documentId,status:'void',reason:'誤入力',expectedRevision:1}),/管理者/);
+ await exec(a,{type:'documentStatus',documentId:r.documentId,status:'void',reason:'誤入力',expectedRevision:1});const document=(await getDoc(ref(db('admin'),'documents',r.documentId))).data().payload,sale=(await getDoc(ref(db('admin'),'sales',r.saleId))).data().payload,payment=(await getDoc(ref(db('admin'),'payments','pending'))).data().payload;
+ assert.equal(document.status,'void');assert.equal(sale.documentStatus,'void');assert(payment.deletedAt);assert.equal(payment.deleteReason,'誤入力');assert.equal(document.snapshot.customerName,'共有テスト');
+ const audit=(await getDocs(collection(db('admin'),`companies/${company}/auditLogs`))).docs.map(d=>d.data());assert(audit.some(a=>a.entityType==='documents'&&a.after.status==='void'&&a.before.status==='active'));assert(audit.some(a=>a.entityType==='payments'&&a.after.deletedAt));
+ const A=require('../js/accounting'),data={sales:[{...sale,id:r.saleId}],payments:[payment]};const m=A.monthly(data,'2026-09');assert.equal(m.sales,0);assert.equal(m.income,0);assert.equal(m.receivables,0);
+ await assert.rejects(exec(s,{type:'payment',paymentId:'late',saleId:r.saleId,amount:1,paymentDate:'2026-09-23',method:'現金'}),/有効/);
+});
+test('staff can edit linked construction schedule and import Google location/notes without editing official snapshot',async()=>{
+ const c=await clientFor('staff'),s=createService(c);await exec(s,{type:'saveDocument',snapshot:snapshot('calendar-est','estimate'),expectedRevision:0});const r=await exec(s,{type:'acceptEstimate',estimateId:'est_calendar-est',workDate:'2026-10-10'});
+ const e=(await getDoc(ref(db('admin'),'calendarLinks',r.calendarEventId))).data();await exec(s,{type:'calendarPrepareCreate',id:r.calendarEventId,calendarId:'shared'});await exec(s,{type:'calendarCreated',id:r.calendarEventId,calendarId:'shared',googleEventId:e.payload.googleEventId});
+ const row=(await getDoc(ref(db('admin'),'calendarLinks',r.calendarEventId))).data();await exec(s,{type:'updateSchedule',id:r.calendarEventId,expectedRevision:row.revision,workDate:'2026-10-11',location:'東京',systemNote:'受付'});const sent=(await getDoc(ref(db('admin'),'calendarLinks',r.calendarEventId))).data().payload;await exec(s,{type:'calendarPatched',id:r.calendarEventId,snapshot:sent,at:'now'});
+ await exec(s,{type:'calendar',event:{googleEventId:e.payload.googleEventId,googleCalendarId:'shared',date:'2026-11-02',start:'2026-11-02',end:'2026-11-03',location:'大阪',description:'鍵は受付'}});const project=(await getDoc(ref(db('admin'),'projects',r.projectId))).data().payload;assert.equal(project.workDate,'2026-11-02');assert.equal(project.location,'大阪');assert.equal(project.systemNote,'鍵は受付');assert.deepEqual((await getDoc(ref(db('admin'),'documents','calendar-est'))).data().payload.snapshot.items,snapshot('calendar-est','estimate').items);c.dispose();
+});
+
+test('legacy receipt reconciliation is admin only, audited, idempotent and preserves original document',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff');const original={documentId:'legacy-cash',docType:'receipt',confirmed:true,status:'active',customerName:'旧顧客',amount:1000,snapshot:{documentId:'legacy-cash',docType:'receipt',customerName:'旧顧客',receiptTotal:1000,invoiceNo:'OLD',invoiceDate:'2026-09-20',paymentMethod:'現金'}};
+ await env.withSecurityRulesDisabled(async c=>setDoc(ref(c.firestore(),'documents','legacy-cash'),{payload:original,revision:1}));const cmd={type:'reconcileReceipt',documentId:'legacy-cash',expectedRevision:1,reason:'旧記録の漏れ補正'};await assert.rejects(exec(createService(staff),cmd),/管理者/);const a=createService(admin);await exec(a,cmd);await exec(a,cmd);assert.deepEqual((await getDoc(ref(db('admin'),'documents','legacy-cash'))).data().payload,original);for(const n of ['sales','payments','cashLedger'])assert.equal((await getDocs(collection(db('admin'),`companies/${company}/${n}`))).size,1);admin.dispose();staff.dispose();
 });
