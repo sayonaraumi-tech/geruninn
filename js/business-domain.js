@@ -7,6 +7,12 @@ const clone=x=>JSON.parse(JSON.stringify(x));
 function cleanSnapshot(s){const out=clone(s);for(const k of ['savedAt','scrollY','cloudRevision','historyId','version','_cloudIdentity','documentStatus','statusReason','revisedFromDocumentId','duplicateOfDocumentId','revisedToDocumentId'])delete out[k];for(const k of ['customerCompany','customerAddress'])if(!out[k])delete out[k];return out;}
 function total(s){if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0,nonTax=0;(s.items||[]).forEach(i=>{const a=(Number(i.qty)||0)*(Number(i.price)||0);subtotal+=a;if(s.docType==='onoda'&&i.taxable===false)nonTax+=a;});if(s.docType!=='onoda')subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+(subtotal-nonTax)*.1);}
 function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'月分 小野田月次施工':(s.bizJobMemo||(s.items||[]).map(x=>x.content).filter(Boolean).slice(0,2).join(' / ')||s.remarks||'工事').slice(0,120);}
+// Presentation metadata only: never used to calculate tax or sales.
+const CATEGORY_RULES=[['クロス張替',/クロス|壁紙/],['穴補修',/穴.*(?:補修|修理|埋)|(?:補修|修理).*穴/],['ドア補修',/(?:ドア|扉).*補修|補修.*(?:ドア|扉)/],['窓枠補修',/窓枠/],['CF/クッションフロア',/\bCF\b|クッションフロア/i],['巾木',/巾木|幅木/],['障子',/障子/],['天井塗装',/天井.*塗装|塗装.*天井/],['ガラスシート',/ガラス.*(?:シート|フィルム)/],['ダイノック',/ダイノック|ダイノク/],['フロアタイル',/フロアタイル/]];
+function rawContent(s){return (s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean).join(' / ')||s.content||s.snapshot?.content||'';}
+function projectCategory(s){if(s.projectCategory)return s.projectCategory;const texts=(s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean);if(!texts.length)texts.push(rawContent(s));const found=new Set();for(const text of texts){let matched=false;for(const [name,re]of CATEGORY_RULES)if(re.test(text.normalize('NFKC'))){found.add(name);matched=true;}if(!matched&&text.trim())found.add('その他');}return [...CATEGORY_RULES.map(r=>r[0]),'その他'].filter(n=>found.has(n)).join('・')||'その他';}
+function estimateFilename(s){return [s.invoiceDate||s.date||s.snapshot?.invoiceDate||'',s.customerName||s.customer||s.snapshot?.customerName||'',projectCategory(s),'見積書'].join('_').replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').replace(/[. ]+$/,'')+'.pdf';}
+function schedule(e,p,link,ids,date){const end=new Date(date+'T00:00:00Z');end.setUTCDate(end.getUTCDate()+1);return {...link,id:ids.calendarEventId,documentId:link.documentId||e.documentId||'',estimateId:e.id,linkedEstimateId:e.id,projectId:p.id,customerName:e.customer,projectCategory:projectCategory(e),officialAmount:e.amount,status:'施工予定',workDate:date,date,start:date,end:end.toISOString().slice(0,10),title:[e.customer,projectCategory(e),'¥'+Number(e.amount||0).toLocaleString('ja-JP'),'施工予定'].join('｜'),source:'google',googleEventId:link.googleEventId||e.googleEventId||ids.googleEventId,googleCalendarId:link.googleCalendarId||link.calendarId||e.calendarId||'',calendarId:link.calendarId||link.googleCalendarId||e.calendarId||'',googleCreatePending:link.googleEventId||e.googleEventId?!!link.googleCreatePending:true,googlePatchPending:true};}
 function numberingMinute(now=new Date()){
  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
  return parts.year+parts.month+parts.day+'-'+parts.hour+parts.minute;
@@ -19,6 +25,7 @@ function createService(client,{now=()=>new Date()}={}){
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
  const importSeed=cmd.type==='historicalPdfImport'?{documents:await client.listRecords('documents'),sales:await client.listRecords('sales')}:null;
+ const calendarSeed=cmd.type==='calendar'?await client.listRecords('calendarLinks'):[];
  const paymentSeed=lifecycle?await client.listRecords('payments'):[];
  const cleanup=typeof module==='object'&&module.exports?require('./test-data-cleanup.js'):globalThis.TsukinowaTestCleanup;
  const cleanupPlan=cmd.type==='cleanTestData'?cleanup.plan(Object.fromEntries(await Promise.all(cleanup.COLLECTIONS.map(async n=>[n,await client.listRecords(n)])))):null;
@@ -41,13 +48,14 @@ function createService(client,{now=()=>new Date()}={}){
   if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable});
   const refs={};
   if(cmd.type==='calendar'){
-    const e=clone(cmd.event),id=await eventId(e),row=await read('calendarLinks',id),old=row?.payload||{};
+    const e=clone(cmd.event),existing=e.googleEventId?calendarSeed.find(r=>r.payload.googleEventId===e.googleEventId):null,id=existing?.id||await eventId(e),row=await read('calendarLinks',id),old=row?.payload||{};
     if(old.calendarId&&e.googleCalendarId&&old.calendarId!==e.googleCalendarId)throw Error('同じGoogle event IDに異なるカレンダーが指定されています。');
     const formal=!!(old.documentId||old.linkedInvoiceId||old.linkedEstimateId||old.projectId);
     const incoming={id,googleEventId:e.googleEventId||'',calendarId:e.googleCalendarId||old.calendarId||'',googleCalendarId:e.googleCalendarId||old.calendarId||'',source:e.source||(e.googleEventId?'google':'ics')};
     for(const k of ['date','start','end','updated','htmlLink','uid'])incoming[k]=e[k]||'';
     incoming.googleLatestTitle=e.title||'';incoming.googleOriginalDescription=e.description||'';incoming.googleStatus=e.googleStatus||'confirmed';
     if(!formal)for(const k of ['title','originalTitle','description'])incoming[k]=e[k]||'';
+    if(old.workDate){if(old.googlePatchPending){for(const k of ['date','start','end'])incoming[k]=old[k];}else{incoming.workDate=e.date||old.workDate;for(const [collection,ref] of [['estimates',old.linkedEstimateId],['projects',old.projectId]])if(ref){const linked=await read(collection,ref);if(linked)await write(collection,ref,{...linked.payload,workDate:incoming.workDate});}}}
     const revision=await write('calendarLinks',id,{...old,...incoming});return {id,revision};
   }
   async function relatedPayments(saleId,ownPaymentId=''){
@@ -149,7 +157,7 @@ function createService(client,{now=()=>new Date()}={}){
     const revision=await write('documents',id,document,undefined,cmd.expectedRevision);
     if(s.docType==='estimate'){
       refs.estimateId=estimateId;
-      await write('estimates',refs.estimateId,{...(estimate?.payload||{}),id:refs.estimateId,documentStatus:'active',historyId:id,documentId:id,customer:s.customerName||'',date:s.invoiceDate||'',amount,content:summary(s),area:s.remarks||'',status:estimate?.payload.status||'見積済',calendarEventId:s.calendarEventId||'',googleEventId:document.googleEventId,calendarId:document.calendarId,projectId:estimate?.payload.projectId||''});
+      await write('estimates',refs.estimateId,{...(estimate?.payload||{}),id:refs.estimateId,documentStatus:'active',historyId:id,documentId:id,customer:s.customerName||'',date:s.invoiceDate||'',amount,content:rawContent(s),projectCategory:projectCategory(s),snapshot:s,area:s.remarks||'',status:estimate?.payload.status||'見積済',calendarEventId:s.calendarEventId||'',googleEventId:document.googleEventId,calendarId:document.calendarId,projectId:estimate?.payload.projectId||''});
     }else if(s.docType==='invoice'||s.docType==='onoda'){
       refs.saleId=saleId;
       await write(anchorCollection(refs.saleId),refs.saleId,{...(sale?.payload||{}),id:refs.saleId,documentStatus:'active',sourceId:id,documentId:id,docType:s.docType,invoiceNo:s.invoiceNo||'',customer:s.customerName||'',amount,salesDate:document.salesDate,saleDate:document.salesDate,invoiceDate:document.invoiceDate,content:summary(s),paymentMethod:s.paymentMethod||'銀行振込',calendarEventId:s.calendarEventId||'',googleEventId:document.googleEventId,calendarId:document.calendarId,estimateId:s.estimateId||'',projectId:s.projectId||''});
@@ -171,13 +179,29 @@ function createService(client,{now=()=>new Date()}={}){
     return {documentId:id,revision,snapshot:s,invoiceNo:s.invoiceNo,numberingMinute:s.numberingMinute,numberingSequence:s.numberingSequence,...refs};
   }
   if(cmd.type==='acceptEstimate'){
-    const e=await read('estimates',cmd.estimateId);if(!e||!A.live(e.payload))throw Error('有効な見積が見つかりません。');
-    const id=e.payload.projectId||'project_'+cmd.estimateId,p=await read('projects',id);
-    if(e.payload.status==='受注'&&p)return {projectId:id,unchanged:true};
-    await write('estimates',cmd.estimateId,{...e.payload,status:'受注',projectId:id},'status change',cmd.expectedRevision);
-    if(!p)await write('projects',id,{id,estimateId:cmd.estimateId,documentId:e.payload.documentId,customer:e.payload.customer,content:e.payload.content,amount:e.payload.amount,calendarEventId:e.payload.calendarEventId||'',googleEventId:e.payload.googleEventId||'',calendarId:e.payload.calendarId||'',status:'受注',workDate:cmd.workDate||''});
-    if(e.payload.calendarEventId){const link=await read('calendarLinks',e.payload.calendarEventId);if(link)await write('calendarLinks',e.payload.calendarEventId,{...link.payload,projectId:id,status:'施工予定',workDate:cmd.workDate||''},'status change');}
-    return {projectId:id};
+    const row=await read('estimates',cmd.estimateId);if(!row||!A.live(row.payload))throw Error('有効な見積が見つかりません。');
+    const document=row.payload.documentId||row.payload.historyId?await read('documents',row.payload.documentId||row.payload.historyId):null;
+    const e={...row.payload,snapshot:row.payload.snapshot||document?.payload.snapshot||{},id:cmd.estimateId},id=e.projectId||'project_'+cmd.estimateId,old=await read('projects',id),p=old?.payload||{id,estimateId:e.id,documentId:e.documentId||'',customer:e.customer,content:e.content,amount:e.amount};
+    const date=String(cmd.workDate||p.workDate||e.workDate||'').trim();if(date)A.date(date);
+    const status=date?'受注':'受注・日程未定';
+    const googleEventId='e'+(await client.digest(id)).slice(0,48);
+    const calendarEventId=e.calendarEventId||p.calendarEventId||(date?await eventId({googleEventId}):'');
+    let next=null;if(date){const link=await read('calendarLinks',calendarEventId);next=schedule(e,p,link?.payload||{}, {calendarEventId,googleEventId},date);await write('calendarLinks',calendarEventId,next,'status change');}
+    // Both clients read the same estimate/project; Firestore retries contention, with stable IDs.
+    await write('estimates',e.id,{...e,status,projectId:id,workDate:date,calendarEventId},'status change');
+    await write('projects',id,{...p,status,workDate:date,calendarEventId,googleEventId:next?.googleEventId||p.googleEventId||'',calendarId:next?.calendarId||p.calendarId||''});
+    return {projectId:id,calendarEventId};
+  }
+  if(cmd.type==='calendarPrepareCreate'){
+    const row=await read('calendarLinks',cmd.id);if(!row)throw Error('施工予定が見つかりません。');
+    const e=row.payload;if(!e.googleCreatePending)return {event:e,revision:row.revision};
+    const calendarId=e.googleCalendarId||e.calendarId||String(cmd.calendarId||'');if(!calendarId)throw Error('同期カレンダーを選択してください。');
+    const next={...e,calendarId,googleCalendarId:calendarId};const revision=await write('calendarLinks',cmd.id,next);return {event:next,revision};
+  }
+  if(cmd.type==='calendarCreated'){
+    const row=await read('calendarLinks',cmd.id);if(!row)return {};
+    const e=row.payload;if(e.googleEventId!==cmd.googleEventId||e.googleCalendarId!==cmd.calendarId)throw Error('Google関連が変更されました。');
+    const revision=await write('calendarLinks',cmd.id,{...e,googleCreatePending:false,htmlLink:cmd.htmlLink||e.htmlLink||''});return {revision};
   }
   if(cmd.type==='payment'){
     const sale=await read(anchorCollection(cmd.saleId),cmd.saleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
@@ -229,5 +253,5 @@ function createService(client,{now=()=>new Date()}={}){
  }}
  return {execute,stable,eventId};
 }
-return {numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
+return {CATEGORY_RULES,rawContent,projectCategory,estimateFilename,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
 });

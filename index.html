@@ -1160,7 +1160,7 @@ body{padding-top:72px}
 <div id="pageEstimates" class="biz-page app-page">
  <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">見積だけで終わったお客様もここには残します。未成約の見積は正式案件・売上には入りません。</div></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>保存済み見積</h2><div class="biz-actions"><input id="estimateSearch" placeholder="客户名・地区・金额" oninput="renderEstimates()"></div></div>
-  <div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>見積日</th><th>客户</th><th>内容/地区</th><th class="biz-money">金额</th><th>状态</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
+  <div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>見積日</th><th>客户</th><th>項目分類 / 内容摘要</th><th class="biz-money">金额</th><th>状态</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
  </div>
 </div>
 
@@ -2234,6 +2234,7 @@ function togglePreview() {
 }
 
 function buildPrintFilename() {
+  if(docType==='estimate')return TsukinowaBusiness.estimateFilename({invoiceDate:document.getElementById('invoiceDate').value,customerName:document.getElementById('customerName').value,items}).slice(0,-4);
   const iso = document.getElementById('invoiceDate').value;
   let dateStr = '';
   let monthStr = '';
@@ -3292,12 +3293,29 @@ function bizGooglePatchEvent(e){
   // Serialize saves so a slow previous request cannot overwrite a later invoice.
   const job=(bizGooglePatchJobs.get(key)||Promise.resolve()).then(()=>bizGooglePatchNow(key));
   bizGooglePatchJobs.set(key,job);
-  job.finally(()=>{if(bizGooglePatchJobs.get(key)===job)bizGooglePatchJobs.delete(key);});
+  job.then(()=>{if(bizGooglePatchJobs.get(key)===job)bizGooglePatchJobs.delete(key);},()=>{if(bizGooglePatchJobs.get(key)===job)bizGooglePatchJobs.delete(key);});
   return job;
 }
+async function bizGoogleCreatePending(e){
+  if(!e.googleCreatePending)return e;
+  if(bizGoogleNeedToken())throw Error('Google接続後に施工予定を自動反映します。');
+  if(!bizGoogleCalendarsLoaded)await bizGoogleLoadCalendars(true);
+  const ui=window.TsukinowaBusinessUI;
+  if(ui?.isEnabled()){
+    const result=await ui.getSync().service.execute({type:'calendarPrepareCreate',id:e.id,calendarId:bizGoogleCalendarId,operationId:crypto.randomUUID()});e=result.event;
+  }else{e.googleCalendarId=e.googleCalendarId||bizGoogleCalendarId;e.calendarId=e.googleCalendarId;bizPersist();}
+  if(!e.googleCalendarId)throw Error('同期カレンダーを選択してください。');
+  const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(e.googleCalendarId)+'/events';
+  let remote;try{remote=await bizGoogleFetch(url,{method:'POST',body:JSON.stringify({id:e.googleEventId,summary:e.title,description:bizGoogleSystemDescription(e),start:{date:e.date},end:{date:e.end},extendedProperties:{private:{estimateId:e.linkedEstimateId,projectId:e.projectId,calendarLinkId:e.id}}})});}
+  catch(err){if(err.status!==409)throw err;remote=await bizGoogleFetch(url+'/'+encodeURIComponent(e.googleEventId));}
+  if(ui?.isEnabled())await ui.getSync().service.execute({type:'calendarCreated',id:e.id,googleEventId:e.googleEventId,calendarId:e.googleCalendarId,htmlLink:remote.htmlLink||'',operationId:crypto.randomUUID()});
+  const current=bizState.calendar.find(x=>x.id===e.id);if(current)Object.assign(current,{googleCalendarId:e.googleCalendarId,calendarId:e.googleCalendarId,googleCreatePending:false});
+  e.googleCreatePending=false;return e;
+}
 async function bizGooglePatchNow(id){
-  const e=bizState.calendar.find(x=>x.id===id);if(!e)return;
+  let e=bizState.calendar.find(x=>x.id===id);if(!e)return;
   try{
+    e=await bizGoogleCreatePending(e);
     if(!e.googleCalendarId)throw new Error('元のカレンダーを確認できません。元カレンダーの対象月を同期してから再試行してください。');
     // Save locally first. Background writes do not trigger authentication popups.
     if(bizGoogleNeedToken())throw new Error('Google接続後、対象月を同期すると帳票を再反映します。');
@@ -3307,13 +3325,13 @@ async function bizGooglePatchNow(id){
       const remote=await bizGoogleFetch(url);
       if(remote.status==='cancelled')throw new Error('元の予定は削除されています。帳票はローカルに保存されています。');
       try{
-        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,remote.description||'')})});
+        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,remote.description||''),...(snapshot.workDate?{start:{date:snapshot.workDate},end:{date:snapshot.end}}:{})})});
         break;
       }catch(err){if(err.status!==412||attempt===1)throw err;}
     }
     const current=bizState.calendar.find(x=>x.id===id)||e;
     current.googlePatchedAt=new Date().toISOString();delete current.googlePatchError;
-    if(current.title===snapshot.title&&current.systemNote===snapshot.systemNote)current.googlePatchPending=false;
+    if(current.title===snapshot.title&&current.systemNote===snapshot.systemNote&&current.workDate===snapshot.workDate)current.googlePatchPending=false;
     bizGoogleSetStatus('反映済',true);bizPersist();
   }catch(err){
     const current=bizState.calendar.find(x=>x.id===id)||e;
@@ -3414,16 +3432,15 @@ function bizEstimateFromHistory(id){
   bizCurrentEstimateId=id;bizCurrentCalendarId=r.calendarEventId||'';bizCurrentProjectId=r.projectId||'';
   const h=loadConfirmedHistory().find(x=>x.historyId===r.historyId);if(h){applyFormState(h,'estimate');bizSwitchPage('chohyo');const b=document.getElementById('bizLinkedSource');if(b){b.style.display='block';b.textContent='見積履歴から呼び出し中：'+(r.customer||'')}}
 }
-function bizAcceptEstimate(id,makeInvoice=false){
+async function bizAcceptEstimate(id,makeInvoice=false){
   bizEnsureV5State();const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
-  r.status='受注';
-  let p=bizState.projects.find(x=>x.estimateId===id);
-  if(!p){p={id:bizId('pj'),estimateId:id,customer:r.customer,content:r.content,amount:r.amount,calendarEventId:r.calendarEventId||'',status:'受注',createdAt:new Date().toISOString()};bizState.projects.unshift(p)}
-  r.projectId=p.id;bizCurrentEstimateId=id;bizCurrentProjectId=p.id;bizCurrentCalendarId=r.calendarEventId||'';
-  const d=prompt('施工日を入力してください（未定なら空欄）', '');
-  if(d){p.workDate=d;const existing=r.calendarEventId?bizState.calendar.find(x=>x.id===r.calendarEventId):null; if(existing){existing.projectId=p.id;existing.workDate=d;existing.status='施工予定';}else{const ce={id:bizId('cal'),uid:'sys_'+p.id,date:d,start:d,title:[r.customer,r.content,r.amount?'¥'+r.amount:'','施工予定'].filter(Boolean).join('｜'),originalTitle:[r.customer,r.content].filter(Boolean).join('｜'),description:'月輪システムから登録',projectId:p.id,linkedEstimateId:id,status:'施工予定',source:'system'};bizState.calendar.push(ce);p.calendarEventId=ce.id;r.calendarEventId=ce.id;bizCurrentCalendarId=ce.id}}
-  bizAudit('見積受注',`${r.customer} ${r.amount}円`);bizPersist();bizRefreshAll();
-  if(makeInvoice)bizConvertEstimateRecordToInvoice(id);
+  const input=prompt('施工日 YYYY-MM-DD（未定なら空欄）',r.workDate||'');if(input===null)return;
+  const date=input.trim()||r.workDate||'';try{if(date)TsukinowaAccounting.date(date);}catch(e){return alert(e.message);}
+  let p=bizState.projects.find(x=>x.estimateId===id);if(!p){p={id:'project_'+id,estimateId:id,customer:r.customer,content:r.content,amount:r.amount};bizState.projects.push(p);}
+  r.projectId=p.id;r.status=p.status=date?'受注':'受注・日程未定';r.workDate=p.workDate=date;
+  if(date){const calendarEventId=r.calendarEventId||p.calendarEventId||'cal_'+id;const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(p.id));const googleEventId='e'+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').slice(0,48);const old=bizState.calendar.find(x=>x.id===calendarEventId);const event=TsukinowaBusiness.schedule(r,p,old||{},{calendarEventId,googleEventId},date);if(old)Object.assign(old,event);else bizState.calendar.push(event);r.calendarEventId=p.calendarEventId=calendarEventId;bizGooglePatchEvent(event);}
+  bizCurrentEstimateId=id;bizCurrentProjectId=p.id;bizCurrentCalendarId=r.calendarEventId||'';if(date)document.getElementById('calendarMonth').value=date.slice(0,7);
+  bizPersist();bizRefreshAll();if(makeInvoice)bizConvertEstimateRecordToInvoice(id);
 }
 function bizConvertEstimateRecordToInvoice(id){
   const r=bizState.estimates.find(x=>x.id===id);if(!r)return;const h=loadConfirmedHistory().find(x=>x.historyId===r.historyId);if(!h)return alert('元の見積履歴が見つかりません。');
@@ -3446,9 +3463,9 @@ function bizRegisterEstimatePayment(id){
   if(confirm('施工日も今登録しますか？')){const d=prompt('施工日 YYYY-MM-DD','');if(d){p.workDate=d;if(r.calendarEventId){const e=bizState.calendar.find(x=>x.id===r.calendarEventId);if(e){e.projectId=p.id;e.workDate=d}}else{const ce={id:bizId('cal'),uid:'sys_'+p.id,date:d,start:d,title:[r.customer,r.content,r.amount?'¥'+r.amount:'','施工予定'].filter(Boolean).join('｜'),originalTitle:[r.customer,r.content].filter(Boolean).join('｜'),description:'月輪システムから登録',projectId:p.id,linkedEstimateId:id,status:'施工予定',source:'system'};bizState.calendar.push(ce);p.calendarEventId=ce.id;r.calendarEventId=ce.id}bizPersist();bizRefreshAll()}}
 }
 function renderEstimates(){
-  bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.filter(r=>!q||[r.customer,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q));
+  bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.map(r=>{const snapshot=r.snapshot||loadConfirmedHistory().find(h=>h.historyId===r.historyId);return {...r,content:TsukinowaBusiness.rawContent(snapshot||r),projectCategory:TsukinowaBusiness.projectCategory({...r,snapshot})};}).filter(r=>!q||[r.customer,r.projectCategory,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q));
   const el=document.getElementById('estimateRows');if(!el)return;
-  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.content||'')}</td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${bizEsc(r.status||'見積済')}</span></td><td>${r.calendarEventId?'有':'—'}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''}<button class="biz-btn" onclick="bizRegisterEstimatePayment('${r.id}')">入金</button><button class="biz-btn primary" onclick="${r.status==='受注'?`bizConvertEstimateRecordToInvoice('${r.id}')`:`bizAcceptEstimate('${r.id}',true)`}">請求書へ</button></div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
+  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${bizEsc(r.status||'見積済')}</span></td><td>${r.calendarEventId?'有':'—'}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''}<button class="biz-btn" onclick="bizRegisterEstimatePayment('${r.id}')">入金</button><button class="biz-btn primary" onclick="${String(r.status||'').includes('受注')?`bizConvertEstimateRecordToInvoice('${r.id}')`:`bizAcceptEstimate('${r.id}',true)`}">請求書へ</button></div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
 }
 function renderProjects(){
   bizEnsureV5State();const q=(document.getElementById('projectSearch')?.value||'').toLowerCase();const rows=bizState.projects.filter(r=>!q||[r.customer,r.content,r.area].join(' ').toLowerCase().includes(q));const el=document.getElementById('projectRows');if(!el)return;
@@ -3469,7 +3486,7 @@ bizOnDocumentConfirmed=function(state){
   bizRestoreDocumentLinks(state);
   if(state?.docType==='estimate'){
     const amount=bizCalcDocumentTotal(state), hid=state.historyId||'';let r=bizState.estimates.find(x=>x.historyId===hid);
-    const payload={historyId:hid,customer:state.customerName||'',date:state.invoiceDate||todayISO(),content:bizSummaryContent(state),area:state.remarks||state.bizJobMemo||'',amount,status:r?.status||'見積済',calendarEventId:bizCurrentCalendarId||r?.calendarEventId||'',updatedAt:new Date().toISOString()};
+    const payload={projectCategory:TsukinowaBusiness.projectCategory(state),snapshot:state,historyId:hid,customer:state.customerName||'',date:state.invoiceDate||todayISO(),content:TsukinowaBusiness.rawContent(state),area:state.remarks||state.bizJobMemo||'',amount,status:r?.status||'見積済',calendarEventId:bizCurrentCalendarId||r?.calendarEventId||'',updatedAt:new Date().toISOString()};
     if(r)Object.assign(r,payload);else{r=Object.assign({id:bizId('est'),createdAt:new Date().toISOString()},payload);bizState.estimates.unshift(r)}
     bizCurrentEstimateId=r.id;
     if(r.calendarEventId){const e=bizState.calendar.find(x=>x.id===r.calendarEventId);if(e){e.linkedEstimateId=r.id;bizReverseUpdateCalendar(e.id,{customerName:r.customer,officialAmount:r.amount,status:'見積済'})}}
