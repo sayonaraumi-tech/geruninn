@@ -109,8 +109,9 @@ function createService(client,{now=()=>new Date()}={}){
     const parent=cmd.revisedFromDocumentId?await read('documents',cmd.revisedFromDocumentId):null;
     if(cmd.revisedFromDocumentId){if(who.role!=='admin')throw Error('訂正版は管理者のみ作成できます。');if(!parent||!A.live(parent.payload)||parent.payload.docType!==s.docType||parent.payload.documentId===id)throw Error('訂正元は同じ種類の有効な帳票を選択してください。');if(parent.revision!==cmd.expectedParentRevision)throw Error('訂正元が変更されました。開き直してください。');if(!String(cmd.reason||'').trim())throw Error('訂正理由を入力してください。');
       for(const k of ['calendarEventId','googleEventId','calendarId','projectId','estimateId'])s[k]=parent.payload[k]||parent.payload.snapshot[k]||'';
-      if(s.docType==='receipt')s.saleId=parent.payload.snapshot.saleId;
+      if(s.docType==='receipt')s.saleId=parent.payload.snapshot.saleId||'';
     }
+    if(s.docType==='receipt'){if(!s.customerName?.trim()||amount<=0||!s.invoiceDate||!s.paymentMethod)throw Error('お客様名・領収金額・日付・支払方法を確認してください。');s.paymentDate=s.paymentDate||s.invoiceDate;}
     if(!Number.isFinite(amount)||amount<0)throw Error('金額を確認してください。');
     if(old&&old.payload.docType!==s.docType)throw Error('帳票の種類は変更できません。新規帳票を作成してください。');
     // A read/download with identical content never mutates the document or accounting records.
@@ -129,12 +130,11 @@ function createService(client,{now=()=>new Date()}={}){
     const minute=numberingMinute(now());
     const number=await reserveDocumentNumber(minute,id);allocated=number;
     Object.assign(s,number);
-    const document={status:'active',reason:cmd.reason||'',revisedFromDocumentId:parent?.payload.documentId||'',saleId:['invoice','onoda'].includes(s.docType)?saleId:s.saleId||'',paymentId:s.docType==='receipt'?paymentId:'',documentId:id,docType:s.docType,amount,customerName:s.customerName||'',salesDate:s.salesDate||s.invoiceDate||'',invoiceDate:s.invoiceDate||'',paymentDate:s.paymentDate||'',snapshot:s,googleEventId:link?.googleEventId||s.googleEventId||'',calendarId:link?.calendarId||s.calendarId||'',calendarEventId:s.calendarEventId||'',estimateId:s.estimateId||'',projectId:s.projectId||'',confirmed:true};
+    const document={status:'active',reason:cmd.reason||'',revisedFromDocumentId:parent?.payload.documentId||'',saleId:['invoice','onoda'].includes(s.docType)?saleId:s.saleId||'',paymentId:s.docType==='receipt'&&s.saleId?paymentId:'',documentId:id,docType:s.docType,amount,customerName:s.customerName||'',salesDate:s.salesDate||s.invoiceDate||'',invoiceDate:s.invoiceDate||'',paymentDate:s.paymentDate||'',snapshot:s,googleEventId:link?.googleEventId||s.googleEventId||'',calendarId:link?.calendarId||s.calendarId||'',calendarEventId:s.calendarEventId||'',estimateId:s.estimateId||'',projectId:s.projectId||'',confirmed:true};
     let estimate=null,sale=null,payment=null;
     if(s.docType==='estimate')estimate=await read('estimates',estimateId);
     if(s.docType==='invoice'||s.docType==='onoda')sale=await read(anchorCollection(saleId),saleId);
-    if(s.docType==='receipt'){
-      if(!s.saleId)throw Error('領収書の対象請求書を選択してください。顧客名だけでは自動照合しません。');
+    if(s.docType==='receipt'&&s.saleId){
       sale=await read(anchorCollection(s.saleId),s.saleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
       if(amount<=0||!s.paymentDate)throw Error('入金額と入金日を確認してください。');
       payment=await read('payments',paymentId);if(payment?.payload.deletedAt)throw Error('取消済み入金に関連する領収書です。管理者に確認してください。');if(payment?.payload.confirmation==='bank-confirmed'&&(payment.payload.amount!==amount||payment.payload.saleId!==s.saleId||payment.payload.paymentDate!==s.paymentDate))throw Error('銀行確認済の入金額・対象・日付は領収書から変更できません。');
@@ -153,11 +153,11 @@ function createService(client,{now=()=>new Date()}={}){
     }else if(s.docType==='invoice'||s.docType==='onoda'){
       refs.saleId=saleId;
       await write(anchorCollection(refs.saleId),refs.saleId,{...(sale?.payload||{}),id:refs.saleId,documentStatus:'active',sourceId:id,documentId:id,docType:s.docType,invoiceNo:s.invoiceNo||'',customer:s.customerName||'',amount,salesDate:document.salesDate,saleDate:document.salesDate,invoiceDate:document.invoiceDate,content:summary(s),paymentMethod:s.paymentMethod||'銀行振込',calendarEventId:s.calendarEventId||'',googleEventId:document.googleEventId,calendarId:document.calendarId,estimateId:s.estimateId||'',projectId:s.projectId||''});
-    }else{
+    }else if(s.docType==='receipt'&&s.saleId){
       refs.paymentId=paymentId;
       await write('payments',refs.paymentId,{...(payment?.payload||{}),id:refs.paymentId,paymentId:refs.paymentId,sourceId:id,documentId:id,saleId:s.saleId,amount,paymentDate:s.paymentDate,date:s.paymentDate,method:s.paymentMethod||'現金',confirmation:payment?.payload.confirmation==='bank-confirmed'?'bank-confirmed':s.paymentMethod==='現金'?'cash-received':'pending-bank',memo:'領収書から登録'},'payment');
     }
-    if(link){
+    if(link&&(s.docType!=='receipt'||s.saleId)){
       const status=s.docType==='estimate'?'見積済':s.docType==='receipt'?'領収済':'請求済';
       const linkedAmount=s.docType==='receipt'?(sale.payload.amount):amount;
       const customer=s.docType==='receipt'?sale.payload.customer:document.customerName;

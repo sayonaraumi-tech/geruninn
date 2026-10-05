@@ -2913,8 +2913,8 @@ function bizOnDocumentConfirmed(state){
     if(sale)Object.assign(sale,payload);else{sale=Object.assign({id:bizId('sale'),createdAt:new Date().toISOString()},payload);bizState.sales.unshift(sale);bizAudit('売上登録',`${sale.customer} ${amount}円`)}
     bizPersist();bizRefreshAll();
   }else if(state.docType==='receipt'){
-    const amount=Number(state.receiptTotal)||0; const candidates=bizState.sales.filter(s=>s.customer===(state.customerName||'')&&bizOutstanding(s)>0).sort((a,b)=>String(a.invoiceDate).localeCompare(String(b.invoiceDate)));
-    const sale=candidates.find(s=>Math.abs(bizOutstanding(s)-amount)<1)||candidates[0];
+    const amount=Number(state.receiptTotal)||0;
+    const sale=state.saleId?bizState.sales.find(s=>s.id===state.saleId):null;
     if(sale&&amount>0){const receiptSourceId=state.historyId||('receipt_'+(state.invoiceNo||'')+'_'+(state.invoiceDate||''));let pay=bizState.payments.find(p=>p.sourceId===receiptSourceId);const payload={sourceId:receiptSourceId,saleId:sale.id,date:state.invoiceDate||todayISO(),amount,method:state.paymentMethod||'現金',memo:'領収書から登録',updatedAt:new Date().toISOString()};if(pay){Object.assign(pay,payload)}else{pay=Object.assign({id:bizId('pay'),createdAt:new Date().toISOString()},payload);bizState.payments.push(pay);bizAudit('入金登録',`${sale.customer} ${amount}円 ${state.paymentMethod||'現金'}`)}bizPersist();bizRefreshAll()}
   }
 }
@@ -3482,7 +3482,7 @@ bizOnDocumentConfirmed=function(state){
     if(bizCurrentEstimateId){const er=bizState.estimates.find(x=>x.id===bizCurrentEstimateId);if(er){er.status='請求書へ変換済';if(!er.projectId&&bizCurrentProjectId)er.projectId=bizCurrentProjectId}}
     if(bizCurrentCalendarId){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e){e.linkedInvoiceId=sourceId;bizReverseUpdateCalendar(e.id,{customerName:state.customerName||'',officialAmount:amount,paymentMethod:state.paymentMethod||'',status:'請求済'})}}
     bizPersist();bizRefreshAll();
-  }else if(state?.docType==='receipt'){
+  }else if(state?.docType==='receipt'&&state.saleId){
     if(bizCurrentCalendarId){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e){e.linkedReceiptId=state.historyId||'';bizReverseUpdateCalendar(e.id,{customerName:state.customerName||'',officialAmount:e.linkedInvoiceId?(e.officialAmount??0):(Number(state.receiptTotal)||0),paymentMethod:state.paymentMethod||'現金',status:'領収済'})}}
     bizPersist();bizRefreshAll();
   }
