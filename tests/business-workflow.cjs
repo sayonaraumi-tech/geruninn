@@ -52,3 +52,7 @@ test('production gate: backed-up Invalid Date outbox recovers subsequent void; c
  const sync=createSync({client:h.client,storage,onCommitted:cmd=>{if(cmd.type==='acceptEstimate')throw Error('bad display observer');},onFailure:(cmd,e)=>failures.push([cmd.type,e])});await sync.flush();
  assert.equal(sync.getQueue().length,0);assert.equal(h.list('calendarLinks').length,1);assert.equal(h.list('calendarLinks')[0].payload.date,'2026-10-07');assert.equal(h.list('documents').find(d=>d.id==='recovery-inv').payload.status,'void');assert.equal(h.list('documents').length,2);assert.equal(failures.length,1);assert([...m.keys()].some(k=>k.includes('invalid_date_bad-date')));assert.equal(JSON.parse(m.get([...m.keys()].find(k=>k.includes('invalid_date_bad-date')))).command.workDate,'2026/10/7');
 });
+
+test('production gate: calendar UTC storage displays Japan time and local ICS times stay local',()=>{
+ assert.equal(B.calendarTime('2026-10-01T05:30:00.000Z'),'14:30');assert.equal(B.calendarTime('2026-10-01T14:30:00+09:00'),'14:30');assert.equal(B.calendarTime('2026-10-01T14:30:00'),'14:30');assert.equal(B.calendarTime('2026-10-01'),'終日');assert.equal(B.calendarTime('Invalid Date'),'未定');
+});

@@ -334,3 +334,26 @@ test('production gate: previously saved independent cash receipt is backfilled w
  await exec(s,{type:'backfillReceiptCash',documentId:'old-cash'});await exec(s,{type:'backfillReceiptCash',documentId:'old-cash'});const doc=(await c.listRecords('documents'))[0].payload;assert.deepEqual(doc.snapshot,old);assert.equal(doc.snapshot.invoiceNo,'20261005-2236-01');assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
  }finally{c.dispose();}
 });
+test('cash calendar receipt reuses existing anchors and formal authority for staff, including legacy backfill',async()=>{
+ const c=await clientFor('staff'),s=createService(c);try{
+ const event={googleEventId:'cash-anchor',googleCalendarId:'shared',title:'下村 健朗、クロス張替、11万、現金',date:'2026-10-05'};
+ const link=await exec(s,{type:'calendar',event});const anchor=(await c.listRecords('calendarLinks'))[0].payload.cashSaleId;
+ const receipt={...snapshot('anchored','receipt'),customerName:'下村健朗',receiptTotal:110000,invoiceDate:event.date,paymentDate:event.date,calendarEventId:link.id,saleId:''};
+ const result=await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});assert.equal(result.saleId,anchor);assert.equal(result.paymentId,'pay_'+anchor);assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
+ await exec(s,{type:'calendar',event:{...event,title:'別名、クロス張替、12万、現金'}});assert.equal((await records('sales'))[0].customer,'下村健朗');assert.equal((await records('sales'))[0].amount,110000);
+ const second=await exec(s,{type:'calendar',event:{...event,googleEventId:'legacy-anchor'}});
+ const old={...receipt,documentId:'legacy-anchor-receipt',calendarEventId:second.id,invoiceNo:'20261005-2236-01'};
+ await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents',old.documentId),{schemaVersion:2,companyId:company,revision:1,createdBy:'uid-staff',createdAt:serverTimestamp(),updatedBy:'uid-staff',updatedAt:serverTimestamp(),lastOperationId:'old',lastAuditId:'old',payload:{documentId:old.documentId,docType:'receipt',status:'active',confirmed:true,customerName:old.customerName,invoiceDate:old.invoiceDate,calendarEventId:second.id,amount:110000,saleId:'',snapshot:old}}));
+ await exec(s,{type:'backfillReceiptCash',documentId:old.documentId});assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,2);assert.deepEqual((await c.listRecords('documents')).find(d=>d.id===old.documentId).payload.snapshot,old);
+ }finally{c.dispose();}
+});
+test('explicit calendar duplicate reconciliation preserves originals and audit, archives only exact imported cash duplicate',async()=>{
+ const c=await clientFor('admin'),s=createService(c);try{
+ const event={googleEventId:'double-cash',googleCalendarId:'shared',title:'下村 健朗、クロス張替、11万、現金',date:'2026-10-05'};const link=await exec(s,{type:'calendar',event});
+ const receipt={...snapshot('official-double','receipt'),customerName:'下村健朗',receiptTotal:110000,invoiceDate:event.date,paymentDate:event.date,saleId:''};await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});
+ await env.withSecurityRulesDisabled(async ctx=>updateDoc(ref(ctx.firestore(),'documents',receipt.documentId),{'payload.calendarEventId':link.id}));
+ const original=(await c.listRecords('documents'))[0].payload.snapshot;
+ const result=await exec(s,{type:'reconcileReceiptCalendarCash',documentId:receipt.documentId});assert(result.reconciled);assert((await exec(s,{type:'reconcileReceiptCalendarCash',documentId:receipt.documentId})).skipped);
+ const A=require('../js/accounting.js');assert.equal((await records('sales')).filter(A.live).length,1);assert.equal((await records('payments')).filter(p=>!p.deletedAt).length,1);assert.equal((await records('cashLedger')).filter(p=>!p.deletedAt).length,1);assert.equal((await records('sales')).length,2);assert.deepEqual((await c.listRecords('documents'))[0].payload.snapshot,original);assert((await c.listRecords('auditLogs')).some(r=>r.after?.duplicateOfSaleId==='sale_official-double'));
+ }finally{c.dispose();}
+});

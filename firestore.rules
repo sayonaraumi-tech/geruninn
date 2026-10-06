@@ -31,7 +31,7 @@ service cloud.firestore {
    return resource.data.payload.docType=='receipt' && active(resource.data.payload)
     && resource.data.payload.get('saleId','')=='' && resource.data.payload.snapshot.get('saleId','')==''
     && resource.data.payload.snapshot.paymentMethod=='現金' && resource.data.payload.amount>0
-    && p.saleId=='sale_'+id && p.paymentId=='pay_'+id
+    && (p.saleId=='sale_'+id && p.paymentId=='pay_'+id || resource.data.payload.get('calendarEventId','')!='' && p.saleId==getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(resource.data.payload.calendarEventId)).data.payload.cashSaleId && p.paymentId=='pay_'+p.saleId)
     && p.diff(resource.data.payload).affectedKeys().hasOnly(['saleId','paymentId'])
     && getAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)).data.payload.sourceType=='receipt-cash'
     && getAfter(/databases/$(database)/documents/companies/$(c)/payments/$(p.paymentId)).data.payload.amount==p.amount;
@@ -89,12 +89,23 @@ service cloud.firestore {
   }
   function receiptCashSale(c,id,p) {
    let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId));
-   return p.get('sourceType','')=='receipt-cash' && id=='sale_'+p.documentId && p.sourceId==p.documentId
+   return p.get('sourceType','')=='receipt-cash' && (id=='sale_'+p.documentId || exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && resource.data.payload.get('sourceType','')=='calendar-cash' && resource.data.payload.get('documentId','')=='' && id=='calendar_cash_'+resource.data.payload.calendarEventId && d.data.payload.calendarEventId==resource.data.payload.calendarEventId) && p.sourceId==p.documentId
     && d.data.lastOperationId==request.resource.data.lastOperationId && d.data.payload.docType=='receipt'
-    && d.data.payload.snapshot.get('saleId','')=='' && d.data.payload.snapshot.paymentMethod=='現金'
+    && d.data.payload.snapshot.get('saleId','') in ['',id] && d.data.payload.snapshot.paymentMethod=='現金'
     && d.data.payload.saleId==id && d.data.payload.amount==p.amount && p.amount>0
     && d.data.payload.customerName==p.customer && p.customer.size()>0
     && d.data.payload.invoiceDate==p.salesDate && p.saleDate==p.salesDate && p.invoiceDate=='';
+  }
+  function receiptCashPayment(c,id,p) {
+   let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId));
+   return exists(/databases/$(database)/documents/companies/$(c)/payments/$(id))
+    && resource.data.payload.get('sourceType','')=='calendar-cash' && resource.data.payload.get('documentId','')==''
+    && resource.data.payload.get('deletedAt',null)==null && resource.data.payload.get('bankTxnId','')==''
+    && p.amount==resource.data.payload.amount && p.paymentDate==resource.data.payload.paymentDate
+    && p.saleId==resource.data.payload.saleId && p.confirmation=='cash-received' && p.method=='現金'
+    && d.data.payload.docType=='receipt' && d.data.payload.saleId==p.saleId && d.data.payload.paymentId==id
+    && d.data.payload.amount==p.amount && d.data.payload.invoiceDate==p.paymentDate
+    && d.data.lastOperationId==request.resource.data.lastOperationId;
   }
   function calendarCashReview(c,id,p) {
    let link=getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(p.calendarEventId));
@@ -116,7 +127,7 @@ service cloud.firestore {
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.customerName==p.customer
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.salesDate==p.salesDate
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.invoiceDate==p.invoiceDate)))
-    || (n=='payments' && calendarCashPayment(c,id,p))
+    || (n=='payments' && (calendarCashPayment(c,id,p)||receiptCashPayment(c,id,p)))
     || (n=='payments' && p.paymentId==id && p.amount>0 && p.confirmation in ['cash-received','pending-bank']
       && (existsAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)) || existsAfter(/databases/$(database)/documents/companies/$(c)/receivables/$(p.saleId)))
       && !exists(/databases/$(database)/documents/companies/$(c)/payments/$(id)));

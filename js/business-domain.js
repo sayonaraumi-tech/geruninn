@@ -25,6 +25,7 @@ function parseCalendar(title){
 }
 function schedule(e,p,link,ids,date){date=A.date(date);const end=new Date(date+'T00:00:00Z');end.setUTCDate(end.getUTCDate()+1);return {...link,id:ids.calendarEventId,documentId:link.documentId||e.documentId||'',estimateId:e.id,linkedEstimateId:e.id,projectId:p.id,customerName:e.customer,projectCategory:projectCategory(e),officialAmount:e.amount,status:'施工予定',workDate:date,date,start:date,end:end.toISOString().slice(0,10),title:[e.customer,projectCategory(e),'¥'+Number(e.amount||0).toLocaleString('ja-JP'),'施工予定'].join('｜'),source:'google',googleEventId:link.googleEventId||e.googleEventId||ids.googleEventId,googleCalendarId:link.googleCalendarId||link.calendarId||e.calendarId||'',calendarId:link.calendarId||link.googleCalendarId||e.calendarId||'',googleCreatePending:link.googleEventId||e.googleEventId?!!link.googleCreatePending:true,googlePatchPending:true};}
 function canDeleteMisregistration(p){return p.sourceType==='system-error'&&p.confirmed!==true&&!p.invoiceNo&&!p.snapshot?.invoiceNo&&!['saleId','receivableId','paymentId','calendarEventId','googleEventId','projectId','estimateId','revisedFromDocumentId','revisedToDocumentId','duplicateOfDocumentId'].some(k=>p[k]||p.snapshot?.[k]);}
+function calendarTime(value){if(!value||String(value).length<=10)return '終日';const text=String(value),d=new Date(/[Zz]$|[+-]\d{2}:?\d{2}$/.test(text)?text:text+'+09:00');return Number.isFinite(d.getTime())?new Intl.DateTimeFormat('ja-JP',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(d):'未定';}
 function numberingMinute(now=new Date()){
  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(now).map(p=>[p.type,p.value]));
  return parts.year+parts.month+parts.day+'-'+parts.hour+parts.minute;
@@ -91,13 +92,31 @@ function createService(client,{now=()=>new Date()}={}){
   if(cmd.type==='backfillReceiptCash'){
     const row=await read('documents',cmd.documentId);if(!row)return {skipped:true};const p=row.payload,s=core.normalizeDates(p.snapshot||{});observed.push(['documents',cmd.documentId,row.revision]);
     if(!A.live(p)||p.docType!=='receipt'||s.saleId||p.saleId||s.paymentMethod!=='現金'||!(total(s)>0)||!s.customerName?.trim()||!s.invoiceDate)return {skipped:true};
-    const saleId='sale_'+cmd.documentId,paymentId='pay_'+cmd.documentId,amount=total(s);
+    let saleId='sale_'+cmd.documentId,paymentId='pay_'+cmd.documentId;const amount=total(s),calendarId=p.calendarEventId||s.calendarEventId;
+    const calendar=calendarId?await read('calendarLinks',calendarId):null;let inherited=null;
+    if(calendar?.payload.cashSaleId){const a=await read('sales',calendar.payload.cashSaleId),pay=await read('payments','pay_'+calendar.payload.cashSaleId);if(a?.payload.sourceType==='calendar-cash'&&!a.payload.documentId&&!a.payload.deletedAt&&pay?.payload.sourceType==='calendar-cash'&&!pay.payload.documentId&&!pay.payload.deletedAt&&!pay.payload.bankTxnId&&pay.payload.amount===amount&&pay.payload.paymentDate===s.invoiceDate){saleId=a.payload.id;paymentId=pay.payload.paymentId;inherited={sale:a.payload,payment:pay.payload};}else return {skipped:true,reviewRequired:true};}
     const sale=await read('sales',saleId),payment=await read('payments',paymentId);
-    if(sale||payment)throw Error('既存の売上・入金があります。領収書の関連付けを管理者が確認してください。');
+    if((sale||payment)&&!inherited)throw Error('既存の売上・入金があります。領収書の関連付けを管理者が確認してください。');
     await write('documents',cmd.documentId,{...p,saleId,paymentId},'update');
-    await write('sales',saleId,{id:saleId,sourceType:'receipt-cash',sourceId:cmd.documentId,documentId:cmd.documentId,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:s.invoiceDate,saleDate:s.invoiceDate,invoiceDate:'',paymentMethod:'現金'});
-    await write('payments',paymentId,{id:paymentId,paymentId,sourceType:'receipt-cash',sourceId:cmd.documentId,documentId:cmd.documentId,saleId,amount,paymentDate:s.invoiceDate,date:s.invoiceDate,method:'現金',confirmation:'cash-received',memo:'領収書から登録'},'payment');
+    await write('sales',saleId,{...(inherited?.sale||{}),id:saleId,sourceType:'receipt-cash',sourceId:cmd.documentId,documentId:cmd.documentId,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:s.invoiceDate,saleDate:s.invoiceDate,invoiceDate:'',paymentMethod:'現金'});
+    await write('payments',paymentId,{...(inherited?.payment||{}),id:paymentId,paymentId,sourceType:'receipt-cash',sourceId:cmd.documentId,documentId:cmd.documentId,saleId,amount,paymentDate:s.invoiceDate,date:s.invoiceDate,method:'現金',confirmation:'cash-received',memo:'領収書から登録'},'payment');
+    if(calendar)await write('calendarLinks',calendarId,{...calendar.payload,documentId:cmd.documentId,linkedReceiptId:cmd.documentId,receiptSaleId:saleId,customerName:s.customerName,officialAmount:amount,status:'領収済',googlePatchPending:true});
     return {documentId:cmd.documentId,saleId,paymentId,repaired:true};
+  }
+  if(cmd.type==='reconcileReceiptCalendarCash'){
+    if(who.role!=='admin')return {skipped:true};
+    const d=await read('documents',cmd.documentId);if(!d||!A.live(d.payload)||d.payload.docType!=='receipt')return {skipped:true};
+    const p=d.payload,s=p.snapshot||{},calendarId=p.calendarEventId||s.calendarEventId,link=calendarId?await read('calendarLinks',calendarId):null;
+    if(!link?.payload.cashSaleId||!p.saleId||link.payload.cashSaleId===p.saleId)return {skipped:true};
+    const oldId=link.payload.cashSaleId,old=await read('sales',oldId),oldPay=await read('payments','pay_'+oldId),official=await read('sales',p.saleId),payment=await read('payments',p.paymentId||'pay_'+p.documentId);
+    if(!old||!oldPay||!official||!payment)return {skipped:true,reviewRequired:true};
+    const a=old.payload,b=oldPay.payload,r=official.payload,v=payment.payload,amount=total(s);
+    if(a.sourceType!=='calendar-cash'||a.documentId||a.calendarEventId!==calendarId||a.sourceId!==calendarId||b.sourceType!=='calendar-cash'||b.documentId||b.bankTxnId||a.deletedAt||b.deletedAt||b.confirmation!=='cash-received'||r.sourceType!=='receipt-cash'||r.documentId!==p.documentId||v.documentId!==p.documentId||v.confirmation!=='cash-received'||v.bankTxnId||v.deletedAt||a.amount!==amount||b.amount!==amount||r.amount!==amount||v.amount!==amount||b.paymentDate!==s.invoiceDate||v.paymentDate!==s.invoiceDate||(a.paymentIds||[]).some(id=>id!=='pay_'+oldId))return {skipped:true,reviewRequired:true};
+    const at=now().toISOString(),reason='同じ日程に関連する正式現金領収書へ統合（自動取込の重複）';
+    await write('sales',oldId,{...a,documentStatus:'duplicate',deletedAt:at,deleteReason:reason,duplicateOfSaleId:p.saleId},'status change');
+    await write('payments','pay_'+oldId,{...b,deletedAt:at,deleteReason:reason,duplicateOfPaymentId:v.paymentId},'adjustment');
+    await write('calendarLinks',calendarId,{...link.payload,cashSaleId:'',receiptSaleId:p.saleId,documentId:p.documentId,linkedReceiptId:p.documentId,customerName:p.customerName,officialAmount:amount,status:'領収済',title:[p.customerName,projectCategory(s),'¥'+amount.toLocaleString('ja-JP'),'領収済'].join('｜'),googlePatchPending:true},'status change');
+    return {documentId:p.documentId,reconciled:true};
   }
   if(cmd.type==='deleteMisregistration'){
     if(who.role!=='admin')throw Error('誤登録削除は管理者のみです。');
@@ -181,22 +200,24 @@ function createService(client,{now=()=>new Date()}={}){
     if(s.docType==='estimate'&&link?.linkedEstimateId&&link.linkedEstimateId!=='est_'+id&&link.linkedEstimateId!==(parent?(parent.payload.estimateId||'est_'+parent.payload.documentId):''))throw Error('この予定には既に見積があります。見積履歴から開いてください。');
     const saleId=link?.cashSaleId||parent?.payload.saleId||parent?.payload.receivableId|| (parent&&['invoice','onoda'].includes(s.docType)?'sale_'+parent.payload.documentId:'sale_'+id);
     const estimateId=parent?(parent.payload.estimateId||'est_'+parent.payload.documentId):'est_'+id;
-    const paymentId=parent?.payload.paymentId||(parent&&s.docType==='receipt'?'pay_'+parent.payload.documentId:'pay_'+id);
+    let paymentId=parent?.payload.paymentId||(parent&&s.docType==='receipt'?'pay_'+parent.payload.documentId:'pay_'+id);
     if(s.docType==='estimate')s.estimateId=estimateId;
     const minute=numberingMinute(now());
     const number=await reserveDocumentNumber(minute,id);allocated=number;
     Object.assign(s,number);
-    const receiptCash=s.docType==='receipt'&&!s.saleId&&s.paymentMethod==='現金';
-    const receiptSaleId=receiptCash?(parent?.payload.saleId||'sale_'+id):s.saleId;
+    const calendarReceiptSale=s.docType==='receipt'?(link?.receiptSaleId||link?.cashSaleId||''):'';
+    const receiptCash=s.docType==='receipt'&&!s.saleId&&!calendarReceiptSale&&s.paymentMethod==='現金';
+    const receiptSaleId=receiptCash?(parent?.payload.saleId||'sale_'+id):s.saleId||calendarReceiptSale;
+    let inheritedCash=null;if(s.docType==='receipt'&&receiptSaleId){const anchor=await read(anchorCollection(receiptSaleId),receiptSaleId);if(anchor?.payload.sourceType==='calendar-cash'&&!anchor.payload.documentId){const prior=await read('payments','pay_'+receiptSaleId);if(prior?.payload.sourceType==='calendar-cash'&&!prior.payload.documentId&&!prior.payload.deletedAt&&!prior.payload.bankTxnId&&prior.payload.confirmation==='cash-received'&&s.paymentMethod==='現金'&&prior.payload.amount===amount&&prior.payload.paymentDate===s.paymentDate){paymentId=prior.id||prior.payload.paymentId||'pay_'+receiptSaleId;inheritedCash=anchor;}else if(calendarReceiptSale&&!s.saleId)throw Error('日程の入金と領収書が一致しません。管理者が入金関係を確認してください。');}}
     const document={status:'active',reason:cmd.reason||'',revisedFromDocumentId:parent?.payload.documentId||'',saleId:['invoice','onoda'].includes(s.docType)?saleId:receiptSaleId||'',paymentId:s.docType==='receipt'&&receiptSaleId?paymentId:'',documentId:id,docType:s.docType,amount,customerName:s.customerName||'',salesDate:s.docType==='estimate'?'':s.salesDate||s.invoiceDate||'',workDate:s.docType==='estimate'?(s.workDate||s.salesDate||''):'',invoiceDate:s.invoiceDate||'',paymentDate:s.paymentDate||'',snapshot:s,googleEventId:link?.googleEventId||s.googleEventId||'',calendarId:link?.calendarId||s.calendarId||'',calendarEventId:s.calendarEventId||'',estimateId:s.estimateId||'',projectId:s.projectId||'',confirmed:true};
     let estimate=null,sale=null,payment=null;
     if(s.docType==='estimate')estimate=await read('estimates',estimateId);
     if(s.docType==='invoice'||s.docType==='onoda')sale=await read(anchorCollection(saleId),saleId);
     if(receiptCash){sale=await read('sales',receiptSaleId);payment=await read('payments',paymentId);}
-    if(s.docType==='receipt'&&s.saleId){
-      sale=await read(anchorCollection(s.saleId),s.saleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
+    if(s.docType==='receipt'&&receiptSaleId&&!receiptCash){
+      sale=await read(anchorCollection(receiptSaleId),receiptSaleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
       if(amount<=0||!s.paymentDate)throw Error('入金額と入金日を確認してください。');
-      payment=await read('payments',paymentId);if(payment?.payload.deletedAt)throw Error('取消済み入金に関連する領収書です。管理者に確認してください。');if(payment?.payload.confirmation==='bank-confirmed'&&(payment.payload.amount!==amount||payment.payload.saleId!==s.saleId||payment.payload.paymentDate!==s.paymentDate))throw Error('銀行確認済の入金額・対象・日付は領収書から変更できません。');
+      payment=await read('payments',paymentId);if(payment?.payload.deletedAt)throw Error('取消済み入金に関連する領収書です。管理者に確認してください。');if(payment?.payload.confirmation==='bank-confirmed'&&(payment.payload.amount!==amount||payment.payload.saleId!==receiptSaleId||payment.payload.paymentDate!==s.paymentDate))throw Error('銀行確認済の入金額・対象・日付は領収書から変更できません。');
     }
     if(parent){
       const ps=await relatedPayments(['invoice','onoda'].includes(s.docType)?saleId:receiptSaleId||'',s.docType==='receipt'?paymentId:'');
@@ -213,17 +234,18 @@ function createService(client,{now=()=>new Date()}={}){
       refs.saleId=saleId;
       await write(anchorCollection(refs.saleId),refs.saleId,{...(sale?.payload||{}),id:refs.saleId,documentStatus:'active',sourceId:id,documentId:id,docType:s.docType,invoiceNo:s.invoiceNo||'',customer:s.customerName||'',amount,salesDate:document.salesDate,saleDate:document.salesDate,invoiceDate:document.invoiceDate,content:summary(s),paymentMethod:s.paymentMethod||'銀行振込',calendarEventId:s.calendarEventId||'',googleEventId:document.googleEventId,calendarId:document.calendarId,estimateId:s.estimateId||'',projectId:s.projectId||''});
     }else if(s.docType==='receipt'&&receiptSaleId){
-      if(receiptCash){refs.saleId=receiptSaleId;await write('sales',receiptSaleId,{...(sale?.payload||{}),id:receiptSaleId,sourceType:'receipt-cash',sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:s.invoiceDate,saleDate:s.invoiceDate,invoiceDate:'',paymentMethod:'現金'});}
+      if(receiptCash||inheritedCash){refs.saleId=receiptSaleId;await write('sales',receiptSaleId,{...(sale?.payload||{}),id:receiptSaleId,sourceType:'receipt-cash',sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:s.invoiceDate,saleDate:s.invoiceDate,invoiceDate:'',paymentMethod:'現金'});}
       refs.paymentId=paymentId;
-      await write('payments',refs.paymentId,{...(payment?.payload||{}),id:refs.paymentId,paymentId:refs.paymentId,sourceId:id,documentId:id,saleId:receiptSaleId,...(receiptCash?{sourceType:'receipt-cash'}:{}),amount,paymentDate:receiptCash?s.invoiceDate:s.paymentDate,date:receiptCash?s.invoiceDate:s.paymentDate,method:s.paymentMethod||'現金',confirmation:payment?.payload.confirmation==='bank-confirmed'?'bank-confirmed':s.paymentMethod==='現金'?'cash-received':'pending-bank',memo:'領収書から登録'},'payment');
+      await write('payments',refs.paymentId,{...(payment?.payload||{}),id:refs.paymentId,paymentId:refs.paymentId,sourceId:id,documentId:id,saleId:receiptSaleId,...(receiptCash||inheritedCash?{sourceType:'receipt-cash'}:{}),amount,paymentDate:receiptCash?s.invoiceDate:s.paymentDate,date:receiptCash?s.invoiceDate:s.paymentDate,method:s.paymentMethod||'現金',confirmation:payment?.payload.confirmation==='bank-confirmed'?'bank-confirmed':s.paymentMethod==='現金'?'cash-received':'pending-bank',memo:'領収書から登録'},'payment');
     }
-    if(link&&s.docType!=='estimate'&&(s.docType!=='receipt'||s.saleId)){
+    if(link&&s.docType!=='estimate'&&(s.docType!=='receipt'||receiptSaleId)){
       const status=s.docType==='estimate'?'見積済':s.docType==='receipt'?'領収済':'請求済';
       const linkedAmount=s.docType==='receipt'?(sale.payload.amount):amount;
-      const customer=s.docType==='receipt'?sale.payload.customer:document.customerName;
+      const customer=s.docType==='receipt'&&!inheritedCash?sale.payload.customer:document.customerName;
       const next={...link,documentStatus:'active',documentId:id,customerName:customer,officialAmount:linkedAmount,status,googlePatchPending:true};
       if(refs.estimateId){next.estimateId=refs.estimateId;next.linkedEstimateId=refs.estimateId;}
-      if(refs.saleId)next.linkedInvoiceId=id;
+      if(refs.saleId&&['invoice','onoda'].includes(s.docType))next.linkedInvoiceId=id;
+      if(s.docType==='receipt')next.receiptSaleId=receiptSaleId;
       if(refs.paymentId)next.linkedReceiptId=id;
       next.title=[customer,summary(s),linkedAmount,status].filter(x=>x!==''&&x!==null).join('｜');
       await write('calendarLinks',s.calendarEventId,next);
@@ -307,5 +329,5 @@ function createService(client,{now=()=>new Date()}={}){
  }}
  return {execute,stable,eventId};
 }
-return {canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
+return {calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
 });
