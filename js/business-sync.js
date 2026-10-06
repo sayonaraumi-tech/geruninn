@@ -30,7 +30,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
     }catch(e){
       if(stopped)return;
       const transient=['unavailable','deadline-exceeded','cancelled','network-request-failed'].some(x=>String(e.code||'').includes(x))||!online();
-      error=e.message||'同期エラー';
+      error=(e.code?'['+e.code+'] ':'')+(e.message||'Firestore同期失敗');
       if(!transient){item.blocked=true;item.error=error;try{saveQueue();}catch(_){} }
       break;
     }
@@ -38,7 +38,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
   })().finally(()=>{running=null;if(!stopped)status();});status();return running;
  }
  function archiveBlocked(){if(!queue[0]?.blocked)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[0]));const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();return key;}
- return {start,enqueue,flush,archiveBlocked,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
+ return {start,enqueue,flush,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
 }
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');

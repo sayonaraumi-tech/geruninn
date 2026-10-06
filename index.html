@@ -1583,7 +1583,7 @@ function isOnodaTollItem(item) {
 }
 
 function applyOnodaFixedPricing(item, row) {
-  if (docType !== 'onoda' || !item || isOnodaTollItem(item)) return;
+  if (registrationSnapshotLocked || docType !== 'onoda' || !item || isOnodaTollItem(item)) return;
   item.unit = 'm';
   item.unitAuto = true;
   item.price = 1000;
@@ -1597,7 +1597,7 @@ function applyOnodaFixedPricing(item, row) {
 // 小野田請求：横浜の現場がある日だけ、その日につき高速代は1回（3,780円）のみ自動追加する。
 // 例：9/5 に横浜の現場が2件・3件あっても「9/5高速代」は1行だけ。
 function syncOnodaYokohamaToll() {
-  if (docType !== 'onoda') return false;
+  if (registrationSnapshotLocked || docType !== 'onoda') return false;
 
   const datePrefix = text => {
     const m = String(text || '').trim().match(/^(\d{1,2}\/\d{1,2})/);
@@ -1753,6 +1753,7 @@ function setDocType(type) {
   docType = type;
   saveActiveTab(type);
   const cfg = DOC_CONFIGS[type];
+  const workLabel=document.getElementById('salesDate')?.previousElementSibling;if(workLabel)workLabel.textContent=type==='estimate'?'施工予定日（任意）':'売上日（施工完了日）';
 
   // 清理可能残留的右上角 expiryMetaLine 节点（旧版本残留）
   const oldExpEl = document.getElementById('expiryMetaLine');
@@ -1945,7 +1946,7 @@ function renderItemEditor() {
     row.className = 'item-row' + (showTax ? ' item-row-tax' : '');
     // 単位の選択肢（よく使う内装単位）
     const unitOptions = ['㎡','m','本','枚','ケース','箇所','式','台','個','人工','日','セット','坪','巻','缶','袋'];
-    if (!it.unit && it.unitAuto !== false) {
+    if (!registrationSnapshotLocked && !it.unit && it.unitAuto !== false) {
       const suggestedUnit = suggestUnitForContent(it.content);
       if (suggestedUnit) {
         it.unit = suggestedUnit;
@@ -2234,39 +2235,7 @@ function togglePreview() {
 }
 
 function buildPrintFilename() {
-  if(docType==='estimate')return TsukinowaBusiness.estimateFilename({invoiceDate:document.getElementById('invoiceDate').value,customerName:document.getElementById('customerName').value,items}).slice(0,-4);
-  const iso = document.getElementById('invoiceDate').value;
-  let dateStr = '';
-  let monthStr = '';
-  if (iso) {
-    const d = new Date(iso);
-    const y = String(d.getFullYear()).slice(2);
-    const m = d.getMonth() + 1;
-    const day = d.getDate();
-    dateStr = y + '／' + m + '／' + day;
-    monthStr = m + '月分';
-  }
-  const customer = (document.getElementById('customerName').value || '').trim();
-  const firstItem = (items[0] && items[0].content || '').trim();
-  const typeJp = { invoice: '請求書', estimate: '見積書', receipt: '領収書', onoda: '請求書' }[docType];
-  const cfg = DOC_CONFIGS[docType];
-  const isMonthly = !!(cfg && cfg.monthlyMode);
-
-  // 拼接：
-  //   一般：26／5／13 プラスワン株式会社様クロス張替請求書
-  //   小野田（月締）：26／4／30 dynast合同会社様4月分クロス張替請求書
-  let name = dateStr;
-  if (customer) name += ' ' + customer + '様';
-  if (isMonthly) {
-    if (monthStr) name += monthStr;
-    name += 'クロス張替';
-  } else if (firstItem) {
-    name += firstItem;
-  }
-  name += typeJp;
-
-  // 移除文件名非法字符（Windows: \ / : * ? " < > |）
-  return name.replace(/[\\\/:*?"<>|]/g, '_');
+  return TsukinowaBusiness.documentFilename(collectFormState()).slice(0,-4);
 }
 
 function systemPrint() {
@@ -2467,7 +2436,6 @@ function doPrint() {
           }
 
           pdf.save(filename);
-          saveConfirmedHistory(confirmedSnapshot);
           cleanup();
         });
       }).catch(function(err) {
@@ -2657,11 +2625,12 @@ function applyFormState(state, forceType) {
     bizRestoreDocumentLinks(state);
     const setv = (id, value) => {
       const el = document.getElementById(id);
-      if (el && value !== undefined && value !== null) el.value = value;
+      if (el) el.value = value ?? '';
     };
     setv('customerName', state.customerName);
     setv('invoiceDate', state.invoiceDate);
-    setv('salesDate', state.salesDate);
+    setv('salesDate', targetType==='estimate'?(state.workDate||state.salesDate||''):state.salesDate);
+    if(Array.isArray(state.items))items=JSON.parse(JSON.stringify(state.items));
     setv('bizJobMemo', state.bizJobMemo);
     setv('invoiceNo', state.invoiceNo);
     registrationSnapshotLocked = !!(state.historyId || state.cloudRevision);
@@ -2675,8 +2644,8 @@ function applyFormState(state, forceType) {
       items = JSON.parse(JSON.stringify(state.items));
     }
     if (targetType === 'onoda') {
-      document.getElementById('customerName').value = 'dynast合同会社';
-      items.forEach(item => applyOnodaFixedPricing(item));
+      document.getElementById('customerName').value = state.customerName||'dynast合同会社';
+      if(!state.historyId&&!state.cloudRevision)items.forEach(item => applyOnodaFixedPricing(item));
     }
     renderItemEditor();
     recalc();
@@ -2921,9 +2890,9 @@ function bizOnDocumentConfirmed(state){
 }
 function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
 function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
-function bizRefreshAll(){const m=bizNowMonth();['calendarMonth','salesMonth','expenseMonth','monthlyMonth'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=m});['paymentDate','expDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=todayISO()});const sd=document.getElementById('salesDate');if(sd&&!sd.value)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderMonthly();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
-function renderDashboard(){const m=bizNowMonth();document.getElementById('dashPeriod').textContent=m.replace('-','年')+'月';const sales=bizState.sales.filter(x=>bizMonth(x.saleDate)===m);const pays=bizState.payments.filter(x=>bizMonth(x.date)===m&&x.confirmation!=='pending-bank');const exps=bizState.expenses.filter(x=>!x.deletedAt&&bizMonth(x.date)===m);const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);document.getElementById('kpiSales').textContent=bizMoney(sum(sales));document.getElementById('kpiPayments').textContent=bizMoney(sum(pays));document.getElementById('kpiReceivable').textContent=bizMoney(bizState.sales.reduce((a,s)=>a+bizOutstanding(s),0));document.getElementById('kpiExpenses').textContent=bizMoney(sum(exps));const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0).length;const unmatched=bizState.bank.filter(b=>!b.matched).length;document.getElementById('attentionList').innerHTML=`未入金 <b>${unpaid}</b>件 ／ 銀行未照合 <b>${unmatched}</b>件 ／ カレンダー取込 <b>${bizState.calendar.length}</b>件`;document.getElementById('dashSalesRows').innerHTML=bizState.sales.slice(0,10).map(s=>`<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate)}</td><td>${bizOutstanding(s)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金 '+bizMoney(bizOutstanding(s))+'</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="biz-muted">まだ売上はありません。</td></tr>'}
-function renderSales(){const m=document.getElementById('salesMonth')?.value||bizNowMonth();const rows=bizState.sales.filter(s=>!m||bizMonth(s.saleDate)===m);document.getElementById('salesRows').innerHTML=rows.map(s=>{const paid=bizPaid(s),out=bizOutstanding(s);return `<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate)}</td><td class="biz-money">${bizMoney(paid)}</td><td class="biz-money">${bizMoney(out)}</td><td>${out<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金</span>'}</td><td><button class="biz-btn" onclick="selectSaleForPayment(\'${s.id}\')">入金</button></td></tr>`}).join('')||'<tr><td colspan="9" class="biz-muted">対象月の売上はありません。</td></tr>';renderPaymentSaleOptions()}
+function bizRefreshAll(){const m=bizNowMonth();['calendarMonth','salesMonth','expenseMonth','monthlyMonth'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=m});['paymentDate','expDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=todayISO()});const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderMonthly();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
+function renderDashboard(){const m=bizNowMonth();document.getElementById('dashPeriod').textContent=m.replace('-','年')+'月';const sales=bizState.sales.filter(x=>bizMonth(x.saleDate)===m);const pays=bizState.payments.filter(x=>bizMonth(x.date)===m&&x.confirmation!=='pending-bank');const exps=bizState.expenses.filter(x=>!x.deletedAt&&bizMonth(x.date)===m);const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);document.getElementById('kpiSales').textContent=bizMoney(sum(sales));document.getElementById('kpiPayments').textContent=bizMoney(sum(pays));document.getElementById('kpiReceivable').textContent=bizMoney(bizState.sales.reduce((a,s)=>a+bizOutstanding(s),0));document.getElementById('kpiExpenses').textContent=bizMoney(sum(exps));const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0).length;const unmatched=bizState.bank.filter(b=>!b.matched).length;document.getElementById('attentionList').innerHTML=`未入金 <b>${unpaid}</b>件 ／ 銀行未照合 <b>${unmatched}</b>件 ／ カレンダー取込 <b>${bizState.calendar.length}</b>件`;document.getElementById('dashSalesRows').innerHTML=bizState.sales.slice(0,10).map(s=>`<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate||'—')}</td><td>${bizOutstanding(s)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金 '+bizMoney(bizOutstanding(s))+'</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="biz-muted">まだ売上はありません。</td></tr>'}
+function renderSales(){const m=document.getElementById('salesMonth')?.value||bizNowMonth();const rows=bizState.sales.filter(s=>!m||bizMonth(s.saleDate)===m);document.getElementById('salesRows').innerHTML=rows.map(s=>{const paid=bizPaid(s),out=bizOutstanding(s);return `<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate||'—')}</td><td class="biz-money">${bizMoney(paid)}</td><td class="biz-money">${bizMoney(out)}</td><td>${s.accountingReviewRequired?'<span class="biz-badge warn">要確認</span>':out<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金</span>'}</td><td><button class="biz-btn" onclick="selectSaleForPayment(\'${s.id}\')">入金</button></td></tr>`}).join('')||'<tr><td colspan="9" class="biz-muted">対象月の売上はありません。</td></tr>';renderPaymentSaleOptions()}
 function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0);sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('')}
 function selectSaleForPayment(id){bizSwitchPage('sales');const s=bizState.sales.find(x=>x.id===id);if(!s)return;document.getElementById('paymentSale').value=id;document.getElementById('paymentAmount').value=bizOutstanding(s);document.getElementById('paymentType').value=s.paymentMethod||'銀行振込';document.getElementById('paymentDate').scrollIntoView({behavior:'smooth',block:'center'})}
 function addPayment(){const saleId=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===saleId);const amount=Number(document.getElementById('paymentAmount').value)||0;if(!sale||amount<=0)return alert('対象売上と入金額を確認してください。');bizState.payments.push({id:bizId('pay'),saleId,date:document.getElementById('paymentDate').value||todayISO(),amount,method:document.getElementById('paymentType').value,memo:document.getElementById('paymentMemo').value,createdAt:new Date().toISOString()});bizAudit('入金登録',`${sale.customer} ${amount}円`);bizPersist();document.getElementById('paymentAmount').value='';document.getElementById('paymentMemo').value='';bizRefreshAll()}
@@ -3174,7 +3143,7 @@ async function bizGoogleConnect(){
   try{
     bizGoogleCalendarId='';bizGoogleCalendars=[];bizGoogleCalendarsLoaded=false;
     await bizGoogleRequestToken('consent');await bizGoogleLoadCalendars(true);
-    bizGoogleSetStatus('接続済',true);
+    bizGoogleSetStatus('接続済',true);window.TsukinowaBusinessUI?.patchPending();
     alert('Google Calendar に接続しました。\n同期対象カレンダーと対象月を確認して「Google日程を同期」を押してください。');
   }catch(e){bizGoogleSetStatus('接続失敗');alert('Googleに接続できませんでした。もう一度お試しください。');}
 }
@@ -3228,7 +3197,7 @@ async function bizGoogleLoadCalendars(silent=false){
 function bizGoogleNormalizeEvent(g,calendarId){
   const start=g?.start?.dateTime||g?.start?.date||'',end=g?.end?.dateTime||g?.end?.date||'';
   const date=g?.start?.date|| (start?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(start)):'');
-  return {id:'g_'+encodeURIComponent(calendarId)+'_'+g.id,googleEventId:g.id,googleCalendarId:calendarId,uid:g.iCalUID||'',date,start,end,title:g.summary||'(無題)',originalTitle:g.summary||'(無題)',description:g.description||'',googleOriginalDescription:g.description||'',updated:g.updated||'',htmlLink:g.htmlLink||'',source:'google',googleStatus:g.status||'confirmed'};
+  return {id:'g_'+encodeURIComponent(calendarId)+'_'+g.id,googleEventId:g.id,googleCalendarId:calendarId,uid:g.iCalUID||'',date,start,end,title:g.summary||'(無題)',originalTitle:g.summary||'(無題)',description:g.description||'',googleOriginalDescription:g.description||'',location:g.location||'',...(()=>{const p=TsukinowaBusiness.parseCalendar(g.summary);return {customerName:p.customer,projectCategory:p.projectCategory,area:p.area,amount:p.amount,paymentMethod:p.payment};})(),updated:g.updated||'',htmlLink:g.htmlLink||'',source:'google',googleStatus:g.status||'confirmed'};
 }
 function bizHasFormalData(e){return !!(e.linkedInvoiceId||e.linkedReceiptId||e.linkedEstimateId||e.projectId||e.customerName||e.officialAmount!==undefined&&e.officialAmount!=='');}
 function bizGoogleMergeEvent(x){
@@ -3238,7 +3207,7 @@ function bizGoogleMergeEvent(x){
   // Keep the local ID so existing invoice/project references continue to resolve.
   const merged={...old,...x,id:old.id};
   if(bizHasFormalData(old)){
-    for(const key of ['title','originalTitle','description'])merged[key]=old[key]??x[key];
+    for(const key of ['title','originalTitle','description','customerName','officialAmount','paymentMethod','projectCategory','area'])merged[key]=old[key]??x[key];
     merged.googleLatestTitle=x.title;
   }
   bizState.calendar[i]=merged;return 'updated';
@@ -3276,7 +3245,7 @@ async function bizGoogleSyncMonth(){
     bizGoogleSetStatus(failures?'反映待ち '+failures+'件':'同期済',!failures);
     alert(`${month} のGoogle日程を同期しました。\n新規 ${added}件 / 更新 ${updated}件\n祝日・休み等 ${normalized.length-events.length}件除外\n同期先: ${calendarId}`+(failures?`\n帳票の反映待ち ${failures}件。共有の編集権限を確認し、再同期してください。`:''));
     bizOpenDeepLinkedEvent();
-  }catch(e){bizGoogleSetStatus('同期失敗');alert(bizGoogleAuthFailed?'Googleに再接続してから、もう一度同期してください。':'同期できませんでした。時間をおいて再度お試しください。接続先は設定で確認できます。');}
+  }catch(e){bizGoogleSetStatus('Google反映待ち：'+e.message);alert('Google同期失敗：'+e.message+'（システム保存済み）');}
   finally{bizGoogleSyncing=false;if(syncButton)syncButton.disabled=false;bizGoogleRefreshAuthUI();}
 }
 function bizGoogleSystemDescription(e,description=e.googleOriginalDescription??e.description??''){
@@ -3288,7 +3257,7 @@ function bizGoogleSystemDescription(e,description=e.googleOriginalDescription??e
   return [base,lines.join('\n')].filter(Boolean).join('\n\n');
 }
 function bizGooglePatchEvent(e){
-  if(!e?.googleEventId||e.source!=='google')return Promise.resolve();
+  if(!e?.googleEventId)return Promise.resolve();
   const key=e.id;
   // Serialize saves so a slow previous request cannot overwrite a later invoice.
   const job=(bizGooglePatchJobs.get(key)||Promise.resolve()).then(()=>bizGooglePatchNow(key));
@@ -3335,7 +3304,7 @@ async function bizGooglePatchNow(id){
     bizGoogleSetStatus('反映済',true);bizPersist();
   }catch(err){
     const current=bizState.calendar.find(x=>x.id===id)||e;
-    current.googlePatchPending=true;current.googlePatchError=err.message;bizPersist();bizGoogleSetStatus('帳票保存済・Google反映待ち');
+    current.googlePatchPending=true;current.googlePatchError=err.message;bizPersist();bizGoogleSetStatus((bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+err.message);window.TsukinowaBusinessUI?.googleError(err.message,id);
   }
 }
 function bizOpenDeepLinkedEvent(){
@@ -3354,25 +3323,11 @@ function bizEnsureV5State(){
   (bizState.calendar||[]).forEach(e=>{if(!e.originalTitle)e.originalTitle=e.title||''});
 }
 function bizFmtDate(d){if(!d)return'';const a=String(d).split('-');return a.length===3?Number(a[1])+'/'+Number(a[2]):d}
-function bizParseShortTitle(title){
-  const raw=String(title||'').trim();
-  const toks=raw.split(/[、,，｜|]/).map(x=>x.trim()).filter(Boolean);
-  let amount=0,payment='',docHint='',area='',customer='',work='';
-  for(const t of toks){
-    const n=Number(t.replace(/[¥￥円,，\s]/g,''));
-    if(!amount && /^\s*[¥￥]?\d{4,9}\s*円?\s*$/.test(t)) amount=n;
-    if(/現金/.test(t)) payment='現金'; else if(/振込|振り込み|振込み/.test(t)) payment='銀行振込';
-    if(/請求/.test(t)) docHint='請求書'; else if(/領収|领收/.test(t)) docHint='領収書'; else if(/見積|报价/.test(t)) docHint='見積書';
-    if(!area && /(区|市|町|村|巣鴨|新宿|池袋|常盤台|目黒|荒川|北区|板橋|横浜|川崎|新小岩)/.test(t) && !/クロス|CF|補修|壁紙|張替|小野田/.test(t)) area=t;
-  }
-  const skip=t=>/^\s*[¥￥]?\d{4,9}\s*円?\s*$/.test(t)||/現金|振込|振り込み|振込み|請求|領収|見積|km$/i.test(t)||t===area;
-  const words=toks.filter(t=>!skip(t));
-  work=words.find(t=>/クロス|CF|補修|壁紙|張替|塗装|床|巾木|ダイノック/.test(t))||words[0]||'';
-  const cand=words.filter(t=>t!==work && !/小野田/.test(t));
-  customer=cand.find(t=>/株式会社|合同会社|様$|さん$|会社$/.test(t))||'';
-  return {raw,toks,amount,payment,docHint,area,customer,work};
-}
+function bizParseShortTitle(title){const p=TsukinowaBusiness.parseCalendar(title);return {...p,raw:String(title||''),toks:String(title||'').split(/[、,，｜|]/),docHint:/請求/.test(title)?'請求書':/領収/.test(title)?'領収書':/見積/.test(title)?'見積書':''};}
+
 function bizEventStatus(e){
+  if(e.accountingReviewRequired)return'要確認';
+  if(e.cashSaleId&&!e.linkedInvoiceId)return'入金済';
   if(e.status)return e.status;
   if(e.linkedReceiptId)return'領収済';
   if(e.linkedInvoiceId)return'請求済';
@@ -3434,7 +3389,7 @@ function bizEstimateFromHistory(id){
 }
 async function bizAcceptEstimate(id,makeInvoice=false){
   bizEnsureV5State();const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
-  const input=prompt('施工日 YYYY-MM-DD（未定なら空欄）',r.workDate||'');if(input===null)return;
+  let input=r.workDate||r.snapshot?.workDate||'';if(String(r.status||'').startsWith('受注')&&!makeInvoice){input=prompt('施工日 YYYY-MM-DD（未定なら空欄）',input);if(input===null)return;}
   const date=input.trim()||r.workDate||'';try{if(date)TsukinowaAccounting.date(date);}catch(e){return alert(e.message);}
   let p=bizState.projects.find(x=>x.estimateId===id);if(!p){p={id:'project_'+id,estimateId:id,customer:r.customer,content:r.content,amount:r.amount};bizState.projects.push(p);}
   r.projectId=p.id;r.status=p.status=date?'受注':'受注・日程未定';r.workDate=p.workDate=date;
@@ -3465,7 +3420,7 @@ function bizRegisterEstimatePayment(id){
 function renderEstimates(){
   bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.map(r=>{const snapshot=r.snapshot||loadConfirmedHistory().find(h=>h.historyId===r.historyId);return {...r,content:TsukinowaBusiness.rawContent(snapshot||r),projectCategory:TsukinowaBusiness.projectCategory({...r,snapshot})};}).filter(r=>!q||[r.customer,r.projectCategory,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q));
   const el=document.getElementById('estimateRows');if(!el)return;
-  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${bizEsc(r.status||'見積済')}</span></td><td>${r.calendarEventId?'有':'—'}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''}<button class="biz-btn" onclick="bizRegisterEstimatePayment('${r.id}')">入金</button><button class="biz-btn primary" onclick="${String(r.status||'').includes('受注')?`bizConvertEstimateRecordToInvoice('${r.id}')`:`bizAcceptEstimate('${r.id}',true)`}">請求書へ</button></div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
+  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${bizEsc(r.status||'見積済')}</span></td><td>${bizEsc(r.workDate||'—')}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''}<button class="biz-btn" onclick="bizRegisterEstimatePayment('${r.id}')">入金</button><button class="biz-btn primary" onclick="${String(r.status||'').includes('受注')?`bizConvertEstimateRecordToInvoice('${r.id}')`:`bizAcceptEstimate('${r.id}',true)`}">請求書へ</button></div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
 }
 function renderProjects(){
   bizEnsureV5State();const q=(document.getElementById('projectSearch')?.value||'').toLowerCase();const rows=bizState.projects.filter(r=>!q||[r.customer,r.content,r.area].join(' ').toLowerCase().includes(q));const el=document.getElementById('projectRows');if(!el)return;
@@ -3486,7 +3441,7 @@ bizOnDocumentConfirmed=function(state){
   bizRestoreDocumentLinks(state);
   if(state?.docType==='estimate'){
     const amount=bizCalcDocumentTotal(state), hid=state.historyId||'';let r=bizState.estimates.find(x=>x.historyId===hid);
-    const payload={projectCategory:TsukinowaBusiness.projectCategory(state),snapshot:state,historyId:hid,customer:state.customerName||'',date:state.invoiceDate||todayISO(),content:TsukinowaBusiness.rawContent(state),area:state.remarks||state.bizJobMemo||'',amount,status:r?.status||'見積済',calendarEventId:bizCurrentCalendarId||r?.calendarEventId||'',updatedAt:new Date().toISOString()};
+    const payload={projectCategory:TsukinowaBusiness.projectCategory(state),snapshot:state,historyId:hid,customer:state.customerName||'',date:state.invoiceDate||todayISO(),workDate:state.workDate||state.salesDate||'',content:TsukinowaBusiness.rawContent(state),area:state.remarks||state.bizJobMemo||'',amount,status:r?.status||'見積済',calendarEventId:bizCurrentCalendarId||r?.calendarEventId||'',updatedAt:new Date().toISOString()};
     if(r)Object.assign(r,payload);else{r=Object.assign({id:bizId('est'),createdAt:new Date().toISOString()},payload);bizState.estimates.unshift(r)}
     bizCurrentEstimateId=r.id;
     if(r.calendarEventId){const e=bizState.calendar.find(x=>x.id===r.calendarEventId);if(e){e.linkedEstimateId=r.id;bizReverseUpdateCalendar(e.id,{customerName:r.customer,officialAmount:r.amount,status:'見積済'})}}

@@ -41,11 +41,11 @@ test('two devices: estimate/acceptance, invoice/download idempotency, partial pa
   for(const [id,amount] of [['p1',50000],['p2',20000]])await exec(s,{type:'payment',paymentId:id,saleId:'sale_invoice-1',amount,paymentDate:'2026-09-22',method:'現金'});
   const sale=(await getDoc(ref(db('admin'),'sales','sale_invoice-1'))).data().payload,pays=await getDocs(collection(db('admin'),`companies/${company}/payments`));assert.equal(sale.amount,100000);assert.equal(sale.amount-pays.docs.reduce((n,d)=>n+d.data().payload.amount,0),30000);assert.equal(sale.salesDate,'2026-09-10');assert.equal(sale.invoiceDate,'2026-09-20');
   await assertFails(deleteDoc(ref(db('staff'),'sales','sale_invoice-1')));
-  const event={googleEventId:'google-1',googleCalendarId:'shared',title:'仮の予定',date:'2026-09-10'};const link=await exec(s,{type:'calendar',event});await exec(s,{type:'calendar',event});assert.equal((await getDocs(collection(db('admin'),`companies/${company}/calendarLinks`))).size,1);
+  const event={googleEventId:'google-1',googleCalendarId:'shared',title:'仮の予定',date:'2026-09-10'};const link=await exec(s,{type:'calendar',event});await exec(s,{type:'calendar',event});assert.equal((await getDocs(collection(db('admin'),`companies/${company}/calendarLinks`))).size,2);
   await exec(s,{type:'saveDocument',snapshot:{...snapshot('linked'),calendarEventId:link.id},expectedRevision:0});await exec(s,{type:'calendar',event:{...event,title:'変更 1円'}});assert.equal((await getDoc(ref(db('admin'),'documents','linked'))).data().payload.amount,100000);
   await assert.rejects(exec(a,{type:'saveDocument',snapshot:{...inv,customerName:'stale'},expectedRevision:0}),/別の端末/);
   online=false;phone.enqueue({type:'payment',paymentId:'offline',saleId:'sale_invoice-1',amount:1000,paymentDate:'2026-09-23',method:'現金',operationId:'offline-payment'});await phone.flush();assert.equal(phone.getQueue().length,1);online=true;await phone.flush();await until(()=>desktop.getRows().payments.some(r=>r.id==='offline'));assert.equal(phone.getQueue().length,0);
-  const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().action==='status change'&&d.data().before.status==='見積済'&&d.data().after.status==='受注'));
+  const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().action==='status change'&&d.data().before?.status==='見積済'&&d.data().after.status==='受注'));
   for(const d of audits.docs.slice(0,1)){await assertFails(deleteDoc(d.ref));await assertFails(updateDoc(d.ref,{action:'forged'}));}
  }finally{phone.stop();desktop.stop();admin.dispose();staff.dispose();}
 });
@@ -270,4 +270,16 @@ test('historical import: admin only, atomic original number/hash locks, non-sale
  await assert.rejects(exec(a,{...cmd,documentId:'again',draft:{...draft,invoiceNo:'changed',invoiceAmount:1}}),/重複/);
  const audit=(await getDocs(collection(db('admin'),`companies/${company}/auditLogs`))).docs.map(d=>d.data()).find(r=>r.action==='historicalPdfImport');assert.equal(audit.whetherCreatedSale,false);assert.equal(audit.sourceHash,cmd.sourceHash);
  admin.dispose();staff.dispose();
+});
+
+test('staff Google cash synchronization atomically updates one sale/payment/cash mirror, locks formal data and flags cancellations',async()=>{
+ const staff=await clientFor('staff'),service=createService(staff);const event={googleEventId:'cashgoogle',googleCalendarId:'shared',date:'2026-10-05',title:'下村 健朗、クロス張替、足立区、11万、現金、km'};
+ const link=await exec(service,{type:'calendar',event});await exec(service,{type:'calendar',event});
+ const all=async n=>(await getDocs(collection(db('admin'),`companies/${company}/${n}`))).docs.map(d=>({id:d.id,...d.data()}));
+ assert.equal((await all('sales')).length,1);assert.equal((await all('payments')).length,1);assert.equal((await all('cashLedger')).length,1);
+ await exec(service,{type:'calendar',event:{...event,date:'2026-10-06',title:'別 顧客、穴補修、足立区、12万、現金'}});assert.equal((await all('sales'))[0].payload.amount,120000);assert.equal((await all('payments'))[0].payload.amount,120000);assert.equal((await all('cashLedger'))[0].payload.amount,120000);
+ // Staff can lock the same stable accounting anchor with a formal invoice.
+ await exec(service,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('cashformal'),calendarEventId:link.id}});
+ await exec(service,{type:'calendar',event:{...event,title:'変更、クロス張替、99万、現金'}});assert.equal((await all('sales')).length,1);assert.equal((await all('sales'))[0].payload.amount,100000);
+ await exec(service,{type:'calendar',event:{...event,googleStatus:'cancelled'}});assert((await all('sales'))[0].payload.accountingReviewRequired);
 });
