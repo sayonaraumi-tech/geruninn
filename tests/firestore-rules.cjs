@@ -17,7 +17,7 @@ async function clientFor(role){
   listen:(path,many,next,error)=>onSnapshot(many?collection(store,path):doc(store,path),{includeMetadataChanges:true},s=>next(many?s.docs.map(d=>({id:d.id,...d.data()})):s.exists()?{id:s.id,...s.data()}:null,{fromCache:s.metadata.fromCache}),error),
   list:async path=>(await getDocs(collection(store,path))).docs.map(d=>({id:d.id,...d.data()})),
   digest:async s=>crypto.createHash('sha256').update(s).digest('hex'),timestamp:serverTimestamp,
-  transaction:fn=>runTransaction(store,tx=>fn({get:async p=>{const s=await tx.get(doc(store,p));return s.exists()?s.data():null},set:(p,v)=>tx.set(doc(store,p),v)}))});
+  transaction:fn=>runTransaction(store,tx=>fn({get:async p=>{const s=await tx.get(doc(store,p));return s.exists()?s.data():null},set:(p,v)=>tx.set(doc(store,p),v),delete:p=>tx.delete(doc(store,p))}))});
  await client.start({enabled:true,companyId:company,firebase:{apiKey:'x',authDomain:'x',projectId:'demo-tsukinowa',appId:'x'}});await callback({uid:'uid-'+role,claims:{role,companyId:company}});return client;
 }
 async function until(fn){const start=Date.now();while(!fn()){if(Date.now()-start>12000)throw Error('snapshot timeout');await new Promise(r=>setTimeout(r,30));}}
@@ -282,4 +282,55 @@ test('staff Google cash synchronization atomically updates one sale/payment/cash
  await exec(service,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('cashformal'),calendarEventId:link.id}});
  await exec(service,{type:'calendar',event:{...event,title:'変更、クロス張替、99万、現金'}});assert.equal((await all('sales')).length,1);assert.equal((await all('sales'))[0].payload.amount,100000);
  await exec(service,{type:'calendar',event:{...event,googleStatus:'cancelled'}});assert((await all('sales'))[0].payload.accountingReviewRequired);
+});
+
+test('production gate: legacy slash construction date, undated acceptance, two-way timed location sync and unique calendar',async()=>{
+ const c=await clientFor('admin'),s=createService(c);const originalExecute=s.execute;s.execute=async cmd=>{try{return await originalExecute(cmd);}catch(e){console.error('GATE STEP FAILED',cmd.type,cmd.workDate||cmd.event?.date||'');throw e;}};try{
+ const snap={...snapshot('gate-est','estimate'),customerName:'琢居株式会社',salesDate:'',workDate:'',items:[{content:'クロス張替',qty:1,price:100000},{content:'穴補修',qty:1,price:2000},{content:'部分的補修',qty:1,price:100},{content:'出張費',qty:1,price:60}]};
+ await exec(s,{type:'saveDocument',snapshot:snap,expectedRevision:0});assert.equal((await records('calendarLinks')).length,0);
+ await exec(s,{type:'acceptEstimate',estimateId:'est_gate-est'});assert.equal((await records('projects'))[0].status,'受注・日程未定');assert.equal((await records('calendarLinks')).length,0);
+ // Reproduce screenshot legacy project date that was validated but then passed raw to schedule().
+ const project=await c.listRecords('projects');await env.withSecurityRulesDisabled(async ctx=>updateDoc(ref(ctx.firestore(),'projects',project[0].id),{'payload.workDate':'2026/10/7'}));
+ await exec(s,{type:'acceptEstimate',estimateId:'est_gate-est'});let link=(await c.listRecords('calendarLinks'))[0];assert.equal(link.payload.workDate,'2026-10-07');assert.equal((await records('projects'))[0].workDate,'2026-10-07');
+ await exec(s,{type:'calendarPrepareCreate',id:link.id,calendarId:'shared'});await exec(s,{type:'calendarCreated',id:link.id,calendarId:'shared',googleEventId:link.payload.googleEventId});link=(await c.listRecords('calendarLinks'))[0];await exec(s,{type:'calendarPatched',id:link.id,expectedRevision:link.revision,at:'2026-10-06T01:00:00Z'});
+ await exec(s,{type:'calendar',event:{googleEventId:link.payload.googleEventId,googleCalendarId:'shared',date:'2026-10-09',start:'2026-10-09T09:00:00+09:00',end:'2026-10-09T12:00:00+09:00',location:'東京都現場',title:'偽顧客、99万、現金'}});
+ for(const n of ['projects','estimates']){const r=(await records(n))[0];assert.equal(r.workDate,'2026-10-09');assert.equal(r.workStart,'2026-10-09T00:00:00.000Z');assert.equal(r.location,'東京都現場');assert.equal(r.customer,'琢居株式会社');}
+ assert.equal((await records('sales')).length,0);assert.equal((await records('calendarLinks')).length,1);
+ await Promise.all([exec(s,{type:'acceptEstimate',estimateId:'est_gate-est',workDate:'2026/10/10'}),exec(s,{type:'acceptEstimate',estimateId:'est_gate-est',workDate:'2026/10/10'})]);assert.equal((await records('calendarLinks')).length,1);assert.equal((await records('calendarLinks'))[0].googleCreatePending,false);
+ }finally{c.dispose();}
+});
+test('production gate: staff independent cash receipt110000, linked receipt only payment, bank receipt no sale, read-only retries',async()=>{
+ const c=await clientFor('staff'),s=createService(c);try{
+ const receipt={...snapshot('cash-gate','receipt'),customerName:'下村 健朗',receiptTotal:110000,invoiceDate:'2026/10/5',salesDate:'',tadashi:'クロス張替'};
+ const saved=await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});for(let i=0;i<3;i++)await exec(s,{type:'saveDocument',snapshot:saved.snapshot,expectedRevision:1});
+ assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);const sale=(await records('sales'))[0];assert.equal(sale.sourceId,'cash-gate');assert.equal(sale.sourceType,'receipt-cash');assert.equal(sale.invoiceDate,'');assert.equal(sale.salesDate,'2026-10-05');assert.equal(A.receivables([sale],await records('payments'),'2026-10-31')[0].outstanding,0);
+ await exec(s,{type:'saveDocument',snapshot:{...receipt,documentId:'bank-gate',paymentMethod:'銀行振込'},expectedRevision:0});assert.equal((await records('sales')).length,1);
+ await exec(s,{type:'saveDocument',snapshot:snapshot('cash-invoice'),expectedRevision:0});await exec(s,{type:'saveDocument',snapshot:{...receipt,documentId:'linked-gate',saleId:'sale_cash-invoice'},expectedRevision:0});assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);
+ }finally{c.dispose();}
+});
+test('production gate: every collection normalizes invalid/empty/legacy dates before writes, no NaN and required invalid date atomic rejection',async()=>{
+ const c=await clientFor('admin'),s=createService(c);try{
+ for(const collection of ['documents','estimates','projects','sales','receivables','payments','calendarLinks','cashLedger']){
+ const p={id:'date-'+collection,workDate:'2026/10/7',invoiceDate:'Invalid Date',salesDate:'2026-02-30',paymentDate:'',date:null,updatedAt:new Date(NaN)};
+ if(collection==='documents')Object.assign(p,{documentId:p.id,docType:'estimate',snapshot:{documentId:p.id,docType:'estimate',invoiceDate:'2026/10/6'}});
+ if(collection==='payments')continue;await exec(s,{type:'migrateRecord',collection,id:p.id,payload:p});const row=(await c.listRecords(collection))[0].payload;assert.equal(row.workDate,'2026-10-07');assert.equal(row.invoiceDate,'');assert.equal(row.salesDate,'');assert.equal(row.date,null);assert.equal(row.updatedAt,'');
+ }
+ await assert.rejects(exec(s,{type:'saveDocument',snapshot:{...snapshot('invalid-required','receipt'),receiptTotal:100,invoiceDate:'2026-99-99'},expectedRevision:0}));assert(!(await records('documents')).some(d=>d.documentId==='invalid-required'));
+ }finally{c.dispose();}
+});
+test('production gate: only isolated system-error documents can be deleted, cloud backup/audit atomic, retry safe',async()=>{
+ const c=await clientFor('admin'),s=createService(c);try{
+ const p={documentId:'error-gate',docType:'estimate',sourceType:'system-error',confirmed:false,snapshot:{documentId:'error-gate',docType:'estimate',customerName:'誤生成'}};
+ await exec(s,{type:'migrateRecord',collection:'documents',id:'error-gate',payload:p});const cmd={type:'deleteMisregistration',documentId:'error-gate',expectedRevision:1,reason:'システム誤生成'};
+ const deleted=await exec(s,cmd);assert.equal(deleted.backup.documentId,'error-gate');assert.equal((await records('documents')).length,0);const audits=await getDocs(collection(db('admin'),'companies/tsukinowa/auditLogs'));assert(audits.docs.some(d=>d.data().action==='misregistration delete'&&d.data().before.documentId==='error-gate'&&d.data().after===null));await exec(s,cmd);
+ await exec(s,{type:'saveDocument',snapshot:snapshot('formal-gate'),expectedRevision:0});await assert.rejects(exec(s,{...cmd,documentId:'formal-gate'}),/正式/);assert.equal((await records('documents')).length,1);
+ }finally{c.dispose();}
+});
+
+test('production gate: previously saved independent cash receipt is backfilled without renumbering or snapshot change',async()=>{
+ const c=await clientFor('staff'),s=createService(c);try{
+ const old={...snapshot('old-cash','receipt'),customerName:'下村 健朗',receiptTotal:110000,invoiceDate:'2026-10-05',invoiceNo:'20261005-2236-01',saleId:''};
+ await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents','old-cash'),{schemaVersion:2,companyId:'tsukinowa',revision:1,createdBy:'uid-staff',createdAt:serverTimestamp(),updatedBy:'uid-staff',updatedAt:serverTimestamp(),lastOperationId:'old',lastAuditId:'old',payload:{documentId:'old-cash',docType:'receipt',status:'active',confirmed:true,customerName:old.customerName,invoiceDate:old.invoiceDate,amount:110000,saleId:'',paymentId:'',snapshot:old}}));
+ await exec(s,{type:'backfillReceiptCash',documentId:'old-cash'});await exec(s,{type:'backfillReceiptCash',documentId:'old-cash'});const doc=(await c.listRecords('documents'))[0].payload;assert.deepEqual(doc.snapshot,old);assert.equal(doc.snapshot.invoiceNo,'20261005-2236-01');assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
+ }finally{c.dispose();}
 });

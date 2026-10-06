@@ -39,6 +39,31 @@
     if(value&&Object.getPrototypeOf(value)===Object.prototype)return '{'+Object.keys(value).sort().map(k=>JSON.stringify(k)+':'+canonical(value[k])).join(',')+'}';
     throw Error('Cloud data must contain JSON values only');
   }
+  // All business payloads cross this boundary, including nested snapshots and legacy audit data.
+  function normalizeDates(value,key=''){
+    const day=key==='date'||/Date$/.test(key),instant=['start','end','updated','at','timestamp'].includes(key)||/At$/.test(key);
+    if(value===null||value==='')return value;
+    if(value instanceof Date){if(!Number.isFinite(value.getTime()))return day||instant?'':null;return day?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(value):value.toISOString();}
+    if(day||instant){
+      if(typeof value==='string'){
+        const text=value.trim().normalize('NFKC');if(!text)return '';
+        const m=text.match(/^(\d{4})[-/.年]?(\d{1,2})[-/.月]?(\d{1,2})日?$/);
+        if(m){const iso=m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0'),d=new Date(iso+'T00:00:00Z');return Number.isFinite(d.getTime())&&d.toISOString().slice(0,10)===iso?iso:'';}
+        const isoDay=text.slice(0,10),calendarDay=new Date(isoDay+'T00:00:00Z');
+        const validDay=Number.isFinite(calendarDay.getTime())&&calendarDay.toISOString().slice(0,10)===isoDay;
+        const d=validDay&&/^\d{4}-\d{2}-\d{2}T/.test(text)?new Date(text):new Date(NaN);
+        if(!Number.isFinite(d.getTime()))return '';
+        return day?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(d):d.toISOString();
+      }
+      if(typeof value==='number')return Number.isFinite(value)?normalizeDates(new Date(value),key):'';
+      if(value&&typeof value==='object'&&'seconds' in value){if(!Number.isFinite(value.seconds)||!Number.isFinite(value.nanoseconds??0))return '';return normalizeDates(new Date(value.seconds*1000+(value.nanoseconds||0)/1e6),key);}
+    }
+    if(Array.isArray(value))return value.map(v=>normalizeDates(v));
+    if(value&&Object.getPrototypeOf(value)===Object.prototype)return Object.fromEntries(Object.entries(value).filter(([,v])=>v!==undefined).map(([k,v])=>[k,normalizeDates(v,k)]));
+    if(typeof value==='number'&&!Number.isFinite(value))throw Error('数値が不正です：'+key);
+    return value;
+  }
+  function displayTimestamp(value){const n=typeof value?.seconds==='number'?value.seconds*1000:Date.parse(value||'');return Number.isFinite(n)&&Math.abs(n)<=8640000000000000?new Date(n).toISOString():'';}
   function createClient(driver,onState=()=>{}){
     let state={phase:'unconfigured',user:null,role:null,companyId:null,error:null};
     let config=null,authStop=null,generation=0;
@@ -87,16 +112,23 @@
         const opPath=`${base}/operations/${operationId}`,previous=await tx.get(opPath);
         if(previous){if(previous.fingerprint!==fingerprint||previous.actorId!==who.uid)throw Error('Operation ID conflict');return previous.result;}
         const cache=new Map(),writes=[],legacyAudits=[],numberReservations=[];
-        const read=async(name,id)=>{scope(name);segment(id);const path=`${base}/${name}/${id}`;if(!cache.has(path))cache.set(path,await tx.get(path));return cache.get(path);};
+        const read=async(name,id)=>{scope(name);segment(id);const path=`${base}/${name}/${id}`;if(!cache.has(path))cache.set(path,await tx.get(path));const pending=writes.find(w=>w.name===name&&w.id===id);return pending?{...(cache.get(path)||{}),payload:pending.payload,revision:pending.revision}:cache.get(path);};
         const write=async(name,id,payload,action,expectedRevision)=>{
           if(name==='auditLogs')throw Error('Audit records are append-only');
           const old=await read(name,id);if(expectedRevision!==undefined&&(old?.revision||0)!==expectedRevision){const e=Error('別の端末で更新されています。クラウドの内容を確認してください。');e.code='conflict';throw e;}
-          const clean=JSON.parse(canonical(payload));
+          const clean=JSON.parse(canonical(normalizeDates(payload)));
           if(canonical(old?.payload??null)===canonical(clean))return old?.revision||0;
-          if(writes.some(w=>w.name===name&&w.id===id))throw Error('Duplicate transaction target');
+          const pending=writes.find(w=>w.name===name&&w.id===id);if(pending){pending.payload=clean;return pending.revision;}
           const revision=(old?.revision||0)+1;writes.push({name,id,payload:clean,old,revision,action:action||(old?'update':'create')});return revision;
         };
-        const archiveAudit=async(id,legacy)=>{if(who.role!=='admin')throw Error('管理者のみ');if(await read('auditLogs',id))return;legacyAudits.push({id,legacy:JSON.parse(canonical(legacy))});};
+        const remove=async(name,id,expectedRevision)=>{
+          if(who.role!=='admin'||name!=='documents')throw Error('管理者の誤登録削除のみ許可されています。');
+          const old=await read(name,id);if(!old)return;
+          if(old.revision!==expectedRevision)throw Error('帳票が変更されました。再確認してください。');
+          if(!tx.delete)throw Error('削除機能が利用できません。');
+          writes.push({name,id,old,payload:null,revision:old.revision+1,action:'misregistration delete',remove:true});
+        };
+        const archiveAudit=async(id,legacy)=>{if(who.role!=='admin')throw Error('管理者のみ');if(await read('auditLogs',id))return;legacyAudits.push({id,legacy:JSON.parse(canonical(normalizeDates(legacy)))});};
         const reserveUnique=async(key,result)=>{segment(key);const path=`${base}/operations/${key}`;if(await tx.get(path))throw Error("重複する旧請求書が既に取り込まれています。");numberReservations.push({path,result});};
         const reserveDocumentNumber=async(minute,documentId)=>{
           if(!/^\d{8}-\d{4}$/.test(minute))throw Error('Invalid numbering minute');
@@ -108,15 +140,15 @@
           numberReservations.push({path,result:{documentId,invoiceNo,numberingMinute:minute,numberingSequence:sequence}});
           return {invoiceNo,numberingMinute:minute,numberingSequence:sequence};
         };
-        const result=await planner({read,write,who,archiveAudit,reserveDocumentNumber,reserveUnique});
+        const result=await planner({read,write,remove,who,archiveAudit,reserveDocumentNumber,reserveUnique});
         if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
         if(writes.length>30)throw Error('Transaction too large');
         if(!writes.length&&!legacyAudits.length)return result;
         const at=driver.timestamp();
         for(let i=0;i<writes.length;i++){
           const w=writes[i],auditId=operationId+'_'+i;
-          tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,createdAt:w.old?.createdAt||w.old?.updatedAt||at,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
-          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId,...(w.name==='documents'?{documentId:w.id,oldStatus:w.old?.payload.status|| (w.old?'active':null),newStatus:w.payload.status||'active',reason:w.payload.reason||'',revisedFromDocumentId:w.payload.revisedFromDocumentId||'',duplicateOfDocumentId:w.payload.duplicateOfDocumentId||'',...(w.action==='historicalPdfImport'?{invoiceNo:w.payload.snapshot.invoiceNo,sourceFileName:w.payload.sourceFileName,sourceHash:w.payload.sourceHash,linkedSaleId:w.payload.saleId||'',whetherCreatedSale:w.payload.whetherCreatedSale}: {})}:{})});
+          if(w.remove)tx.delete(`${base}/${w.name}/${w.id}`);else tx.set(`${base}/${w.name}/${w.id}`,{schemaVersion:2,companyId:who.companyId,payload:w.payload,revision:w.revision,createdBy:w.old?.createdBy||who.uid,createdAt:w.old?.createdAt||w.old?.updatedAt||at,updatedBy:who.uid,updatedAt:at,lastOperationId:operationId,lastAuditId:auditId});
+          tx.set(`${base}/auditLogs/${auditId}`,{userId:who.uid,timestamp:at,entityType:w.name,entityId:w.id,action:w.action,before:w.old?.payload??null,after:w.payload,operationId,...(w.name==='documents'?{documentId:w.id,oldStatus:w.old?.payload.status|| (w.old?'active':null),newStatus:w.payload?.status||(w.remove?'deleted':'active'),reason:w.payload?.reason||command.reason||'',revisedFromDocumentId:w.payload?.revisedFromDocumentId||'',duplicateOfDocumentId:w.payload?.duplicateOfDocumentId||'',...(w.action==='historicalPdfImport'?{invoiceNo:w.payload.snapshot.invoiceNo,sourceFileName:w.payload.sourceFileName,sourceHash:w.payload.sourceHash,linkedSaleId:w.payload.saleId||'',whetherCreatedSale:w.payload.whetherCreatedSale}: {})}:{})});
         }
         for(const reservation of numberReservations)tx.set(reservation.path,{actorId:who.uid,fingerprint,result:reservation.result,createdAt:at});
         for(const a of legacyAudits)tx.set(`${base}/auditLogs/${a.id}`,{userId:who.uid,timestamp:at,entityType:'auditLogs',entityId:a.id,action:'migration',before:null,after:{legacy:a.legacy},operationId});
@@ -138,5 +170,5 @@
     }
     return {start,signIn,signOut,listen,listRecords,put,transact,isDocumentNumberReserved,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
   }
-  return {COLLECTIONS,STAFF_READ,LOCAL_KEYS,validateConfig,readLegacy,backupLegacy,canonical,createClient};
+  return {COLLECTIONS,STAFF_READ,LOCAL_KEYS,validateConfig,readLegacy,backupLegacy,canonical,normalizeDates,displayTimestamp,createClient};
 });

@@ -11,9 +11,9 @@ async function harness(role='admin'){
 
 const receipt={documentId:'standalone',docType:'receipt',customerName:'同じ顧客',receiptTotal:'1000',invoiceDate:'2026-10-05',paymentMethod:'現金',tadashi:'工事代',remarks:'備考'};
 const save=(snapshot,extra={})=>({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot,...extra});
-test('standalone receipt reserves formal number but leaves all accounting and Calendar untouched',async()=>{
+test('standalone bank receipt reserves formal number and leaves accounting untouched',async()=>{
  const h=await harness();h.rows.set('companies/tsukinowa/sales/existing',{payload:{id:'existing',customer:receipt.customerName,amount:1000,paymentIds:[]},revision:1});h.rows.set('companies/tsukinowa/calendarLinks/event',{payload:{id:'event',status:'請求済'},revision:1});
- const before=[...h.rows],r=await h.service.execute(save({...receipt,calendarEventId:'event'}));
+ const before=[...h.rows],r=await h.service.execute(save({...receipt,paymentMethod:'銀行振込',calendarEventId:'event'}));
  assert.match(r.invoiceNo,/^\d{8}-\d{4}-\d{2,}$/);assert.equal(r.snapshot.paymentDate,receipt.invoiceDate);assert.equal(h.list('documents')[0].payload.paymentId,'');assert.equal(h.list('documents')[0].payload.saleId,'');
  for(const [key,value]of before)assert.deepEqual(h.rows.get(key),value);
  for(const name of ['payments','cashLedger','receivables','bankTransactions'])assert.equal(h.list(name).length,0);
@@ -28,4 +28,12 @@ test('explicit invoice link defaults payment date and repeated output creates on
 });
 test('standalone receipt still requires customer, positive amount, date and method',async()=>{
  for(const bad of [{customerName:''},{receiptTotal:0},{receiptTotal:-1},{invoiceDate:''},{paymentMethod:''}]){const h=await harness();await assert.rejects(h.service.execute(save({...receipt,...bad})));assert.equal(h.rows.size,0);}
+});
+
+test('standalone cash receipt creates its own sale/payment/cash mirror without guessing invoice links',async()=>{
+ const h=await harness('staff'),r=await h.service.execute(save({...receipt,receiptTotal:110000}));
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);
+ const sale=h.list('sales')[0].payload,pay=h.list('payments')[0].payload;assert.equal(sale.sourceType,'receipt-cash');assert.equal(sale.invoiceDate,'');assert.equal(sale.amount,110000);assert.equal(pay.amount,110000);assert.equal(pay.paymentDate,receipt.invoiceDate);
+ const frozen=JSON.stringify([...h.rows]);for(let i=0;i<3;i++)assert((await h.service.execute(save(r.snapshot,{expectedRevision:1}))).unchanged);assert.equal(JSON.stringify([...h.rows]),frozen);
+ await assert.rejects(h.service.execute(save({...r.snapshot,documentId:'revision',receiptTotal:900},{revisedFromDocumentId:'standalone',expectedParentRevision:1,reason:'訂正'})),/管理者/);
 });

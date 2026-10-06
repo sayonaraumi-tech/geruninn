@@ -27,13 +27,23 @@ service cloud.firestore {
       || (p.deletedAt is string && (payment.confirmation!='cash-received' || payment.get('deletedAt',null)!=null)));
   }
   function active(p) { return p.get('status','active')=='active' && p.get('documentStatus','active')=='active' && p.get('deletedAt',null)==null; }
+  function receiptBackfill(c,id,p) {
+   return resource.data.payload.docType=='receipt' && active(resource.data.payload)
+    && resource.data.payload.get('saleId','')=='' && resource.data.payload.snapshot.get('saleId','')==''
+    && resource.data.payload.snapshot.paymentMethod=='現金' && resource.data.payload.amount>0
+    && p.saleId=='sale_'+id && p.paymentId=='pay_'+id
+    && p.diff(resource.data.payload).affectedKeys().hasOnly(['saleId','paymentId'])
+    && getAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)).data.payload.sourceType=='receipt-cash'
+    && getAfter(/databases/$(database)/documents/companies/$(c)/payments/$(p.paymentId)).data.payload.amount==p.amount;
+  }
   function documentGuard(c,n,id) {
    let p=request.resource.data.payload;
    return n!='documents' || (p.documentId==id && p.get('status','active') in ['active','void','cancelled','duplicate','revised']
     && (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id))
       ? (p.get('status','active')=='active' && (admin(c)||(p.get('revisedFromDocumentId','')=='' && p.get('sourceType','')!='historicalPdfImport')))
-      : (admin(c) && p.snapshot==resource.data.payload.snapshot && p.diff(resource.data.payload).affectedKeys().hasOnly(['status','reason','revisedToDocumentId','duplicateOfDocumentId'])
-        && resource.data.payload.get('status','active')=='active' && p.status in ['void','cancelled','duplicate','revised'] && p.reason is string && p.reason.size()>0)));
+      : (p.snapshot==resource.data.payload.snapshot && (receiptBackfill(c,id,p) ||
+        (admin(c) && p.diff(resource.data.payload).affectedKeys().hasOnly(['status','reason','revisedToDocumentId','duplicateOfDocumentId'])
+        && resource.data.payload.get('status','active')=='active' && p.status in ['void','cancelled','duplicate','revised'] && p.reason is string && p.reason.size()>0)))));
   }
   function paymentGuard(c,n,id) {
    let p=request.resource.data.payload;
@@ -59,6 +69,33 @@ service cloud.firestore {
     && sale.data.payload.amount==p.amount && sale.data.payload.salesDate==p.paymentDate
     && p.confirmation=='cash-received' && p.method=='現金' && p.get('deletedAt',null)==null;
   }
+  function isolatedError(p) {
+   return p.get('sourceType','')=='system-error' && p.get('confirmed',false)!=true
+    && p.get('invoiceNo','')=='' && p.get('snapshot',{}).get('invoiceNo','')==''
+    && p.get('saleId','')=='' && p.get('receivableId','')=='' && p.get('paymentId','')==''
+    && p.get('calendarEventId','')=='' && p.get('googleEventId','')=='' && p.get('projectId','')=='' && p.get('estimateId','')==''
+    && p.get('revisedFromDocumentId','')=='' && p.get('revisedToDocumentId','')=='' && p.get('duplicateOfDocumentId','')=='';
+  }
+  function errorDeletion(c,id) {
+   let op=getAfter(/databases/$(database)/documents/companies/$(c)/operations/$('delete_error_'+id+'_'+string(resource.data.revision))).data;
+   let audit=getAfter(/databases/$(database)/documents/companies/$(c)/auditLogs/$('delete_error_'+id+'_'+string(resource.data.revision)+'_0')).data;
+   return admin(c) && isolatedError(resource.data.payload) && op.actorId==request.auth.uid && op.createdAt==request.time
+    && op.result.backup==resource.data.payload && op.result.backupRevision==resource.data.revision && op.result.reason.size()>0
+    && audit.action=='misregistration delete' && audit.before==resource.data.payload && audit.after==null
+    && !exists(/databases/$(database)/documents/companies/$(c)/sales/$('sale_'+id))
+    && !exists(/databases/$(database)/documents/companies/$(c)/receivables/$('receivable_'+id))
+    && !exists(/databases/$(database)/documents/companies/$(c)/payments/$('pay_'+id))
+    && !exists(/databases/$(database)/documents/companies/$(c)/estimates/$('est_'+id));
+  }
+  function receiptCashSale(c,id,p) {
+   let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId));
+   return p.get('sourceType','')=='receipt-cash' && id=='sale_'+p.documentId && p.sourceId==p.documentId
+    && d.data.lastOperationId==request.resource.data.lastOperationId && d.data.payload.docType=='receipt'
+    && d.data.payload.snapshot.get('saleId','')=='' && d.data.payload.snapshot.paymentMethod=='現金'
+    && d.data.payload.saleId==id && d.data.payload.amount==p.amount && p.amount>0
+    && d.data.payload.customerName==p.customer && p.customer.size()>0
+    && d.data.payload.invoiceDate==p.salesDate && p.saleDate==p.salesDate && p.invoiceDate=='';
+  }
   function calendarCashReview(c,id,p) {
    let link=getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(p.calendarEventId));
    return exists(/databases/$(database)/documents/companies/$(c)/sales/$(id))
@@ -73,7 +110,7 @@ service cloud.firestore {
     || n in ['calendarLinks','estimates','projects']
     || (n=='documents' && p.documentId==id && p.confirmed==true && p.docType in ['invoice','onoda','estimate','receipt'] && p.snapshot.documentId==id && p.snapshot.docType==p.docType && p.get('sourceType','')!='historicalPdfImport' && p.snapshot.get('sourceType','')!='historicalPdfImport')
     || (n=='receivables' && exists(/databases/$(database)/documents/companies/$(c)/receivables/$(id)) && active(p) && p.diff(resource.data.payload).affectedKeys().hasOnly(['paymentIds','paymentVersion']) && p.paymentIds.hasAll(resource.data.payload.get('paymentIds',[])) && p.paymentVersion==resource.data.payload.get('paymentVersion',0)+1)
-    || (n=='sales' && active(p) && (calendarCashSale(c,id,p) || calendarCashReview(c,id,p) || (exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && p.diff(resource.data.payload).affectedKeys().hasOnly(['paymentIds','paymentVersion']) && p.paymentIds.hasAll(resource.data.payload.get('paymentIds',[])) && p.paymentVersion==resource.data.payload.get('paymentVersion',0)+1) || ((id=='sale_'+p.documentId || (exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && resource.data.payload.get('sourceType','')=='calendar-cash' && resource.data.payload.documentId=='' && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.saleId==id && getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(p.calendarEventId)).data.payload.cashSaleId==id))
+    || (n=='sales' && active(p) && (calendarCashSale(c,id,p) || receiptCashSale(c,id,p) || calendarCashReview(c,id,p) || (exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && p.diff(resource.data.payload).affectedKeys().hasOnly(['paymentIds','paymentVersion']) && p.paymentIds.hasAll(resource.data.payload.get('paymentIds',[])) && p.paymentVersion==resource.data.payload.get('paymentVersion',0)+1) || ((id=='sale_'+p.documentId || (exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && resource.data.payload.get('sourceType','')=='calendar-cash' && resource.data.payload.documentId=='' && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.saleId==id && getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(p.calendarEventId)).data.payload.cashSaleId==id))
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.docType in ['invoice','onoda']
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.amount==p.amount
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.customerName==p.customer
@@ -81,14 +118,14 @@ service cloud.firestore {
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.invoiceDate==p.invoiceDate)))
     || (n=='payments' && calendarCashPayment(c,id,p))
     || (n=='payments' && p.paymentId==id && p.amount>0 && p.confirmation in ['cash-received','pending-bank']
-      && (exists(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)) || exists(/databases/$(database)/documents/companies/$(c)/receivables/$(p.saleId)))
+      && (existsAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)) || existsAfter(/databases/$(database)/documents/companies/$(c)/receivables/$(p.saleId)))
       && !exists(/databases/$(database)/documents/companies/$(c)/payments/$(id)));
   }
   match /companies/{c}/{n}/{id} {
    allow read: if business(n) && (admin(c) || (member(c) && (core(n) || (n=='settings' && id=='system'))));
    allow create: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && documentGuard(c,n,id) && (n!='payments'||paymentGuard(c,n,id)) && valid(c,n,id) && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
    allow update: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && documentGuard(c,n,id) && (n!='payments'||paymentGuard(c,n,id)) && valid(c,n,id) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy && (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt==resource.data.createdAt);
-   allow delete: if false;
+   allow delete: if n=='documents' && errorDeletion(c,id);
   }
   match /companies/{c}/cashLedger/{id} {
    allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
@@ -103,7 +140,8 @@ service cloud.firestore {
    allow create: if member(c)
     && request.resource.data.keys().hasOnly(['userId','timestamp','entityType','entityId','action','before','after','operationId','documentId','oldStatus','newStatus','reason','revisedFromDocumentId','duplicateOfDocumentId','invoiceNo','sourceFileName','sourceHash','linkedSaleId','whetherCreatedSale'])
     && request.resource.data.userId==request.auth.uid && request.resource.data.timestamp==request.time
-    && ((admin(c) && request.resource.data.entityType=='auditLogs' && request.resource.data.entityId==id && request.resource.data.action=='migration' && request.resource.data.before==null && request.resource.data.after.legacy is map
+    && ((admin(c) && request.resource.data.entityType=='documents' && request.resource.data.action=='misregistration delete' && isolatedError(request.resource.data.before) && request.resource.data.after==null && !existsAfter(/databases/$(database)/documents/companies/$(c)/documents/$(request.resource.data.entityId)) && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.result.backup==request.resource.data.before)
+    || (admin(c) && request.resource.data.entityType=='auditLogs' && request.resource.data.entityId==id && request.resource.data.action=='migration' && request.resource.data.before==null && request.resource.data.after.legacy is map
       && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.actorId==request.auth.uid
       && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.createdAt==request.time)
     || (business(request.resource.data.entityType)

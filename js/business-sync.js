@@ -1,10 +1,13 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./business-domain.js'):root.TsukinowaBusiness);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaSync=api;})(globalThis,function(core,domain){
 'use strict';
-function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},online=()=>true}){
+function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
  const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
  let stopped=false,running=null,error=null;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
- queue=load(queueKey,[]);for(const name of collections)rows[name]=load(prefix+name,[]);
+ queue=load(queueKey,[]);
+ const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
+ if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
+ for(const name of collections)rows[name]=load(prefix+name,[]);
  function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
  function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
@@ -16,7 +19,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
    if(queue.some(x=>x.command.operationId===command.operationId))return command.operationId;
-   const entry={command:JSON.parse(core.canonical(command)),createdAt:new Date().toISOString()};
+   const entry={command:JSON.parse(core.canonical(core.normalizeDates(command))),createdAt:new Date().toISOString()};
    const next=[...queue,entry];storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();flush();return command.operationId;
  }
  function flush(){
@@ -26,12 +29,12 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
     const item=queue[0];if(item.blocked){error=item.error;break;}
     try{const result=await service.execute(item.command);if(stopped)return;
       // Persist removal before issuing the next command. Replaying a committed operation is safe after a quota failure.
-      const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;onCommitted(item.command,result);
+      const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;try{onCommitted(item.command,result);}catch(observerError){onFailure(item.command,'保存済み。画面を再読込してください：'+observerError.message);}
     }catch(e){
       if(stopped)return;
       const transient=['unavailable','deadline-exceeded','cancelled','network-request-failed'].some(x=>String(e.code||'').includes(x))||!online();
       error=(e.code?'['+e.code+'] ':'')+(e.message||'Firestore同期失敗');
-      if(!transient){item.blocked=true;item.error=error;try{saveQueue();}catch(_){} }
+      if(!transient){item.blocked=true;item.error=error;try{saveQueue();}catch(_){} onFailure(item.command,error); }
       break;
     }
    }

@@ -3196,7 +3196,7 @@ async function bizGoogleLoadCalendars(silent=false){
 }
 function bizGoogleNormalizeEvent(g,calendarId){
   const start=g?.start?.dateTime||g?.start?.date||'',end=g?.end?.dateTime||g?.end?.date||'';
-  const date=g?.start?.date|| (start?new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(start)):'');
+  const date=g?.start?.date|| TsukinowaCloudCore.normalizeDates(start,'workDate');
   return {id:'g_'+encodeURIComponent(calendarId)+'_'+g.id,googleEventId:g.id,googleCalendarId:calendarId,uid:g.iCalUID||'',date,start,end,title:g.summary||'(無題)',originalTitle:g.summary||'(無題)',description:g.description||'',googleOriginalDescription:g.description||'',location:g.location||'',...(()=>{const p=TsukinowaBusiness.parseCalendar(g.summary);return {customerName:p.customer,projectCategory:p.projectCategory,area:p.area,amount:p.amount,paymentMethod:p.payment};})(),updated:g.updated||'',htmlLink:g.htmlLink||'',source:'google',googleStatus:g.status||'confirmed'};
 }
 function bizHasFormalData(e){return !!(e.linkedInvoiceId||e.linkedReceiptId||e.linkedEstimateId||e.projectId||e.customerName||e.officialAmount!==undefined&&e.officialAmount!=='');}
@@ -3294,7 +3294,7 @@ async function bizGooglePatchNow(id){
       const remote=await bizGoogleFetch(url);
       if(remote.status==='cancelled')throw new Error('元の予定は削除されています。帳票はローカルに保存されています。');
       try{
-        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,remote.description||''),...(snapshot.workDate?{start:{date:snapshot.workDate},end:{date:snapshot.end}}:{})})});
+        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,remote.description||''),...(snapshot.workDate?{start:snapshot.start?.length>10?{dateTime:snapshot.start}:{date:snapshot.workDate},end:snapshot.end?.length>10?{dateTime:snapshot.end}:{date:snapshot.end},location:snapshot.location||''}:{})})});
         break;
       }catch(err){if(err.status!==412||attempt===1)throw err;}
     }
@@ -3424,7 +3424,7 @@ function renderEstimates(){
 }
 function renderProjects(){
   bizEnsureV5State();const q=(document.getElementById('projectSearch')?.value||'').toLowerCase();const rows=bizState.projects.filter(r=>!q||[r.customer,r.content,r.area].join(' ').toLowerCase().includes(q));const el=document.getElementById('projectRows');if(!el)return;
-  el.innerHTML=rows.map(p=>{const est=bizState.estimates.find(x=>x.id===p.estimateId);const sale=bizState.sales.find(x=>x.projectId===p.id||x.estimateId===p.estimateId);return `<tr><td>${bizEsc(p.customer||'')}</td><td>${bizEsc(p.content||'')}</td><td>${bizEsc(p.workDate||'未定')}</td><td>${est?bizMoney(est.amount):'—'}</td><td>${sale?bizMoney(sale.amount):'—'}</td><td>${sale?(bizOutstanding(sale)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金</span>'):'—'}</td><td>${sale?`<button class="biz-btn" onclick="selectSaleForPayment('${sale.id}')">入金</button>`:(est?`<button class="biz-btn primary" onclick="bizConvertEstimateRecordToInvoice('${est.id}')">請求書</button>`:'')}</td></tr>`}).join('')||'<tr><td colspan="7" class="biz-muted">正式案件はまだありません。</td></tr>';
+  el.innerHTML=rows.map(p=>{const est=bizState.estimates.find(x=>x.id===p.estimateId);const sale=bizState.sales.find(x=>x.projectId===p.id||x.estimateId===p.estimateId);return `<tr><td>${bizEsc(p.customer||'')}</td><td>${bizEsc(p.content||'')}</td><td>${bizEsc(p.workDate||'未定')}${est?`<br><button class="biz-btn" onclick="bizAcceptEstimate('${est.id}',false)">施工日を設定</button>`:''}</td><td>${est?bizMoney(est.amount):'—'}</td><td>${sale?bizMoney(sale.amount):'—'}</td><td>${sale?(bizOutstanding(sale)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金</span>'):'—'}</td><td>${sale?`<button class="biz-btn" onclick="selectSaleForPayment('${sale.id}')">入金</button>`:(est?`<button class="biz-btn primary" onclick="bizConvertEstimateRecordToInvoice('${est.id}')">請求書</button>`:'')}</td></tr>`}).join('')||'<tr><td colspan="7" class="biz-muted">正式案件はまだありません。</td></tr>';
 }
 const _legacyConvertEstimateToInvoiceV5=convertEstimateToInvoice;
 convertEstimateToInvoice=function(){
