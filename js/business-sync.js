@@ -2,7 +2,7 @@
 'use strict';
 function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
  const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
- let stopped=false,running=null,error=null;const stops=[],rows={},serverSeen=new Set();let queue=[];
+ let stopped=false,running=null,error=null,reloading=false;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
  queue=load(queueKey,[]);
  const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
@@ -11,11 +11,14 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
  function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
-   if(stopped)return;
+   if(stopped||reloading)return;
    if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
    else if(value.length){rows[name]=value;onData(rows);}
    status();
  },e=>{if(!stopped){if(name==='receivables'&&String(e.code||'').includes('permission-denied')){rows[name]=[];serverSeen.add(name);onData(rows);status();return;}error=e.message;status();}}));status();flush();}
+ async function reload(){
+  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;storage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
+ }
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
    if(queue.some(x=>x.command.operationId===command.operationId))return command.operationId;
@@ -28,6 +31,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
    while(queue.length&&!stopped&&online()){
     const item=queue[0];if(item.blocked){error=item.error;break;}
     try{const result=await service.execute(item.command);if(stopped)return;
+      if(item.command.type==='payment')await reload();
       // Persist removal before issuing the next command. Replaying a committed operation is safe after a quota failure.
       const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;try{onCommitted(item.command,result);}catch(observerError){onFailure(item.command,'保存済み。画面を再読込してください：'+observerError.message);}
     }catch(e){
@@ -41,7 +45,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
   })().finally(()=>{running=null;if(!stopped)status();});status();return running;
  }
  function archiveBlocked(){if(!queue[0]?.blocked)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[0]));const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();return key;}
- return {start,enqueue,flush,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
+ return {start,enqueue,flush,reload,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
 }
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');

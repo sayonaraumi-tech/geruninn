@@ -102,15 +102,20 @@ root.bizConvertEstimateRecordToInvoice=function(id){
  applyFormState(draft,'invoice');bizSwitchPage('chohyo');
 };
 root.convertEstimateToInvoice=function(){if(!enabled)return original.convertEstimateToInvoice();if(!bizCurrentEstimateId)return alert('先に見積を正式保存して、見積履歴から受注してください。');bizConvertEstimateRecordToInvoice(bizCurrentEstimateId);};
-root.bizRegisterEstimatePayment=function(id){if(!enabled)return original.bizRegisterEstimatePayment(id);const sale=bizState.sales.find(x=>x.estimateId===id);if(sale)return selectSaleForPayment(sale.id);alert('対象請求書を正式保存してから入金を登録してください。見積だけでは売上を作成しません。');};
+
+const paymentFlights=new Map();
 async function registerPayment(value){
- if(!ready())return false;
- if(sync.getQueue().some(x=>x.command.type==='payment'&&x.command.saleId===value.saleId))throw Error('前の入金が未同期です。同期完了後に登録してください。');
- if(!command({...value,type:'payment',paymentId:'pay_'+uuid(),manualConfirmed:true}))return false;
- await sync.flush();return !sync.getQueue().some(x=>x.command.type==='payment'&&x.command.saleId===value.saleId);
+ if(paymentFlights.has(value.saleId))return paymentFlights.get(value.saleId);
+ const task=(async()=>{
+  if(!enabled){const sale=bizState.sales.find(s=>s.id===value.saleId);if(!sale||bizOutstanding(sale)<=0)throw Error('有効な未入金の対象売上を選択してください。');bizState.payments.push({...value,id:'pay_'+uuid(),date:value.paymentDate,confirmation:value.method==='現金'?'cash-received':'bank-confirmed',createdAt:new Date().toISOString()});bizAudit('入金登録',`${sale.customer} ${value.amount}円`);bizPersist();bizRefreshAll();return true;}
+  if(!ready())return false;
+  if(sync.getQueue().some(x=>x.command.type==='payment'&&x.command.saleId===value.saleId))throw Error('前の入金が未同期です。同期完了後に登録してください。');
+  // Persist both IDs in the existing outbox before sending. Retries replay this command.
+  if(!command({...value,type:'payment',paymentId:'pay_'+uuid(),operationId:uuid(),manualConfirmed:true}))return false;
+  await sync.flush();return !sync.getQueue().some(x=>x.command.type==='payment'&&x.command.saleId===value.saleId);
+ })();paymentFlights.set(value.saleId,task);
+ try{return await task;}finally{paymentFlights.delete(value.saleId);}
 }
-let paymentBusy=false;
-root.addPayment=async function(){if(!enabled)return original.addPayment();if(paymentBusy)return;paymentBusy=true;try{const saleId=el('paymentSale').value,amount=root.TsukinowaAccounting.money(el('paymentAmount').value),paymentDate=root.TsukinowaAccounting.date(el('paymentDate').value);if(!saleId)throw Error('対象請求書を選択してください。');if(await registerPayment({saleId,amount,paymentDate,method:el('paymentType').value,memo:el('paymentMemo').value})){el('paymentAmount').value='';el('paymentMemo').value='';}}catch(e){alert(e.message);}finally{paymentBusy=false;}};
 root.selectSaleForPayment=function(id){if(enabled&&!ready())return;return original.selectSaleForPayment(id);};
 root.matchBankSale=function(bankId,saleId){if(!enabled)return original.matchBankSale(bankId,saleId);if(!ready()||client.getState().role!=='admin')return;const b=bizState.bank.find(x=>x.id===bankId);if(!b)return;const pending=bizState.payments.filter(p=>p.saleId===saleId&&p.confirmation==='pending-bank'&&p.amount===b.incoming);if(pending.length>1)return alert('同額の仮入金が複数あります。照合前に管理者が確認してください。');command({type:'confirmBank',bankId:b.key||bankId,localBankId:bankId, saleId,amount:b.incoming,paymentDate:b.date,pendingPaymentId:pending[0]?.id||''});};
 root.openManualSale=function(){if(!enabled)return original.openManualSale();alert('売上は請求書の正式保存から登録してください。');};
@@ -171,7 +176,7 @@ async function deleteMisregistration(h){
 function renderDocuments(boxId,kind){
  const box=el(boxId);if(!box)return;box.replaceChildren();const q=(el('savedDocSearch')?.value||'').toLowerCase();
  history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId].join(' ').toLowerCase().includes(q))return;
-  const row=document.createElement('div');row.className='biz-card';row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
+  const row=document.createElement('div');row.className='biz-card';row.dataset.documentId=h.documentId;row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
   const label=document.createElement('strong');label.textContent=`${documentLabels[h.documentStatus]} ｜ ${docTypeLabel(h.docType)} ｜ ${h.customerName||''}`;if(h.documentStatus!=='active')label.style.color='#a23';row.append(label);
   const detail=document.createElement('p');detail.textContent=`${h.sourceType==='historicalPdfImport'?'過去PDF ｜ ':''}No.${h.invoiceNo||''} ｜ ${h.invoiceDate||''} ｜ ID: ${h.documentId}`+(h.statusReason?' ｜ 理由: '+h.statusReason:'')+(h.revisedFromDocumentId?' ｜ 訂正元: '+h.revisedFromDocumentId:'')+(h.duplicateOfDocumentId?' ｜ 原帳票: '+h.duplicateOfDocumentId:'')+(h.revisedToDocumentId?' ｜ 訂正版: '+h.revisedToDocumentId:'');row.append(detail);
   const add=(text,fn)=>{const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=text;b.onclick=fn;row.append(b);};
@@ -181,7 +186,7 @@ function renderDocuments(boxId,kind){
   if(['invoice','onoda'].includes(h.docType)){
    const v=invoiceBalance(h.documentId);
    const summary=document.createElement('p');summary.textContent=`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`;row.append(summary);
-   if(v.active)add('入金登録',()=>root.openInvoiceBalance(h.documentId,'payment'));
+   if(v.active&&v.outstandingAmount>0&&client?.getState().role==='admin')add('入金登録',()=>root.openInvoiceBalance(h.documentId,'payment'));
    add('入金履歴',()=>root.openInvoiceBalance(h.documentId));
    if(v.active&&v.outstandingAmount>0)add('未入金残高請求書',()=>root.openInvoiceBalance(h.documentId,'pdf'));
   }

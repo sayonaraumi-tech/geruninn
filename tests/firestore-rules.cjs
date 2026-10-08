@@ -236,14 +236,14 @@ test('outstanding balance: staff partial/final payments, idempotency, immutable 
  await exec(a,{type:'saveDocument',snapshot:form,expectedRevision:0});
  const original=(await getDoc(ref(db('admin'),'documents','dynast'))).data(),saleBefore=(await getDoc(ref(db('admin'),'sales','sale_dynast'))).data().payload;
  const cmd={type:'payment',operationId:'partial-dynast',paymentId:'dynast-partial',saleId:'sale_dynast',documentId:'dynast',amount:770379,paymentDate:'2026-08-25',method:'銀行振込'};
- await s.execute(cmd);await s.execute(cmd);
+ await s.execute(cmd);await s.execute(cmd);await exec(a,{type:'confirmBank',bankId:'dynast-bank',saleId:cmd.saleId,pendingPaymentId:cmd.paymentId,amount:cmd.amount,paymentDate:cmd.paymentDate});
  const records=async name=>(await getDocs(collection(db('admin'),`companies/${company}/${name}`))).docs.map(r=>({...r.data().payload,id:r.id}));
  const v=O.view(original,saleBefore,await records('payments'));assert.deepEqual([v.invoiceAmount,v.paidAmount,v.outstandingAmount,v.paymentStatus],[779379,770379,9000,'一部入金']);
  const state=JSON.stringify([await records('sales'),await records('payments'),await records('documents')]);for(let i=0;i<3;i++)O.notice(v,'2026-10-02');assert.equal(JSON.stringify([await records('sales'),await records('payments'),await records('documents')]),state);
  for(const bad of [{amount:1.5},{amount:Infinity},{paymentDate:'2026-02-31'},{method:'invalid'},{documentId:'different'}])await assert.rejects(exec(s,{...cmd,...bad,operationId:crypto.randomUUID(),paymentId:crypto.randomUUID()}));
  await exec(s,{...cmd,operationId:crypto.randomUUID(),paymentId:'dynast-final',amount:9000,method:'現金',paymentDate:'2026-10-02'});
  const final=O.view(original,saleBefore,await records('payments'));assert.deepEqual([final.paidAmount,final.outstandingAmount,final.paymentStatus],[779379,0,'入金済']);
- assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,1);
+ assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).filter(p=>p.confirmation!=='bank-marker').length,2);assert.equal((await records('cashLedger')).length,1);
  assert.deepEqual((await getDoc(ref(db('admin'),'documents','dynast'))).data(),original);
  await exec(s,{type:'payment',paymentId:'existing-online-method',saleId:'sale_dynast',amount:1,paymentDate:'2026-10-03',method:'オンライン決済'});
  const after=(await getDoc(ref(db('admin'),'sales','sale_dynast'))).data().payload;for(const k of Object.keys(saleBefore))if(!['paymentIds','paymentVersion'].includes(k))assert.deepEqual(after[k],saleBefore[k]);
@@ -262,10 +262,10 @@ test('historical import: admin only, atomic original number/hash locks, non-sale
  // Bypass the service to verify Security Rules reject a forged staff import with a valid audit envelope.
  await assert.rejects(staff.transact('forged-old',{},async({write})=>write('documents','forged-old',{...docBefore.payload,documentId:'forged-old',snapshot:{...docBefore.payload.snapshot,documentId:'forged-old'}},'create',0)),/permission|PERMISSION/i);
  await exec(s,{type:'payment',paymentId:'historical-partial',documentId:id,saleId:anchor,amount:770379,paymentDate:'2026-08-25',method:'銀行振込'});
- const O=require('../js/outstanding'),pays=(await getDocs(collection(db('admin'),`companies/${company}/payments`))).docs.map(d=>({id:d.id,...d.data()}));const v=O.view(docBefore,null,pays);assert.equal(v.outstandingAmount,9000);assert.equal(v.paymentStatus,'一部入金');
+ const O=require('../js/outstanding'),pays=(await getDocs(collection(db('admin'),`companies/${company}/payments`))).docs.map(d=>({id:d.id,...d.data()}));const v=O.view(docBefore,null,pays);assert.equal(v.outstandingAmount,779379);assert.equal(v.paymentStatus,'未入金');
  await exec(a,{type:'importBank',bank:{bankTxnId:'bank-old',bankAccount:'test',bankTransactionDate:'2026-08-25',incoming:770379,outgoing:0,amount:770379,description:'dynast'}});
  await exec(a,{type:'bankMatch',bankTxnId:'bank-old',targetType:'sale',targetId:anchor,paymentId:'historical-partial',expectedRevision:1});
- assert.equal((await getDoc(ref(db('admin'),'payments','historical-partial'))).data().payload.confirmation,'bank-confirmed');
+ assert.equal((await getDoc(ref(db('admin'),'payments','historical-partial'))).data().payload.confirmation,'bank-confirmed');const confirmedPays=(await getDocs(collection(db('admin'),`companies/${company}/payments`))).docs.map(d=>({id:d.id,...d.data()}));assert.equal(O.view(docBefore,null,confirmedPays).outstandingAmount,9000);
  assert.deepEqual((await getDoc(ref(db('admin'),'documents',id))).data(),docBefore);
  await assert.rejects(exec(a,{...cmd,documentId:'again',draft:{...draft,invoiceNo:'changed',invoiceAmount:1}}),/重複/);
  const audit=(await getDocs(collection(db('admin'),`companies/${company}/auditLogs`))).docs.map(d=>d.data()).find(r=>r.action==='historicalPdfImport');assert.equal(audit.whetherCreatedSale,false);assert.equal(audit.sourceHash,cmd.sourceHash);
@@ -363,7 +363,9 @@ test('admin manual bank confirmation writes only one payment, no document/number
  const admin=await clientFor('admin'),service=createService(admin);await exec(service,{type:'saveDocument',snapshot:snapshot('manual-bank'),expectedRevision:0});
  const docs=JSON.stringify(await admin.listRecords('documents')),numbers=JSON.stringify((await getDocs(collection(db('admin'),'companies/tsukinowa/operations'))).docs.filter(d=>d.id.startsWith('documentNumber_')).map(d=>d.data()));
  const command={type:'payment',manualConfirmed:true,saleId:'sale_manual-bank',paymentId:'one',amount:50000,paymentDate:'2026-10-08',method:'銀行振込',memo:'確認済'};
- await exec(service,command);await exec(service,{...command,paymentId:'two'});const payments=await admin.listRecords('payments');assert.equal(payments.length,1);assert.equal(payments[0].payload.confirmation,'bank-confirmed');
+ await exec(service,command);await exec(service,command);const payments=await admin.listRecords('payments');assert.equal(payments.length,1);assert.equal(payments[0].payload.confirmation,'bank-confirmed');
  assert.equal(JSON.stringify(await admin.listRecords('documents')),docs);assert.equal(JSON.stringify((await getDocs(collection(db('admin'),'companies/tsukinowa/operations'))).docs.filter(d=>d.id.startsWith('documentNumber_')).map(d=>d.data())),numbers);
  await assert.rejects(exec(createService(await clientFor('staff')),{...command,paymentId:'staff'}),/管理者/);
 });
+
+test('manual same-day same-amount real deposits are distinct; replay operation is idempotent',async()=>{const admin=await clientFor('admin'),service=createService(admin);try{await exec(service,{type:'saveDocument',snapshot:{...snapshot('two-real'),paymentMethod:'銀行振込'},expectedRevision:0});const command={type:'payment',manualConfirmed:true,saleId:'sale_two-real',paymentId:'real-one',operationId:'deposit-one',amount:20000,paymentDate:'2026-10-08',method:'銀行振込',memo:''};await Promise.all([service.execute(command),service.execute(command)]).catch(e=>{e.message='first concurrent: '+e.message;throw e;});await service.execute({...command,paymentId:'real-two',operationId:'deposit-two'}).catch(e=>{e.message='second real: '+e.message;throw e;});assert.equal((await admin.listRecords('payments')).length,2);}finally{admin.dispose();}});

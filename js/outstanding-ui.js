@@ -2,7 +2,9 @@
 (function(root){
 'use strict';
 const el=id=>document.getElementById(id),O=root.TsukinowaOutstanding;
-let target='',account='',busy=false,dialog;
+let target='',account='',busy=false,dialog,formHome,formAnchor;
+function restorePaymentForm(){if(formHome){formHome.insertBefore(el('paymentRegistrationForm'),formAnchor);el('paymentSale').disabled=false;}}
+
 function current(){if(account!==root.TsukinowaBusinessUI.getClient()?.getState().user?.uid)throw Error('アカウントが変更されました。');return root.TsukinowaBusinessUI.invoiceBalance(target);}
 function text(parent,tag,value){const node=document.createElement(tag);node.textContent=value;parent.append(node);return node;}
 function refresh(){
@@ -12,11 +14,11 @@ function refresh(){
  const body=table.createTBody();for(const p of v.payments){const row=body.insertRow();for(const t of [p.date,bizMoney(p.amount),p.method,p.note,p.confirmation==='pending-bank'?'銀行照合待ち':p.confirmation==='bank-confirmed'?'銀行確認済':'登録済'])text(row,'td',t);}
  box.append(table);if(!v.payments.length)text(box,'p','入金履歴はありません。');
  text(box,'p','実際の入金を確認してから登録してください。銀行振込は銀行確認済として記帳します。');
- el('balancePDF').hidden=!v.active||v.outstandingAmount<=0;el('balancePaymentForm').hidden=!v.active;
+ el('balancePDF').hidden=!v.active||v.outstandingAmount<=0;el('balancePaymentHost').hidden=!v.active||v.outstandingAmount<=0; if(v.outstandingAmount<=0)restorePaymentForm();
  return v;
 }
 root.openInvoiceBalance=function(id,action='history'){
- try{target=id;account=root.TsukinowaBusinessUI.getClient()?.getState().user?.uid;const v=refresh();el('balanceHeading').textContent=`${v.customerName} / No.${v.invoiceNo}`;el('balanceDate').value=todayISO();el('balanceMonth').value=v.month;el('balanceAmount').value=Math.max(0,v.outstandingAmount)||'';el('balanceSaveStatus').textContent='';el('balanceNote').value='';el('balanceSave').disabled=false;dialog.showModal();if(action==='payment')el('balanceAmount').focus();if(action==='pdf')return exportPDF();}catch(e){alert(e.message);}
+ try{restorePaymentForm();target=id;account=root.TsukinowaBusinessUI.getClient()?.getState().user?.uid;const v=refresh();el('balanceHeading').textContent=`${v.customerName} / No.${v.invoiceNo}`;el('balanceMonth').value=v.month;el('balanceSaveStatus').textContent='';dialog.showModal();if(action==='payment'&&v.active&&v.outstandingAmount>0){el('balancePaymentHost').append(el('paymentRegistrationForm'));const select=el('paymentSale');if(![...select.options].some(o=>o.value===v.saleId))select.add(new Option(v.customerName,v.saleId));select.value=v.saleId;select.disabled=true;el('paymentAmount').value=v.outstandingAmount;el('paymentDate').value=todayISO();el('paymentType').value='銀行振込';el('paymentMemo').value='';el('paymentAmount').focus();}if(action==='pdf')return exportPDF();}catch(e){alert(e.message);}
 };
 function createSheet(n){
  const source=document.querySelector('.invoice'),sheet=document.createElement('div');sheet.className='invoice outstanding-notice';sheet.style.cssText='width:210mm;min-height:297mm;height:auto;box-sizing:border-box;background:white;--dens:1';
@@ -52,11 +54,11 @@ async function exportPDF(){
  pdf.addImage(canvas.toDataURL('image/jpeg',.98),'JPEG',0,0,210,Math.min(height,297));pdf.save(n.filename);
  }catch(e){alert('未入金残高PDF：'+e.message);}finally{host?.remove();busy=false;el('balancePDF').disabled=false;}
 }
-root.TsukinowaBalanceUI={refresh:()=>{if(dialog?.open){try{refresh();}catch{dialog.close();}}},close:()=>dialog?.close(),createSheet};
+root.TsukinowaBalanceUI={paymentContext:()=>dialog?.open&&el('balancePaymentHost').contains(el('paymentRegistrationForm'))?{documentId:current().documentId}:{},paymentSaved:()=>{if(dialog?.open)el('balanceSaveStatus').textContent='入金を保存しました。';},refresh:()=>{if(dialog?.open){try{refresh();}catch{dialog.close();}}},close:()=>dialog?.close(),createSheet};
 document.addEventListener('DOMContentLoaded',()=>{
- dialog=document.createElement('dialog');dialog.id='invoiceBalanceDialog';dialog.style.cssText='max-width:880px;width:calc(100% - 32px);max-height:90vh;overflow:auto';dialog.innerHTML='<h2 id="balanceHeading"></h2><div id="balanceSummary"></div><form id="balancePaymentForm"><h3>入金登録</h3><label>入金日<input id="balanceDate" type="date" required></label><label>入金額<input id="balanceAmount" type="number" min="1" step="1" required></label><label>入金方法<select id="balanceMethod"><option>銀行振込</option><option>現金</option><option>その他</option></select></label><label>備考<input id="balanceNote"></label><button id="balanceSave" class="biz-btn primary">入金を保存</button><p id="balanceSaveStatus" role="status"></p></form><label>原請求書の対象月<input id="balanceMonth" type="month"></label><button id="balancePDF" class="biz-btn" type="button">未入金残高請求書</button><button id="balanceClose" class="biz-btn" type="button">閉じる</button>';document.body.append(dialog);
- const style=document.createElement('style');style.textContent='#invoiceBalanceDialog{border:1px solid #ddd;border-radius:14px;padding:20px;color:#222}#invoiceBalanceDialog::backdrop{background:#0006}#invoiceBalanceDialog h2{font-size:20px;margin-bottom:14px}#balancePaymentForm{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:16px 0}#balancePaymentForm h3,#balanceSaveStatus{grid-column:1/-1}#invoiceBalanceDialog label{display:block;font-size:13px}#invoiceBalanceDialog input,#invoiceBalanceDialog select{display:block;box-sizing:border-box;width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;margin-top:5px}#balanceMonth{max-width:220px}#balanceSummary{overflow-x:auto}';document.head.append(style);
+ dialog=document.createElement('dialog');dialog.id='invoiceBalanceDialog';dialog.style.cssText='max-width:880px;width:calc(100% - 32px);max-height:90vh;overflow:auto';dialog.innerHTML='<h2 id="balanceHeading"></h2><div id="balanceSummary"></div><div id="balancePaymentHost"></div><p id="balanceSaveStatus" role="status"></p><label>原請求書の対象月<input id="balanceMonth" type="month"></label><button id="balancePDF" class="biz-btn" type="button">未入金残高請求書</button><button id="balanceClose" class="biz-btn" type="button">閉じる</button>';document.body.append(dialog);
+ const style=document.createElement('style');style.textContent='#invoiceBalanceDialog{border:1px solid #ddd;border-radius:14px;padding:20px;color:#222}#invoiceBalanceDialog::backdrop{background:#0006}#invoiceBalanceDialog h2{font-size:20px;margin-bottom:14px}#balancePaymentHost .biz-section{margin:16px 0;padding:12px}#balanceSaveStatus{grid-column:1/-1}#invoiceBalanceDialog label{display:block;font-size:13px}#invoiceBalanceDialog input,#invoiceBalanceDialog select{display:block;box-sizing:border-box;width:100%;padding:9px;border:1px solid #ccc;border-radius:6px;margin-top:5px}#balanceMonth{max-width:220px}#balanceSummary{overflow-x:auto}';document.head.append(style);
  el('balanceClose').onclick=()=>dialog.close();el('balancePDF').onclick=exportPDF;
- el('balancePaymentForm').onsubmit=async e=>{e.preventDefault();const button=el('balanceSave');if(button.disabled)return;button.disabled=true;try{const v=current(),amount=TsukinowaAccounting.money(el('balanceAmount').value),date=TsukinowaAccounting.date(el('balanceDate').value);if(!v.active)throw Error('有効な請求書を選択してください。');el('balanceSaveStatus').textContent='同期中';const saved=await root.TsukinowaBusinessUI.registerPayment({saleId:v.saleId,documentId:v.documentId,amount,paymentDate:date,method:el('balanceMethod').value,memo:el('balanceNote').value});el('balanceSaveStatus').textContent=saved?'入金を保存しました。':'未同期。クラウド同期状態を確認してください。';if(saved){refresh();el('balanceAmount').value='';}}catch(err){el('balanceSaveStatus').textContent=err.message;}finally{button.disabled=false;}};
+ formHome=el('paymentRegistrationForm').parentNode;formAnchor=document.createComment('payment form');formHome.insertBefore(formAnchor,el('paymentRegistrationForm').nextSibling);dialog.addEventListener('close',restorePaymentForm);
 });
 })(window);

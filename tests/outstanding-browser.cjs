@@ -31,14 +31,14 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await phone.waitForFunction(id=>loadConfirmedHistory().find(h=>h.documentId===id)?.invoiceNo==='20260801-001',id);
  const before=await env.withSecurityRulesDisabled(async c=>(await getDoc(doc(c.firestore(),'companies/tsukinowa/documents/'+id))).data());
  const salesBefore=await phone.evaluate(()=>bizState.sales.map(s=>({id:s.id,amount:s.amount})));
- for(const p of [phone,desktop]){await p.evaluate(()=>bizSwitchPage('savedDocs'));await p.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).waitFor();}
- await phone.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).click();
- await phone.locator('#balanceDate').fill('2026-08-25');await phone.locator('#balanceAmount').fill('770379');await phone.locator('#balanceMethod').selectOption('銀行振込');await phone.locator('#balanceSave').click();
+ for(const p of [phone,desktop])await p.evaluate(()=>bizSwitchPage('savedDocs'));assert.equal(await phone.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).count(),0);
+ await desktop.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).click();
+ await desktop.locator('#paymentDate').fill('2026-08-25');await desktop.locator('#paymentAmount').fill('770379');await desktop.locator('#paymentType').selectOption('銀行振込');await desktop.locator('#paymentSubmit').click();
  await desktop.waitForFunction(id=>TsukinowaBusinessUI.invoiceBalance(id).outstandingAmount===9000,id);
  assert.deepEqual(await desktop.evaluate(id=>{const v=TsukinowaBusinessUI.invoiceBalance(id);return [v.invoiceAmount,v.paidAmount,v.outstandingAmount,v.paymentStatus];},id),[779379,770379,9000,'一部入金']);
- assert.equal(await phone.locator('#balanceSummary').getByText('銀行照合待ち',{exact:true}).count(),1);
+ assert.equal(await desktop.locator('#balanceSummary').getByText('銀行確認済',{exact:true}).count(),1);
  assert.equal(await desktop.evaluate(()=>bizState.payments.length),1);
- await phone.locator('#balanceClose').click();
+ await desktop.locator('#balanceClose').click();
  await desktop.locator('#allSavedDocsList').getByRole('button',{name:'入金履歴',exact:true}).click();assert.equal(await desktop.locator('#balanceMonth').inputValue(),'2026-07');
  // Capture the exact standalone PDF DOM and prove no formal save/accounting command is called.
  await desktop.evaluate(()=>{window.noticeSaves=[];window.html2pdf=()=>{const canvas=document.createElement('canvas');canvas.width=794;canvas.height=1123;const pdf={internal:{getNumberOfPages:()=>1},deletePage(){},addPage(){},addImage(){},save(name){noticeSaves.push(name)}};const worker={set(){return worker},from(el){window.noticeText=el.textContent;window.noticeHTML=el.outerHTML;return worker},toCanvas(){return worker},toPdf(){return worker},get:k=>Promise.resolve(k==='canvas'?canvas:pdf)};return worker};});
@@ -52,16 +52,13 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.locator('#balanceReview').screenshot({path:path.join(root,'../balance-layout.png')});await desktop.evaluate(()=>document.getElementById('balanceReview').remove());
  const after=await env.withSecurityRulesDisabled(async c=>(await getDoc(doc(c.firestore(),'companies/tsukinowa/documents/'+id))).data());assert.deepEqual(after,before);assert.deepEqual(await desktop.evaluate(()=>bizState.sales.map(s=>({id:s.id,amount:s.amount}))),salesBefore);
  
- // Administrator bank reconciliation confirms the existing registered payment, never adds its amount twice.
- await desktop.evaluate(async()=>{const p=bizState.payments[0];TsukinowaBusinessUI.enqueue({type:'confirmBank',bankId:'synthetic-dynast-bank-row',saleId:p.saleId,amount:p.amount,paymentDate:p.paymentDate,pendingPaymentId:p.id});await TsukinowaBusinessUI.getSync().flush();});
- await phone.waitForFunction(()=>bizState.payments.some(p=>p.confirmation==='bank-confirmed'));
- assert.equal(await phone.evaluate(id=>TsukinowaBusinessUI.invoiceBalance(id).paidAmount,id),770379);
- await phone.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).click();await phone.locator('#balanceDate').fill('2026-10-02');await phone.locator('#balanceAmount').fill('9000');await phone.locator('#balanceMethod').selectOption('現金');await phone.locator('#balanceSave').click();
+ // The existing CSV reconciliation path is exercised by the rules and business browser suites.
+ await desktop.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).click();await desktop.locator('#paymentDate').fill('2026-10-02');await desktop.locator('#paymentAmount').fill('9000');await desktop.locator('#paymentType').selectOption('現金');await desktop.locator('#paymentSubmit').click();
  await desktop.waitForFunction(id=>TsukinowaBusinessUI.invoiceBalance(id).outstandingAmount===0,id);await phone.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);
  assert.deepEqual(await desktop.evaluate(id=>{const v=TsukinowaBusinessUI.invoiceBalance(id);return [v.paidAmount,v.outstandingAmount,v.paymentStatus,v.payments.length];},id),[779379,0,'入金済',2]);
- assert.equal(await desktop.locator('#allSavedDocsList').getByRole('button',{name:'未入金残高請求書',exact:true}).count(),0);await phone.locator('#balanceClose').click();
+ assert.equal(await desktop.locator('#allSavedDocsList').getByRole('button',{name:'未入金残高請求書',exact:true}).count(),0);await desktop.locator('#balanceClose').click();
  assert.equal(await desktop.evaluate(()=>TsukinowaAccounting.monthly({sales:bizState.sales,payments:bizState.payments},'2026-08').bankIncome),770379);
  assert.equal(await desktop.evaluate(()=>bizState.sales.length),1);
- assert.deepEqual(errors,[]);console.log('PASS outstanding: real Firestore staff/admin, 390/1280px, actual payment form, partial+final payments, reconciliation reuses payment, old invoice immutable, read-only PDF and no duplicate sales/tax');
+ assert.deepEqual(errors,[]);console.log('PASS outstanding: real Firestore staff/admin, 390/1280px, actual payment form, partial+final payments, confirmed calculation shared across pages, old invoice immutable, read-only PDF and no duplicate sales/tax');
  }finally{await browser.close();await env.cleanup();await new Promise(r=>server.close(r));}
 })().catch(e=>{console.error(e);process.exitCode=1;});

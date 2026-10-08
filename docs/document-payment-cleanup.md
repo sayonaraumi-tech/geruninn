@@ -1,55 +1,51 @@
-# 帳票命名与入金解耦审计／验收
+# 帳票命名・入金联动统一版本审计与验收
 
-基线：main `3461c632f6f05da38db14dfe867931a67d7e30de`（提交前重新核对远端 main）。只提交评审分支，不部署、合并，也不修改生产 Firestore。
+基线：远端 main `3461c632f6f05da38db14dfe867931a67d7e30de`；PR #3 原提交 `695ccb77a80613d6d40ccf81a128229322b76685`。2026-10-08 提交前重新 fetch 确认两者未变化。本版本沿用 PR #3，与 main 一起审计，只处理命名、入金及相关重复代码。发布方式沿用 README 中的 GitHub Pages。没有更改 Firestore rules/config、迁移生产数据或执行生产入金。
 
-## 历史对比与冲突／残留
+## 冲突、重复路径与处理
 
-| 路径 | 历史／当前冲突 | 处理 |
+| 路径 | main / 原 PR #3 的问题 | 本版本处理 |
 |---|---|---|
-| `index.html:buildPrintFilename` → `business-domain.documentFilename` | `b49e944` 以前的实现使用 YY／M／D、空格、客户様、首项、小野田 M月分；`b49e944` 对見積采用分类下划线命名，`7a94200` 将下划线命名推广到所有帳票 | 恢复实际业务格式；补上费用项过滤、様去重及施工内容兜底 |
-| `business-ui.buildPrintFilename` | 覆盖 HTML 中同名函数，再额外解析关联請求書；入口依赖加载顺序 | 删除覆盖定义；关联原請求书解析移到唯一 HTML 入口 |
-| `projectCategory` | 将多个项目汇总为分类字符串，用作文件名会拼成长串；小野田也被普通规则覆盖 | 文件名专用首项目选择；普通一套，小野田固定一套。保留分类函数供现有日历／业务元数据使用 |
-| 共享模式 `selectSaleForPayment` | 原 HTML 已有入金表单选中行为；共享桥接却调用 `setDocType('receipt')`、切换帳票页并填写现金領収书 | 删除这段領収书跳转／填表调用链，复用原入金表单入口 |
-| 主入金表单及保存帳票余额弹窗 | 两处各自随机生成 payment 并入队；銀行振込一律变成 pending-bank | 合并为 `registerPayment`；用户核实到账的銀行振込沿用 bank-confirmed |
-| 手工入金重复提交 | 操作 ID 可防同一命令重试，但不同页面／设备重新提交会生成新 payment ID | 使用现有 stable ID／事务机制，同 sale、日期、金额、方法、备注生成同一 payment ID；保留队列和忙碌保护 |
+| `index.html:buildPrintFilename`、`business-ui.buildPrintFilename` | 同名覆盖依赖加载顺序；普通文件名曾被分类下划线格式覆盖 | 删除桥接层覆盖；唯一入口调用 `business-domain.documentFilename`，保留关联請求書内容解析 |
+| `business-domain.documentFilename` / `projectCategory` | 多分类字符串不符合首个主营项目规则 | 命名独立选择首个主营项目，过滤费用，施工内容兜底，再用工事；Calendar 多分类元数据保留 |
+| `business-domain.onodaFilename` | 原 PR 仍按传入日期命名，月初会成为文件名日期 | 独立按目标月份计算月末，固定 dynast合同会社様＋M月分クロス張替請求書；不改月次金额计算 |
+| 共享模式 `selectSaleForPayment` | main 的桥接层把入金跳转至现金領収書并填表 | 删除跳转/自动填表；选择 sale 后打开入金表单 |
+| `index.html:addPayment`、`business-ui.addPayment`、`outstanding-ui` submit | 本地、共享、余额窗口分别持有提交逻辑和表单 | 一个 UI submit handler、一个 `registerPayment`；保存帳票窗口移动复用同一个表单，关闭后归位；删除余额 submit 和重复表单 |
+| `index.html:bizRegisterEstimatePayment`、桥接层同名函数 | 旧本地代码把入金单独保存在 estimate.payment，还改变受注/Calendar 状态 | 统一只选已正式保存的关联 sale 并进入同一表单；删除桥接重复实现；见積受注和日期设置逻辑保留 |
+| 原 PR `manualpay` 内容哈希 | 同 sale/日期/金额/方法/备注永远指向同一个 payment，吞掉真实第二笔 | 删除内容哈希；每次明确操作生成新的 operationId/paymentId，发送前持久化到原 outbox；同操作并发合并 promise，重试复用原 ID |
+| `outstanding.view` 与 `accounting.confirmed` | 保存帳票把 pending-bank 计为已入金，売上/Home 不计，显示冲突 | 共用 `Accounting.confirmed`；待照合仍在历史中显示，但不冲减余额；不批量转换历史 payment |
+| Home 当月入金 | 原 HTML 另按非 pending 状态求和 | 共享模式使用 `Accounting.monthly` 的确认入金结果，未収使用同一 receivables 结果 |
+| 登记后刷新 | 写入后仅等待各 collection 的实时通知，返回时页面可能还未完成刷新 | payment 成功后由现有 sync 统一 reload 最新 collections，一次 hydrate/render；读取失败时保留原操作供安全重试 |
+| 已结清操作入口 | 原 PR 已结清保存帳票仍有登记，売上/案件行也有按钮 | 余额>0才提供登记；结清保存帳票保留入金履歴，窗口不再展示表单；売上/案件行隐藏登记按钮 |
 
-没有发现可以证明完全无引用且与迁移无关的额外会计 helper，因此没有继续扩大删除范围。以下仍有用途，保留：端末内模式和备份／历史迁移、独立領収书 `saveDocument`、现金領収记账和补齐、見積受注、Calendar、CSV银行照合、权限和未収计算。`estimateFilename` 是兼容别名，仅调用唯一命名器，不再形成另一套算法。未入金残高通知是独立通知文档，未改它的专用命名。
+保留：正式历史原本、备份及迁移、本地模式、独立領収書、显式关联现金領収書及现金镜像、Calendar现金、Google Calendar、GMO CSV唯一明细及照合机制、見積→受注、正式番号事务、小野田生成/金额/保存逻辑。`estimateFilename` 仅为唯一命名器的兼容别名；未入金残高通知 PDF 仍用原专用规则。receipt/CSV/migration 有各自必要写入，不是第二套手工入金入口。
 
 ## 最终行为
 
-- 普通：`26／4／8 中村成男様クロス張替領収書.pdf`、`26／9／24 蛍火株式会社様網戸張替請求書.pdf`。
-- 小野田：`26／8／31 dynast合同会社様8月分クロス張替請求書.pdf`。独立固定客户、项目及日期月份；原月次金额／生成逻辑不变。
-- 主营项目按项目出现顺序识别，费用项不参与；没有已识别主营项目则取首个非费用施工内容，再兜底“工事”。Calendar 仍保留原多分类元数据。
-- 売上・入金 → 入金：选中 sale、填写日期／方法／金额／备注 → 入金登録。共享模式只执行 payment 命令及现有 sale.paymentIds/paymentVersion、审计更新；銀行振込为 bank-confirmed。没有 document 保存、正式编号预留、PDF 或領収书调用。
-- 确认到账沿用现有管理员权限边界；未扩大 staff 权限，也未修改 Firestore rules。
-- 相同 sale、日期、金额、方法、备注的再次提交视为同一入金；部分／后续入金通过不同金额、日期或备注区分。取消済 payment 不会被自动复活。
-- 未改变 CSV银行照合路径；历史 pending-bank 记录不批量转换。独立帳票模块创建領収书仍保留原记账规则。
+- 普通：`YY／M／D 客户名様首个主营项目帳票种类.pdf`；两位年、月日不补零、全角／、様不重复。
+- 小野田：8/9/10月分别为31/30/31日；2026年2月28日，2024年2月29日。不改保存日期或生产帳票数据。
+- 正式請求書仍生成一个 sale/未収。手工确认到账只创建 payment，附带原有 sale 的 paymentIds/paymentVersion 及审计维护；不创建 document、正式番号、PDF或第二个 sale。
+- 保存帳票与売上入口共用表单和 registerPayment。保存帳票上下文带 documentId 并锁定对应 sale。
+- 银行到账登记为 bank-confirmed；现金沿用 cash-received 及现金镜像。其他实际到账方法也计入确认入金；CSV业务逻辑保持原样。
+- 同一次双击/网络重试不重复；用户同步完成后明确登记第二笔，即使同日同额同方法同备注，也得到新 payment。
+- 管理员确认权限保持原 PR 边界；staff不能绕过 service。原 CSV 待确认/照合及显式现金領収書权限保留。
 
-## 修改文件
+## 验收结果
 
-生产代码仅四个文件：`index.html`、`js/business-domain.js`、`js/business-ui.js`、`js/outstanding-ui.js`。
-
-回归：`tests/business-workflow.cjs`、`tests/business-workflow-browser.cjs`、`tests/estimate-calendar.cjs`、`tests/estimate-calendar-browser.cjs`、`tests/firestore-rules.cjs`；以及本审计记录。
-
-## 验收
-
-| 要求 | 证据 |
+| 验收 | 结果及证据 |
 |---|---|
-| 1–4 四类文件名 | 单元断言及桌面／手机浏览器 PDF 保存调用的完整文件名断言 |
-| 5 首个主营项目、忽略费用、施工内容兜底 | 多项、逆序、同一行多项目、材料费／出张费／杂费、全费用测试 |
-| 6 様去重 | 蛍火株式会社様准确文件名断言 |
-| 7 入金仅更新 payment、未収部分／结清 | 实际点击 sale 行入金按钮，主表单登记 500，余额弹窗登记 600；未収 1100→600→0；documents、documentNumber 操作与 PDF 次数保持不变 |
-| 8 防重复 | 同时提交、同步后重复提交、不同 payment ID／operation ID 的域层并发与重试，始终只有一笔 payment |
-| 9 独立領収书 | 原 standalone-receipt 单元测试及两种屏宽下独立正式領収书创建、原本打开／再下载 |
-| 10 小野田月次 | 原 onoda 单元及浏览器月次回归，24／25／35 行、金额合计、重复／取消／删除数据处理、多页 PDF 调用、保存／revision |
+| 普通見積/請求/領収文件名 | 单元及390/1280px浏览器下载调用断言全部通过；主营项目顺序、费用过滤、様去重、fallback覆盖 |
+| 小野田8/9/10/2月及闰年 | 任意月内日期的月末断言通过；原月次浏览器24/25/35行及全部金额回归通过 |
+| 正式保存→sale/未収 | 业务单元、正式编号及真实emulator浏览器通过 |
+| 任一入口登记仅新增payment | 双击500→真实第二笔500→保存帳票100结清；原document/番号/PDF快照不变，sale不新增 |
+| 四页面一次登记同步 | 浏览器直接断言Home当月入金/未収、売上、未収一覧、保存帳票金额自动更新；无额外页面确认 |
+| 入金済隐藏登记 | 保存帳票卡片只保留入金履歴，窗口表单归位，売上按钮消失；390/1280px截图验证 |
+| 部分入金及两笔同日同额 | 余额1100→600→100→0；域层及真实Firestore emulator两笔真实入金独立存在 |
+| 双击/网络重试 | UI按钮与service并发保护；丢失成功响应后outbox重试仍一笔，成功后一次reload；真实emulator同操作重放通过 |
+| 既有业务 | 独立银行/现金領収書、现金镜像、CSV重复导入与照合、Google Calendar、見積受注、小野田月次、历史PDF导入通过 |
+| 390/1280px | 主要业务、正式编号、保存帳票、历史导入、页面同步通过；原小野田/导航另外覆盖390/1440px |
+| 完整测试 | 静态/PWA＋6个小野田/清理测试＋55个业务单元全部通过；Firestore emulator29/29通过；全部现有浏览器入口与auth-persistence通过 |
 
-执行结果：
+执行命令：`node --run test`、`node --test tests/firestore-rules.cjs`（demo-tsukinowa emulator）、`node --run test:browser`、`node tests/business-workflow-browser.cjs`、`node tests/estimate-calendar-browser.cjs`、`node tests/business-browser.cjs`、`node tests/document-numbering-browser.cjs`、`node tests/historical-import-browser.cjs`、`node tests/outstanding-browser.cjs`、`node tests/auth-persistence.cjs`、`git diff --check`。
 
-- `node --run test`：静态/PWA检查通过；6 个 onoda/cleanup 测试和 52 个业务单元测试全部通过。
-- `node tests/business-workflow-browser.cjs`：390px、1280px 全部通过。
-- `node tests/estimate-calendar-browser.cjs`：390px、1280px 全部通过。
-- `node tests/onoda-browser.cjs`：390px、1440px 全部通过。
-- Firestore demo 模拟器 `node --test tests/firestore-rules.cjs`：28/28 通过，包括新确认入金、编号不变、重复提交及 staff 拒绝。
-- `git diff --check`：通过。
-
-浏览器以隔离数据和 PDF 保存替身检验下载调用／文件名，不连接生产；未重新设计或修改 PDF 页面布局。本次未对真实银行流水或生产账票执行验收操作。
+测试仅使用隔离localhost/emulator和测试账号。文件名与“入金不输出PDF”的浏览器断言使用PDF保存替身；另补实际html2pdf渲染库的独立領収書下载回归。真实Google OAuth/银行业务数据未写入；线上烟雾只读取发布资源。UI截图及上线commit/验证证据随交付报告提供。

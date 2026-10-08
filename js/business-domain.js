@@ -23,7 +23,7 @@ function filenameProject(s){
 }
 const safeFilename=name=>name.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_')+'.pdf';
 function filenameDate(s){const date=s.invoiceDate||s.date||'',m=String(date).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?{date:m[1].slice(-2)+'／'+Number(m[2])+'／'+Number(m[3]),month:Number(m[2])}:{date:'',month:''};}
-function onodaFilename(s){const {date,month}=filenameDate(s);return safeFilename(date+' dynast合同会社様'+(month?month+'月分':'')+'クロス張替請求書');}
+function onodaFilename(s){const value=s.invoiceDate||s.date||'',m=String(value).match(/^(\d{4})-(\d{2})/),last=m?new Date(Date.UTC(Number(m[1]),Number(m[2]),0)).getUTCDate():null;const {date,month}=filenameDate({...s,invoiceDate:m?m[1]+'-'+m[2]+'-'+String(last).padStart(2,'0'):value});return safeFilename(date+' dynast合同会社様'+(month?month+'月分':'')+'クロス張替請求書');}
 function documentFilename(value){const s={...(value.snapshot||{}),...value};if(s.docType==='onoda')return onodaFilename(s);const customer=String(s.customerName||s.customer||'').trim(),honorific=customer?(customer.endsWith('様')?customer:customer+'様'):'';return safeFilename(filenameDate(s).date+' '+honorific+filenameProject(s)+({invoice:'請求書',estimate:'見積書',receipt:'領収書'}[s.docType||'estimate']));}
 function estimateFilename(s){return documentFilename({...s,docType:'estimate'});}
 function parseCalendar(title){
@@ -48,8 +48,8 @@ function createService(client,{now=()=>new Date()}={}){
  const eventId=event=>stable('cal',event.googleEventId||event.id);
  async function execute(cmd,numberRetries=0){
  cmd=core.normalizeDates(cmd);
- // Manual confirmation retries on either screen/device resolve to the same payment.
- if(cmd.type==='payment'&&cmd.manualConfirmed){if(client.getState().role!=='admin')throw Error('確認済み入金の登録は管理者のみです。');cmd={...cmd,paymentId:await stable('manualpay',core.canonical({saleId:cmd.saleId,amount:A.money(cmd.amount),paymentDate:A.date(cmd.paymentDate),method:cmd.method,memo:cmd.memo||''}))};}
+ // Identity belongs to the submitted operation, never to its business contents.
+ if(cmd.type==='payment'&&cmd.manualConfirmed){if(client.getState().role!=='admin')throw Error('確認済み入金の登録は管理者のみです。');if(!cmd.paymentId||!cmd.operationId)throw Error('入金の操作IDがありません。');}
  if(cmd.type==='deleteMisregistration')cmd={...cmd,operationId:'delete_error_'+cmd.documentId+'_'+cmd.expectedRevision};
  let allocated=null;const observed=[];
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
@@ -299,7 +299,7 @@ function createService(client,{now=()=>new Date()}={}){
     const amount=A.money(cmd.amount),paymentDate=A.date(cmd.paymentDate);
     if(!['現金','銀行振込','その他','オンライン決済'].includes(cmd.method||'現金'))throw Error('入金方法を確認してください。');
     if(cmd.documentId&&sale.payload.documentId!==cmd.documentId)throw Error('対象請求書が訂正されています。読み込み直してください。');
-    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':cmd.manualConfirmed&&cmd.method==='銀行振込'?'bank-confirmed':'pending-bank',memo:cmd.memo||'',documentId:''};
+    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':cmd.manualConfirmed?'bank-confirmed':'pending-bank',memo:cmd.memo||'',documentId:''};
     if(old){if(core.canonical(old.payload)!==core.canonical(payload))throw Error('入金IDが既存の入金と競合しています。');return {paymentId:cmd.paymentId,unchanged:true};}
     await write('payments',cmd.paymentId,payload,'payment',0);return {paymentId:cmd.paymentId};
   }
@@ -343,7 +343,14 @@ function createService(client,{now=()=>new Date()}={}){
   }
   throw error;
  }}
- return {execute,stable,eventId};
+ const paymentOperations=new Map();
+ async function executeCommand(cmd){
+  if(cmd.type!=='payment')return execute(cmd);
+  const key=cmd.operationId,fingerprint=core.canonical(cmd),previous=paymentOperations.get(key);
+  if(previous){if(previous.fingerprint!==fingerprint)return Promise.reject(Error('Operation ID conflict'));return previous.promise;}
+  const promise=execute(cmd).finally(()=>paymentOperations.delete(key));paymentOperations.set(key,{fingerprint,promise});return promise;
+ }
+ return {execute:executeCommand,stable,eventId};
 }
 return {calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
 });
