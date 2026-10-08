@@ -29,7 +29,7 @@ test('ordinary events without explicit cash/amount create no accounting; standal
  const snapshot={documentId:docType,docType,invoiceDate:'2026-10-06',workDate:docType==='estimate'?'2026-10-20':'',customerName:'顧客',items:docType==='receipt'?[]:[{content:'穴補修',qty:1,price:1000}],tadashi:'穴補修代',receiptTotal:1100,paymentMethod:'現金'};
  await h.execute({type:'saveDocument',snapshot,expectedRevision:0});const row=h.list('documents').find(r=>r.id===docType),before=JSON.stringify([...h.rows]);
  const result=await h.execute({type:'saveDocument',snapshot:row.payload.snapshot,expectedRevision:row.revision});assert(result.unchanged);assert.equal(h.list('documents').find(r=>r.id===docType).revision,row.revision);assert.equal(h.list('sales').length,['invoice','onoda','receipt'].filter(t=>h.list('documents').some(d=>d.id===t)).length);
- assert.equal(B.projectCategory({items:[],linkedInvoice:{items:[{content:'クロス張替'},{content:'穴補修'},{content:'ドア補修'}]},tadashi:'工事代'}),'クロス張替・穴補修・ドア補修');assert(B.documentFilename(snapshot).startsWith('2026-10-06_顧客_穴補修_'));
+ assert.equal(B.projectCategory({items:[],linkedInvoice:{items:[{content:'クロス張替'},{content:'穴補修'},{content:'ドア補修'}]},tadashi:'工事代'}),'クロス張替・穴補修・ドア補修');assert.equal(B.documentFilename(snapshot),docType==='onoda'?'26／10／31 dynast合同会社様10月分クロス張替請求書.pdf':`26／10／6 顧客様穴補修${{invoice:'請求書',estimate:'見積書',receipt:'領収書'}[docType]}.pdf`);
  }
  assert.equal(h.list('payments').length,1);await h.execute({type:'acceptEstimate',estimateId:'est_estimate'});assert.equal(h.list('estimates')[0].payload.workDate,'2026-10-20');assert.equal(h.list('documents').find(r=>r.id==='estimate').payload.salesDate,'');
 });
@@ -56,3 +56,31 @@ test('production gate: backed-up Invalid Date outbox recovers subsequent void; c
 test('production gate: calendar UTC storage displays Japan time and local ICS times stay local',()=>{
  assert.equal(B.calendarTime('2026-10-01T05:30:00.000Z'),'14:30');assert.equal(B.calendarTime('2026-10-01T14:30:00+09:00'),'14:30');assert.equal(B.calendarTime('2026-10-01T14:30:00'),'14:30');assert.equal(B.calendarTime('2026-10-01'),'終日');assert.equal(B.calendarTime('Invalid Date'),'未定');
 });
+
+
+test('restored business filenames use first main work, skip expenses, honorific once and fixed Onoda branch',()=>{
+ for(const [docType,label]of [['estimate','見積書'],['invoice','請求書'],['receipt','領収書']])assert.equal(B.documentFilename({docType,invoiceDate:'2026-04-08',customerName:'中村成男',items:[{content:'出張費'},{content:'クロス張替'},{content:'穴補修'}]}),`26／4／8 中村成男様クロス張替${label}.pdf`);
+ assert.equal(B.documentFilename({docType:'invoice',invoiceDate:'2026-09-24',customerName:'蛍火株式会社様',items:[{content:'網戸張替'},{content:'クロス張替'}]}),'26／9／24 蛍火株式会社様網戸張替請求書.pdf');
+ assert.equal(B.documentFilename({docType:'onoda',invoiceDate:'2026-08-31',customerName:'変更顧客',items:[{content:'穴補修'}]}),'26／8／31 dynast合同会社様8月分クロス張替請求書.pdf');
+ assert.equal(B.filenameProject({items:[{content:'材料費 クロス'},{content:'雑費'},{content:'清掃'},{content:'洗浄'}]}),'清掃');
+ assert.equal(B.filenameProject({items:[{content:'材料費'},{content:'雑費'}]}),'工事');
+ assert.equal(B.filenameProject({items:[{content:'穴補修'},{content:'クロス張替'}]}),'穴補修');
+ assert.equal(B.filenameProject({items:[{content:'クロス張替・網戸張替'}]}),'クロス張替');
+ assert.equal(B.filenameProject({linkedInvoice:{items:[{content:'網戸張替'}]},tadashi:'工事代'}),'網戸張替');
+ assert.equal(B.projectCategory({items:[{content:'クロス張替'},{content:'穴補修'}]}),'クロス張替・穴補修');
+});
+test('manual confirmed bank payment is partial/final, concurrent/repeated idempotent and creates no document or number',async()=>{
+ const h=await harness();await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'manual',docType:'invoice',customerName:'顧客',invoiceDate:'2026-10-08',items:[{content:'クロス張替',qty:1,price:10000}]}});
+ const original=JSON.stringify(h.list('documents')),numbers=JSON.stringify(h.list('operations').filter(r=>r.id.startsWith('documentNumber_')));
+ const cmd={type:'payment',manualConfirmed:true,paymentId:'random-a',saleId:'sale_manual',amount:5000,paymentDate:'2026-10-08',method:'銀行振込',memo:'銀行で確認'};
+ await Promise.all([h.execute(cmd),h.execute(cmd)]);await h.execute(cmd);
+ assert.equal(h.list('payments').length,1);assert.equal(h.list('payments')[0].payload.confirmation,'bank-confirmed');
+ assert.equal(A.receivables(h.list('sales').map(r=>r.payload),h.list('payments').map(r=>r.payload),'2026-10-08')[0].outstanding,6000);
+ await h.execute({...cmd,paymentId:'real-second'});assert.equal(h.list('payments').length,2);assert.equal(A.receivables(h.list('sales').map(r=>r.payload),h.list('payments').map(r=>r.payload),'2026-10-08')[0].outstanding,1000);await h.execute({...cmd,paymentId:'final',amount:1000,paymentDate:'2026-10-09'});
+ assert.equal(A.receivables(h.list('sales').map(r=>r.payload),h.list('payments').map(r=>r.payload),'2026-10-09')[0].outstanding,0);
+ assert.equal(h.list('cashLedger').length,0);assert.equal(JSON.stringify(h.list('documents')),original);assert.equal(JSON.stringify(h.list('operations').filter(r=>r.id.startsWith('documentNumber_'))),numbers);
+});
+
+test('Onoda filenames always use the target month end including leap February',()=>{for(const [date,expected] of [['2026-08-01','26／8／31'],['2026-09-12','26／9／30'],['2026-10-06','26／10／31'],['2026-02-01','26／2／28'],['2024-02-01','24／2／29']])assert.equal(B.documentFilename({docType:'onoda',invoiceDate:date}),expected+' dynast合同会社様'+Number(date.slice(5,7))+'月分クロス張替請求書.pdf');});
+
+test('lost payment response replays the persisted operation and standard reload once',async()=>{const h=await harness();await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'retry-network',docType:'invoice',invoiceDate:'2026-10-08',customerName:'顧客',items:[{content:'施工',qty:1,price:1000}]}});const store=new Map();let reloads=0;const sync=require('../js/business-sync').createSync({client:h.client,storage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},onData:()=>reloads++});const run=sync.service.execute;let lose=true;sync.service.execute=async cmd=>{const result=await run(cmd);if(lose){lose=false;const e=Error('response lost');e.code='unavailable';throw e;}return result;};const command={type:'payment',operationId:'network-retry',paymentId:'pay-network',manualConfirmed:true,saleId:'sale_retry-network',amount:500,paymentDate:'2026-10-08',method:'銀行振込',memo:''};sync.enqueue(command);await sync.flush();assert.equal(h.list('payments').length,1);assert.equal(sync.getQueue().length,1);await sync.flush();assert.equal(h.list('payments').length,1);assert.equal(sync.getQueue().length,0);assert.equal(reloads,1);assert.equal(sync.getRows().payments.length,1);sync.stop();});

@@ -75,7 +75,6 @@ async function prepareFormalOutput(){
  original.applyFormState({...copy(formBase),cloudRevision:docRevision},formBase.docType);
  viewBaseline=root.TsukinowaCloudCore.canonical(root.TsukinowaBusiness.cleanSnapshot(collectFormState()));readOnly(true);return true;
 }
-root.buildPrintFilename=function(){const snapshot=collectFormState(),sale=bizState.sales.find(s=>s.id===snapshot.saleId);return root.TsukinowaBusiness.documentFilename({...snapshot,linkedInvoice:rows.documents?.find(r=>r.id===sale?.documentId)?.payload.snapshot||sale}).slice(0,-4);};
 root.doPrint=async function(){if(await prepareFormalOutput())return original.doPrint();};
 const originalSystemPrint=root.systemPrint;
 root.systemPrint=async function(){if(await prepareFormalOutput())return originalSystemPrint();};
@@ -103,9 +102,21 @@ root.bizConvertEstimateRecordToInvoice=function(id){
  applyFormState(draft,'invoice');bizSwitchPage('chohyo');
 };
 root.convertEstimateToInvoice=function(){if(!enabled)return original.convertEstimateToInvoice();if(!bizCurrentEstimateId)return alert('先に見積を正式保存して、見積履歴から受注してください。');bizConvertEstimateRecordToInvoice(bizCurrentEstimateId);};
-root.bizRegisterEstimatePayment=function(id){if(!enabled)return original.bizRegisterEstimatePayment(id);const sale=bizState.sales.find(x=>x.estimateId===id);if(sale)return selectSaleForPayment(sale.id);alert('対象請求書を正式保存してから入金を登録してください。見積だけでは売上を作成しません。');};
-root.addPayment=function(){if(!enabled)return original.addPayment();const amount=Number(el('paymentAmount').value);if(!amount||!el('paymentSale').value)return alert('対象請求書と入金額を確認してください。');if(command({type:'payment',paymentId:'pay_'+uuid(),saleId:el('paymentSale').value,amount,paymentDate:el('paymentDate').value,method:el('paymentType').value,memo:el('paymentMemo').value})){el('paymentAmount').value='';el('paymentMemo').value='';}};
-root.selectSaleForPayment=function(id){if(!enabled)return original.selectSaleForPayment(id);if(!ready())return;const sale=bizState.sales.find(x=>x.id===id);if(!sale)return;setDocType('receipt');el('receiptSale').value=id;el('customerName').value=sale.customer;el('receiptTotal').value=bizOutstanding(sale);el('paymentMethod').value='現金';bizSwitchPage('chohyo');recalc();};
+
+const paymentFlights=new Map();
+async function registerPayment(value){
+ if(paymentFlights.has(value.saleId))return paymentFlights.get(value.saleId);
+ const task=(async()=>{
+  if(!enabled){const sale=bizState.sales.find(s=>s.id===value.saleId);if(!sale||bizOutstanding(sale)<=0)throw Error('有効な未入金の対象売上を選択してください。');bizState.payments.push({...value,id:'pay_'+uuid(),date:value.paymentDate,confirmation:value.method==='現金'?'cash-received':'bank-confirmed',createdAt:new Date().toISOString()});bizAudit('入金登録',`${sale.customer} ${value.amount}円`);bizPersist();bizRefreshAll();return true;}
+  if(!ready())return false;
+  if(sync.getQueue().some(x=>x.command.type==='payment'&&x.command.saleId===value.saleId))throw Error('前の入金が未同期です。同期完了後に登録してください。');
+  // Persist both IDs in the existing outbox before sending. Retries replay this command.
+  if(!command({...value,type:'payment',paymentId:'pay_'+uuid(),operationId:uuid(),manualConfirmed:true}))return false;
+  await sync.flush();return !sync.getQueue().some(x=>x.command.type==='payment'&&x.command.saleId===value.saleId);
+ })();paymentFlights.set(value.saleId,task);
+ try{return await task;}finally{paymentFlights.delete(value.saleId);}
+}
+root.selectSaleForPayment=function(id){if(enabled&&!ready())return;return original.selectSaleForPayment(id);};
 root.matchBankSale=function(bankId,saleId){if(!enabled)return original.matchBankSale(bankId,saleId);if(!ready()||client.getState().role!=='admin')return;const b=bizState.bank.find(x=>x.id===bankId);if(!b)return;const pending=bizState.payments.filter(p=>p.saleId===saleId&&p.confirmation==='pending-bank'&&p.amount===b.incoming);if(pending.length>1)return alert('同額の仮入金が複数あります。照合前に管理者が確認してください。');command({type:'confirmBank',bankId:b.key||bankId,localBankId:bankId, saleId,amount:b.incoming,paymentDate:b.date,pendingPaymentId:pending[0]?.id||''});};
 root.openManualSale=function(){if(!enabled)return original.openManualSale();alert('売上は請求書の正式保存から登録してください。');};
 root.bizGoogleMergeEvent=function(e){if(!enabled)return original.bizGoogleMergeEvent(e);if(!ready())throw Error('クラウドにログインしてください。');const exists=bizState.calendar.some(x=>x.googleEventId===e.googleEventId);command({type:'calendar',event:copy(e)});return exists?'updated':'added';};
@@ -165,7 +176,7 @@ async function deleteMisregistration(h){
 function renderDocuments(boxId,kind){
  const box=el(boxId);if(!box)return;box.replaceChildren();const q=(el('savedDocSearch')?.value||'').toLowerCase();
  history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId].join(' ').toLowerCase().includes(q))return;
-  const row=document.createElement('div');row.className='biz-card';row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
+  const row=document.createElement('div');row.className='biz-card';row.dataset.documentId=h.documentId;row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
   const label=document.createElement('strong');label.textContent=`${documentLabels[h.documentStatus]} ｜ ${docTypeLabel(h.docType)} ｜ ${h.customerName||''}`;if(h.documentStatus!=='active')label.style.color='#a23';row.append(label);
   const detail=document.createElement('p');detail.textContent=`${h.sourceType==='historicalPdfImport'?'過去PDF ｜ ':''}No.${h.invoiceNo||''} ｜ ${h.invoiceDate||''} ｜ ID: ${h.documentId}`+(h.statusReason?' ｜ 理由: '+h.statusReason:'')+(h.revisedFromDocumentId?' ｜ 訂正元: '+h.revisedFromDocumentId:'')+(h.duplicateOfDocumentId?' ｜ 原帳票: '+h.duplicateOfDocumentId:'')+(h.revisedToDocumentId?' ｜ 訂正版: '+h.revisedToDocumentId:'');row.append(detail);
   const add=(text,fn)=>{const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=text;b.onclick=fn;row.append(b);};
@@ -175,7 +186,7 @@ function renderDocuments(boxId,kind){
   if(['invoice','onoda'].includes(h.docType)){
    const v=invoiceBalance(h.documentId);
    const summary=document.createElement('p');summary.textContent=`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`;row.append(summary);
-   if(v.active)add('入金登録',()=>root.openInvoiceBalance(h.documentId,'payment'));
+   if(v.active&&v.outstandingAmount>0&&client?.getState().role==='admin')add('入金登録',()=>root.openInvoiceBalance(h.documentId,'payment'));
    add('入金履歴',()=>root.openInvoiceBalance(h.documentId));
    if(v.active&&v.outstandingAmount>0)add('未入金残高請求書',()=>root.openInvoiceBalance(h.documentId,'pdf'));
   }
@@ -189,7 +200,7 @@ function invoiceBalance(id){
  const anchor=doc.payload.saleId||doc.payload.receivableId||'sale_'+id;const sale=bizState.sales.find(s=>s.id===anchor||s.documentId===id)||(rows.receivables||[]).find(r=>r.id===anchor)?.payload;
  return root.TsukinowaOutstanding.view({...doc,payload:{...doc.payload,amount:doc.payload.amount??sale?.amount??root.TsukinowaBusiness.total(doc.payload.snapshot),documentId:doc.payload.documentId||id,docType:doc.payload.docType||doc.payload.snapshot.docType}},sale,rows.payments||[]);
 }
-root.TsukinowaBusinessUI={invoiceBalance,patchPending,googleError(message,id){googleErrors.set(id,message);if(lastStatus.state==='error')return;el('coreSyncStatus').textContent=(bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+message;el('cloudRealtime').textContent=message;},
+root.TsukinowaBusinessUI={registerPayment,invoiceBalance,patchPending,googleError(message,id){googleErrors.set(id,message);if(lastStatus.state==='error')return;el('coreSyncStatus').textContent=(bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+message;el('cloudRealtime').textContent=message;},
  configure(value){const changed=enabled!==value;enabled=value;if(enabled){if(changed)clearView();el('coreSyncStatus').textContent='ログイン待ち';}else el('coreSyncStatus').textContent='端末内保存';},
  auth(state,instance){client=instance;const next=state.phase==='ready'?`${state.projectId}/${state.companyId}/${state.user.uid}/${state.role}`:'';
   // The core removes listeners on every token refresh, so rebuild once per auth-ready transition.

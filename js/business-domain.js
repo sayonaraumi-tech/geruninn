@@ -11,7 +11,20 @@ function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'�
 const CATEGORY_RULES=[['クロス張替',/クロス|壁紙/],['穴補修',/穴.*(?:補修|修理|埋)|(?:補修|修理).*穴/],['ドア補修',/(?:ドア|扉).*補修|補修.*(?:ドア|扉)/],['窓枠補修',/窓枠/],['CF/クッションフロア',/\bCF\b|クッションフロア/i],['巾木',/巾木|幅木/],['障子',/障子/],['天井塗装',/天井.*塗装|塗装.*天井/],['ガラスシート',/ガラス.*(?:シート|フィルム)/],['ダイノック',/ダイノック|ダイノク/],['フロアタイル',/フロアタイル/]];
 function rawContent(s){return (s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean).join(' / ')||s.content||s.snapshot?.content||(s.linkedInvoice?.items||[]).map(i=>String(i.content||'')).filter(Boolean).join(' / ')||s.linkedInvoice?.content||s.tadashi||s.snapshot?.tadashi||'';}
 function projectCategory(s){const texts=(s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean);if(!texts.length)texts.push(rawContent(s)||s.projectCategory||'');const found=new Set();for(const text of texts){let matched=false;for(const [name,re]of CATEGORY_RULES)if(re.test(text.normalize('NFKC'))){found.add(name);matched=true;}}return [...CATEGORY_RULES.map(r=>r[0]),'その他'].filter(n=>found.has(n)).join('・')||'その他';}
-function documentFilename(s){return [s.invoiceDate||s.date||s.snapshot?.invoiceDate||'',s.customerName||s.customer||s.snapshot?.customerName||'',projectCategory(s),({invoice:'請求書',estimate:'見積書',receipt:'領収書',onoda:'小野田請求書'})[s.docType||s.snapshot?.docType||'estimate']].join('_').replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_').replace(/[. ]+$/,'')+'.pdf';}
+// Filename selection is independent of the multi-category Calendar metadata.
+const FEE_ITEM=/出張費|材料費|雑費|諸経費|交通費|駐車(?:場)?(?:代|料金|費)|処分費|運搬費/;
+function filenameProject(s){
+ const source={...(s.snapshot||{}),...s},linked=source.linkedInvoice||{};
+ const texts=(source.items?.length?source.items:linked.items||[]).map(i=>String(i.content||'').trim()).filter(Boolean);
+ if(!texts.length)texts.push(...String(source.content||linked.content||source.tadashi||'').split(/\s*[／/・、,]\s*/).filter(Boolean));
+ const work=texts.filter(t=>!FEE_ITEM.test(t.normalize('NFKC')));
+ for(const text of work){const normalized=text.normalize('NFKC');const matches=[...CATEGORY_RULES,['網戸張替',/網戸/]].map(([name,re])=>({name,index:normalized.search(re)})).filter(x=>x.index>=0).sort((a,b)=>a.index-b.index);if(matches.length)return matches[0].name;}
+ return work[0]||'工事';
+}
+const safeFilename=name=>name.replace(/[\\/:*?"<>|\x00-\x1f\x7f]/g,'_')+'.pdf';
+function filenameDate(s){const date=s.invoiceDate||s.date||'',m=String(date).match(/^(\d{4})-(\d{2})-(\d{2})/);return m?{date:m[1].slice(-2)+'／'+Number(m[2])+'／'+Number(m[3]),month:Number(m[2])}:{date:'',month:''};}
+function onodaFilename(s){const value=s.invoiceDate||s.date||'',m=String(value).match(/^(\d{4})-(\d{2})/),last=m?new Date(Date.UTC(Number(m[1]),Number(m[2]),0)).getUTCDate():null;const {date,month}=filenameDate({...s,invoiceDate:m?m[1]+'-'+m[2]+'-'+String(last).padStart(2,'0'):value});return safeFilename(date+' dynast合同会社様'+(month?month+'月分':'')+'クロス張替請求書');}
+function documentFilename(value){const s={...(value.snapshot||{}),...value};if(s.docType==='onoda')return onodaFilename(s);const customer=String(s.customerName||s.customer||'').trim(),honorific=customer?(customer.endsWith('様')?customer:customer+'様'):'';return safeFilename(filenameDate(s).date+' '+honorific+filenameProject(s)+({invoice:'請求書',estimate:'見積書',receipt:'領収書'}[s.docType||'estimate']));}
 function estimateFilename(s){return documentFilename({...s,docType:'estimate'});}
 function parseCalendar(title){
  const tokens=String(title||'').normalize('NFKC').replace(/(\d),(?=\d{3}(?:\D|$))/g,'$1').split(/[、,，｜|]/).map(t=>t.trim()).filter(Boolean);
@@ -34,7 +47,10 @@ function createService(client,{now=()=>new Date()}={}){
  const stable=async(prefix,value)=>prefix+'_'+(await client.digest(String(value))).slice(0,48);
  const eventId=event=>stable('cal',event.googleEventId||event.id);
  async function execute(cmd,numberRetries=0){
- cmd=core.normalizeDates(cmd);if(cmd.type==='deleteMisregistration')cmd={...cmd,operationId:'delete_error_'+cmd.documentId+'_'+cmd.expectedRevision};
+ cmd=core.normalizeDates(cmd);
+ // Identity belongs to the submitted operation, never to its business contents.
+ if(cmd.type==='payment'&&cmd.manualConfirmed){if(client.getState().role!=='admin')throw Error('確認済み入金の登録は管理者のみです。');if(!cmd.paymentId||!cmd.operationId)throw Error('入金の操作IDがありません。');}
+ if(cmd.type==='deleteMisregistration')cmd={...cmd,operationId:'delete_error_'+cmd.documentId+'_'+cmd.expectedRevision};
  let allocated=null;const observed=[];
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
@@ -283,7 +299,7 @@ function createService(client,{now=()=>new Date()}={}){
     const amount=A.money(cmd.amount),paymentDate=A.date(cmd.paymentDate);
     if(!['現金','銀行振込','その他','オンライン決済'].includes(cmd.method||'現金'))throw Error('入金方法を確認してください。');
     if(cmd.documentId&&sale.payload.documentId!==cmd.documentId)throw Error('対象請求書が訂正されています。読み込み直してください。');
-    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':'pending-bank',memo:cmd.memo||'',documentId:''};
+    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':cmd.manualConfirmed?'bank-confirmed':'pending-bank',memo:cmd.memo||'',documentId:''};
     if(old){if(core.canonical(old.payload)!==core.canonical(payload))throw Error('入金IDが既存の入金と競合しています。');return {paymentId:cmd.paymentId,unchanged:true};}
     await write('payments',cmd.paymentId,payload,'payment',0);return {paymentId:cmd.paymentId};
   }
@@ -327,7 +343,14 @@ function createService(client,{now=()=>new Date()}={}){
   }
   throw error;
  }}
- return {execute,stable,eventId};
+ const paymentOperations=new Map();
+ async function executeCommand(cmd){
+  if(cmd.type!=='payment')return execute(cmd);
+  const key=cmd.operationId,fingerprint=core.canonical(cmd),previous=paymentOperations.get(key);
+  if(previous){if(previous.fingerprint!==fingerprint)return Promise.reject(Error('Operation ID conflict'));return previous.promise;}
+  const promise=execute(cmd).finally(()=>paymentOperations.delete(key));paymentOperations.set(key,{fingerprint,promise});return promise;
+ }
+ return {execute:executeCommand,stable,eventId};
 }
-return {calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
+return {calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
 });
