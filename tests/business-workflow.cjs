@@ -9,6 +9,27 @@ async function harness(){
 }
 
 const A=require('../js/accounting');
+test('platform payment survives repeat registration, bank match/unmatch and historical supplier accounting',async()=>{
+ const h=await harness();await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'platform',docType:'invoice',customerName:'顧客',invoiceDate:'2026-10-08',items:[{content:'施工',qty:1,price:10000}]}});
+ await h.execute({type:'saveSupplier',supplierId:'supplier',supplier:{supplierName:'材料会社',openingDate:'2026-10-01',openingBalance:1000000},expectedRevision:0});
+ await h.execute({type:'supplierTransaction',transactionId:'material',transaction:{supplierId:'supplier',date:'2026-10-08',type:'monthlyInvoice',amount:1000,invoiceMonth:'2026-10',paymentMethod:'銀行振込',description:'請求書'},expectedRevision:0});
+ const preserved=JSON.stringify(['suppliers','supplierTransactions','expenses'].map(n=>h.list(n)));
+ const cmd={type:'payment',paymentId:'platform-pay',saleId:'sale_platform',amount:1000,paymentDate:'2026-10-08',method:'プラットフォーム経由',platformName:'くらしのマーケット',memo:'精算'};
+ await h.execute(cmd);await h.execute(cmd);assert.equal(h.list('payments').length,1);assert.equal(h.list('payments')[0].payload.confirmation,'pending-bank');
+ const bank={bankTxnId:'platform-bank',bankTransactionDate:'2026-10-09',bankAccount:'GMO',incoming:1000,outgoing:0,amount:1000,description:'STRIPE JAPAN'};
+ await h.execute({type:'importBank',bank});await h.execute({type:'bankMatch',bankTxnId:bank.bankTxnId,targetType:'sale',targetId:cmd.saleId,paymentId:cmd.paymentId,expectedRevision:1});
+ let p=h.list('payments')[0].payload;assert.equal(p.method,cmd.method);assert.equal(p.platformName,cmd.platformName);assert.equal(p.confirmation,'bank-confirmed');assert.equal(p.memo,bank.description);assert.equal(h.list('cashLedger').length,0);
+ const d=()=>Object.fromEntries(['sales','payments','suppliers','supplierTransactions','expenses','documents'].map(n=>[n,h.list(n).map(r=>r.payload)]));
+ assert.equal(A.monthly(d(),'2026-10').income,1000);assert.equal(A.monthly(d(),'2026-10').receivables,10000);assert.equal(A.monthly(d(),'2026-10').expenseTotal,1000);
+ const csv=require('../js/year-end').exports(d(),2026,{role:'admin',companyId:'tsukinowa'});for(const n of ['入金一覧.csv','月次集計.csv','年間集計.csv'])assert(csv[n].includes('くらしのマーケット'),n);
+ await h.execute({type:'bankUnmatch',bankTxnId:bank.bankTxnId,expectedRevision:2,reason:'再確認'});p=h.list('payments')[0].payload;assert.equal(p.method,cmd.method);assert.equal(p.platformName,cmd.platformName);assert.equal(p.confirmation,'pending-bank');assert.equal(A.monthly(d(),'2026-10').income,0);
+ assert.equal(JSON.stringify(['suppliers','supplierTransactions','expenses'].map(n=>h.list(n))),preserved);
+});
+test('legacy channel projection is read-only; missing methods and platform aliases do not change totals',()=>{
+ const rows=[{method:'現金'},{method:'銀行振込'},{method:'GMO銀行'},{method:'暮らしのマーケット'},{method:'くらしのマーケット'},{method:'オンライン決済',memo:'くらしのマーケット経由入金'},{}, {method:'その他'}],before=JSON.stringify(rows);
+ assert.deepEqual(rows.map(p=>A.paymentChannel(p).channel),['現金','銀行振込','銀行振込','プラットフォーム経由','プラットフォーム経由','プラットフォーム経由','未設定','その他']);
+ for(const p of rows.slice(3,6))assert.equal(A.paymentChannel(p).platformName,'くらしのマーケット');assert.equal(JSON.stringify(rows),before);
+});
 const event={googleEventId:'cash-event',googleCalendarId:'shared',date:'2026-10-05',start:'2026-10-05',end:'2026-10-06',title:'下村 健朗、クロス張替、足立区、11万、現金、km',location:'現場'};
 test('cash Google parsing, repeat/concurrent synchronization, amount/date/customer update, cancellation audit and formal lock',async()=>{
  const parsed=B.parseCalendar(event.title);assert.deepEqual(parsed,{amount:110000,payment:'現金',area:'足立区',customer:'下村健朗',work:'クロス張替',projectCategory:'クロス張替'});

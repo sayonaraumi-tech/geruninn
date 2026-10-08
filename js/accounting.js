@@ -4,6 +4,16 @@ const COLLECTIONS=['expenses','cashLedger','suppliers','supplierTransactions','b
 const CATEGORIES=['材料費','給与','家賃','交通費','車両費','通信費','消耗品費','外注費','その他'];
 const live=r=>!r.deletedAt&&!['void','cancelled','duplicate','revised'].some(status=>[r.documentStatus,r.status].includes(status)),amount=r=>Number(r.amount)||0,sum=rs=>rs.reduce((n,r)=>n+amount(r),0);
 const confirmed=p=>live(p)&&['cash-received','bank-confirmed'].includes(p.confirmation);
+// Read legacy methods without rewriting historical records. Confirmation remains authoritative.
+function paymentChannel(p={}){
+ const method=String(p.channel||p.method||'').trim(),platform=/(?:くらし|暮らし)のマーケット/.test(method);
+ const channel=platform||['プラットフォーム経由','オンライン決済'].includes(method)?'プラットフォーム経由':method==='現金'?'現金':['銀行振込','GMO銀行'].includes(method)?'銀行振込':method&&method!=='未設定'?'その他':'未設定';
+ const detail=String(p.platformName||p.channelDetail||'').trim().replace(/^暮らしのマーケット$/,'くらしのマーケット');
+ return {channel,platformName:channel==='プラットフォーム経由'?(detail||(platform||/(?:くらし|暮らし)のマーケット/.test(p.memo||'')?'くらしのマーケット':'')):''};
+}
+function paymentChannels(payments){
+ const groups=new Map();for(const p of payments){const c=paymentChannel(p),key=JSON.stringify(c);if(!groups.has(key))groups.set(key,{...c,amount:0});groups.get(key).amount+=amount(p);}return [...groups.values()];
+}
 function date(value){const m=String(value||'').trim().normalize('NFKC').match(/^(\d{4})[-/.年]?(\d{1,2})[-/.月]?(\d{1,2})日?$/);if(!m)throw Error('日付は YYYY-MM-DD で指定してください。');const s=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;const parsed=new Date(s+'T00:00:00Z');if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==s)throw Error('日付が不正です。');return s;}
 function money(v,signed=false){const n=Number(String(v??'').normalize('NFKC').replace(/[¥￥,\s円]/g,''));if(!Number.isSafeInteger(n)||(!signed&&n<=0))throw Error('金額は整数の円で入力してください。');return n;}
 const delta=t=>t.deletedAt?0:t.type==='monthlyInvoice'?-amount(t):amount(t);
@@ -25,7 +35,7 @@ function receivables(sales,payments,asOf=new Date().toLocaleDateString('sv-SE',{
 function supplierBalance(s,txs,asOf='9999-12-31'){return (s.openingDate<=asOf?Number(s.openingBalance)||0:0)+txs.filter(t=>t.supplierId===s.supplierId&&t.date<=asOf).reduce((n,t)=>n+delta(t),0);}
 function monthly(data,month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('対象月を指定してください。');const end=new Date(Date.UTC(Number(month.slice(0,4)),Number(month.slice(5,7)),0)).toISOString().slice(0,10),inMonth=(rs,k)=>rs.filter(r=>live(r)&&String(r[k]).slice(0,7)===month),ps=inMonth(ledger(data.sales||[],data.payments||[]).payments,'paymentDate'),expenses=inMonth(data.expenses||[],'expenseDate'),cash=cashRows(data.cashLedger||[]),supplierTx=inMonth(data.supplierTransactions||[],'date'),categories=Object.fromEntries(CATEGORIES.map(c=>[c,0]));for(const e of expenses)categories[e.category]=(categories[e.category]||0)+amount(e);
  const bankIncome=sum(ps.filter(p=>p.confirmation==='bank-confirmed')),cashIncome=sum(ps.filter(p=>p.confirmation==='cash-received')),expenseTotal=sum(expenses);
- return {month,sales:sum(inMonth((data.sales||[]).filter(s=>!s.receivableOnly),'salesDate')),bankIncome,cashIncome,income:bankIncome+cashIncome,receivables:receivables(data.sales||[],data.payments||[],end).reduce((n,s)=>n+s.outstanding,0),expenseTotal,categories,cashReceipts:sum(inMonth(cash,'date').filter(x=>x.type==='income')),cashExpenses:sum(inMonth(cash,'date').filter(x=>x.type==='expense')),cashBalance:cash.filter(x=>x.date<=end).at(-1)?.runningBalance||0,supplierPrepayment:sum(supplierTx.filter(t=>t.type==='prepayment')),supplierInvoice:sum(supplierTx.filter(t=>t.type==='monthlyInvoice')),supplierPayment:sum(supplierTx.filter(t=>t.type==='payment')),suppliers:(data.suppliers||[]).filter(live).map(s=>({...s,currentBalance:supplierBalance(s,data.supplierTransactions||[],end)})),cashFlowDifference:bankIncome+cashIncome-expenseTotal};
+ return {month,sales:sum(inMonth((data.sales||[]).filter(s=>!s.receivableOnly),'salesDate')),bankIncome,cashIncome,income:bankIncome+cashIncome,incomeChannels:paymentChannels(ps),receivables:receivables(data.sales||[],data.payments||[],end).reduce((n,s)=>n+s.outstanding,0),expenseTotal,categories,cashReceipts:sum(inMonth(cash,'date').filter(x=>x.type==='income')),cashExpenses:sum(inMonth(cash,'date').filter(x=>x.type==='expense')),cashBalance:cash.filter(x=>x.date<=end).at(-1)?.runningBalance||0,supplierPrepayment:sum(supplierTx.filter(t=>t.type==='prepayment')),supplierInvoice:sum(supplierTx.filter(t=>t.type==='monthlyInvoice')),supplierPayment:sum(supplierTx.filter(t=>t.type==='payment')),suppliers:(data.suppliers||[]).filter(live).map(s=>({...s,currentBalance:supplierBalance(s,data.supplierTransactions||[],end)})),cashFlowDifference:bankIncome+cashIncome-expenseTotal};
 }
 function parseCSV(text){const out=[];let row=[],field='',quote=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quote&&text[i+1]==='"'){field+='"';i++;}else if(quote||!field)quote=!quote;else throw Error('CSVの引用符が不正です。');}else if(c===','&&!quote){row.push(field);field='';}else if((c==='\n'||c==='\r')&&!quote){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);if(row.some(x=>x.trim()))out.push(row);row=[];field='';}else field+=c;}if(quote)throw Error('CSVの引用符が閉じていません。');row.push(field);if(row.some(x=>x.trim()))out.push(row);return out;}
 const normalize=s=>String(s||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();
@@ -39,5 +49,5 @@ function suggestions(bank,data){if(['照合済','除外'].includes(bank.status))
  return results.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
 }
 function csv(rows){const cell=v=>'"'+(typeof v==='number'?String(v):String(v??'').replace(/^[\s]*[=+@-]/,"'$&")).replace(/"/g,'""')+'"';return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');}
-return {COLLECTIONS,CATEGORIES,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
+return {COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
 });

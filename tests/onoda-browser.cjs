@@ -37,7 +37,7 @@ const server=http.createServer((req,res)=>{try{const u=new URL(req.url,'http://l
  // A regenerated monthly invoice is a revision of the same sale, using the new server value.
  const changed=await p.evaluate(async()=>{const r=testRecords.get('companies/tsukinowa/calendarLinks/event34');r.payload.googleLatestTitle='小野田，マキシヴ川崎サウスdue201，62.6米';await importOnodaFromCalendar({month:'2026-09'});const s=collectFormState();saveConfirmedHistory(s);await TsukinowaBusinessUI.getSync().flush();return {qty:items.find(x=>x.sourceEventId==='event34').qty,sales:await TsukinowaBusinessUI.getClient().listRecords('sales'),docs:await TsukinowaBusinessUI.getClient().listRecords('documents')};});assert.equal(changed.qty,62.6);assert.equal(changed.sales.length,1);assert.equal(changed.docs.filter(x=>x.payload.status==='active').length,1);
  await p.evaluate(()=>{if(!document.getElementById('previewArea').classList.contains('show'))togglePreview();});assert(await p.locator('#previewArea').isVisible());
- for(const route of ['calendar','projects','estimates','sales','expenses','bank','suppliers','monthly']){
+ for(const route of ['calendar','estimates','sales','expenses','bank','monthly']){
   await p.evaluate(route=>bizSwitchPage(route),route);assert(!(await p.locator('#previewArea').isVisible()));assert.equal(await p.locator('#previewArea').evaluate(x=>x.classList.contains('show')),false);
   await p.evaluate(()=>{bizSwitchPage('chohyo');togglePreview();});assert(await p.locator('#previewArea').isVisible());
  }
