@@ -357,3 +357,13 @@ test('explicit calendar duplicate reconciliation preserves originals and audit, 
  const A=require('../js/accounting.js');assert.equal((await records('sales')).filter(A.live).length,1);assert.equal((await records('payments')).filter(p=>!p.deletedAt).length,1);assert.equal((await records('cashLedger')).filter(p=>!p.deletedAt).length,1);assert.equal((await records('sales')).length,2);assert.deepEqual((await c.listRecords('documents'))[0].payload.snapshot,original);assert((await c.listRecords('auditLogs')).some(r=>r.after?.duplicateOfSaleId==='sale_official-double'));
  }finally{c.dispose();}
 });
+
+
+test('admin manual bank confirmation writes only one payment, no document/number, staff cannot bypass permissions',async()=>{
+ const admin=await clientFor('admin'),service=createService(admin);await exec(service,{type:'saveDocument',snapshot:snapshot('manual-bank'),expectedRevision:0});
+ const docs=JSON.stringify(await admin.listRecords('documents')),numbers=JSON.stringify((await getDocs(collection(db('admin'),'companies/tsukinowa/operations'))).docs.filter(d=>d.id.startsWith('documentNumber_')).map(d=>d.data()));
+ const command={type:'payment',manualConfirmed:true,saleId:'sale_manual-bank',paymentId:'one',amount:50000,paymentDate:'2026-10-08',method:'銀行振込',memo:'確認済'};
+ await exec(service,command);await exec(service,{...command,paymentId:'two'});const payments=await admin.listRecords('payments');assert.equal(payments.length,1);assert.equal(payments[0].payload.confirmation,'bank-confirmed');
+ assert.equal(JSON.stringify(await admin.listRecords('documents')),docs);assert.equal(JSON.stringify((await getDocs(collection(db('admin'),'companies/tsukinowa/operations'))).docs.filter(d=>d.id.startsWith('documentNumber_')).map(d=>d.data())),numbers);
+ await assert.rejects(exec(createService(await clientFor('staff')),{...command,paymentId:'staff'}),/管理者/);
+});

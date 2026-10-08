@@ -13,11 +13,12 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
 
  const alerts=[];page.on('dialog',async d=>{alerts.push(d.message());await d.dismiss();});
  await page.evaluate(()=>{
-  window.pdfSaves=0;window.html2pdf=()=>{const canvas=document.createElement('canvas');canvas.width=794;canvas.height=1123;const pdf={internal:{getNumberOfPages:()=>1},deletePage(){},addPage(){},addImage(){},save(){pdfSaves++}};const worker={set(){return worker},from(){return worker},toCanvas(){return worker},toPdf(){return worker},get:key=>Promise.resolve(key==='canvas'?canvas:pdf)};return worker;};
+  window.pdfSaves=0;window.pdfNames=[];window.html2pdf=()=>{const canvas=document.createElement('canvas');canvas.width=794;canvas.height=1123;const pdf={internal:{getNumberOfPages:()=>1},deletePage(){},addPage(){},addImage(){},save(name){pdfSaves++;pdfNames.push(name)}};const worker={set(){return worker},from(){return worker},toCanvas(){return worker},toPdf(){return worker},get:key=>Promise.resolve(key==='canvas'?canvas:pdf)};return worker;};
  });
  for(const type of ['invoice','estimate','receipt','onoda']){
   const id=await page.evaluate(async type=>{bizSwitchPage('chohyo');setDocType(type);while(onodaGenerating)await new Promise(r=>setTimeout(r,10));document.getElementById('customerName').value=type==='onoda'?'dynast合同会社':'原本顧客';document.getElementById('invoiceDate').value='2026-10-06';document.getElementById('salesDate').value=type==='estimate'?'2026-10-20':'';items=[{content:'クロス張替',qty:1,unit:'m',price:1000,taxable:true}];if(type==='receipt'){document.getElementById('receiptTotal').value='1100';document.getElementById('tadashi').value='クロス張替代';document.getElementById('paymentMethod').value='現金';}recalc();await doPrint();return collectFormState().documentId;},type);
   await page.waitForFunction(id=>loadConfirmedHistory().some(h=>h.documentId===id),id);await page.waitForFunction(n=>pdfSaves===n,['invoice','estimate','receipt','onoda'].indexOf(type)*3+1);
+  assert.equal(await page.evaluate(()=>pdfNames.at(-1)),type==='onoda'?'26／10／6 dynast合同会社様10月分クロス張替請求書.pdf':`26／10／6 原本顧客様クロス張替${{invoice:'請求書',estimate:'見積書',receipt:'領収書'}[type]}.pdf`);
   assert.equal(await page.evaluate(()=>bizGoogleNeedToken()),true);
   await page.evaluate(()=>{window.saveCalls=0;window.formalSave=saveConfirmedHistory;window.saveConfirmedHistory=()=>{saveCalls++;throw Error('Read-only output must never save');};});
   const before=await page.evaluate(()=>JSON.stringify([...testRecords]));
@@ -30,11 +31,31 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   await page.evaluate(()=>{document.getElementById('customerName').value='不正編集';return doPrint();});assert.match(alerts.at(-1),/正式帳票は直接変更できません/);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),before);
   await page.evaluate(()=>{window.saveConfirmedHistory=formalSave;});
  }
+
+ // Exercise the actual sales row button and form, without invoking a document action.
+ await page.evaluate(()=>{bizSwitchPage('sales');document.getElementById('salesMonth').value='2026-10';renderSales();});
+ const sale=await page.evaluate(()=>bizState.sales.find(s=>s.docType==='invoice'));
+ const beforePayment=await page.evaluate(()=>({docs:JSON.stringify([...testRecords].filter(([p])=>(/\/documents\//.test(p)||/\/operations\/documentNumber_/.test(p)))),pdf:pdfSaves}));
+ await page.locator(`button[onclick="selectSaleForPayment('${sale.id}')"]`).click();
+ assert.equal(await page.locator('#paymentSale').inputValue(),sale.id);assert.equal(await page.locator('#pageSales').isVisible(),true);
+ await page.locator('#paymentType').selectOption('銀行振込');await page.locator('#paymentAmount').fill('500');await page.locator('#paymentDate').fill('2026-10-08');await page.locator('#paymentMemo').fill('確認済');
+ if(process.env.PREVIEW_DIR)await page.screenshot({path:path.join(process.env.PREVIEW_DIR,`payment-form-${width}.png`),fullPage:true});
+ await page.evaluate(()=>Promise.all([addPayment(),addPayment()]));await page.waitForFunction(id=>bizState.payments.some(p=>p.saleId===id),sale.id);
+ assert.equal(await page.evaluate(id=>bizState.payments.filter(p=>p.saleId===id).length,sale.id),1);assert.equal(await page.evaluate(id=>bizState.payments.find(p=>p.saleId===id).confirmation,sale.id),'bank-confirmed');
+ assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),600);
+ // Retry the same submitted contents after synchronization: one stable payment remains.
+ await page.locator('#paymentAmount').fill('500');await page.locator('#paymentMemo').fill('確認済');await page.evaluate(()=>addPayment());
+ assert.equal(await page.evaluate(id=>bizState.payments.filter(p=>p.saleId===id).length,sale.id),1);
+ // Saved-document balance dialog uses the same registration path.
+ await page.evaluate(id=>openInvoiceBalance(id,'payment'),sale.documentId);await page.locator('#balanceMethod').selectOption('銀行振込');await page.locator('#balanceAmount').fill('600');await page.locator('#balanceDate').fill('2026-10-09');await page.locator('#balanceSave').click();await page.waitForFunction(()=>document.getElementById('balanceSaveStatus').textContent==='入金を保存しました。');
+ await page.waitForFunction(id=>bizOutstanding(bizState.sales.find(s=>s.id===id))===0,sale.id);
+ assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),0);await page.locator('#balanceClose').click();
+ assert.deepEqual(await page.evaluate(()=>({docs:JSON.stringify([...testRecords].filter(([p])=>(/\/documents\//.test(p)||/\/operations\/documentNumber_/.test(p)))),pdf:pdfSaves})),beforePayment);
  const estimate=await page.evaluate(()=>bizState.estimates[0]);
  await page.evaluate(id=>bizAcceptEstimate(id),estimate.id);await page.waitForFunction(()=>bizState.calendar.length===1);assert.equal(await page.evaluate(()=>bizState.calendar[0].date),'2026-10-20');assert.equal(await page.evaluate(()=>bizState.calendar[0].googlePatchPending),true);assert.equal(await page.evaluate(()=>bizState.calendar[0].googleCreatePending),true);
  await page.evaluate(()=>TsukinowaBusinessUI.patchPending());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);
  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);const beforeOriginal=await page.evaluate(()=>JSON.stringify([...testRecords]));const saves=await page.evaluate(()=>pdfSaves);await page.evaluate(()=>doPrint());await page.waitForFunction(n=>pdfSaves===n,saves+1);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimate.id);assert.equal(await page.locator('#customerName').isDisabled(),false);assert.equal(await page.evaluate(()=>collectFormState().calendarEventId),await page.evaluate(()=>bizState.calendar[0].id));assert.equal(await page.evaluate(()=>collectFormState().salesDate),'2026-10-20');
  assert.deepEqual(errors,[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
- console.log(`PASS ${width}px: four new formal documents/PDF without Google; original open/redownload/bottom PDF zero save calls and zero database/number/accounting/Calendar writes; readonly controls; modified content rejected; saved workDate acceptance without prompt; pending Google visible`);await page.close();
+ console.log(`PASS ${width}px: four new formal documents/PDF without Google; original open/redownload/bottom PDF zero save calls and zero database/number/accounting/Calendar writes; readonly controls; sales button/payment form/balance dialog confirmed bank payments, partial/final balances, repeated submission one payment, no PDF/document/number writes; modified content rejected; saved workDate acceptance without prompt; pending Google visible`);await page.close();
  }}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

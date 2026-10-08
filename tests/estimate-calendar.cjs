@@ -11,7 +11,7 @@ const snapshot={documentId:'estimate',docType:'estimate',invoiceDate:'2026-10-03
 async function saved(){const h=await harness();await h.execute({type:'saveDocument',snapshot,expectedRevision:0});return h;}
 test('classification, all requested categories, deduplication, filename and old snapshots',()=>{
  assert.equal(B.projectCategory(snapshot),'クロス張替・穴補修');assert.equal(B.projectCategory({snapshot}),'クロス張替・穴補修');assert.equal(B.projectCategory({content:'クロス張替 / 穴補修'}),'クロス張替・穴補修');
- assert.equal(B.estimateFilename(snapshot),'2026-10-03_琢居株式会社_クロス張替・穴補修_見積書.pdf');assert(!/[\\/:*?"<>|\x00-\x1f]/.test(B.estimateFilename({...snapshot,customerName:'a/b:*?"<>|\x01'})));
+ assert.equal(B.estimateFilename(snapshot),'26／10／3 琢居株式会社様クロス張替見積書.pdf');assert(!/[\\/:*?"<>|\x00-\x1f]/.test(B.estimateFilename({...snapshot,customerName:'a/b:*?"<>|\x01'})));
  for(const [name]of B.CATEGORY_RULES)assert.equal(B.projectCategory({items:[{content:name}]}),name);assert.equal(B.projectCategory({content:'清掃'}),'その他');
 });
 test('independent acceptance creates one immediate schedule with metadata; concurrent clients and repeat clicks do not duplicate',async()=>{

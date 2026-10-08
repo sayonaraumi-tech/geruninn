@@ -2235,7 +2235,9 @@ function togglePreview() {
 }
 
 function buildPrintFilename() {
-  return TsukinowaBusiness.documentFilename(collectFormState()).slice(0,-4);
+  const snapshot=collectFormState(),sale=bizState.sales.find(s=>s.id===snapshot.saleId);
+  const linkedInvoice=loadConfirmedHistory().find(h=>h.documentId===sale?.documentId)||sale;
+  return TsukinowaBusiness.documentFilename({...snapshot,linkedInvoice}).slice(0,-4);
 }
 
 function systemPrint() {
