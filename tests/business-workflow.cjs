@@ -37,7 +37,8 @@ test('void excludes unpaid sale, is idempotent, preserves snapshot and audit; va
  const h=await harness();const snapshot={documentId:'i',docType:'invoice',customerName:'顧客',invoiceDate:'2026-10-06',items:[{content:'穴補修',qty:1,price:1000}]};await h.execute({type:'saveDocument',snapshot,expectedRevision:0});
  await h.execute({type:'payment',paymentId:'p',saleId:'sale_i',amount:100,paymentDate:'2026-10-06',method:'現金'});
  await assert.rejects(h.execute({type:'documentStatus',documentId:'i',status:'void',reason:'誤登録',expectedRevision:1}),/入金/);
- await h.execute({type:'voidPayment',paymentId:'p',reason:'取消',expectedRevision:h.list('payments')[0].revision});
+ // Fixture for a pre-existing cancelled payment; the obsolete UI cancellation command is removed.
+ await h.client.transact('cancelled-fixture',{},async({read,write})=>{const p=await read('payments','p');await write('payments','p',{...p.payload,deletedAt:'2026-10-07',deleteReason:'取消'},'adjustment',p.revision);return {};});
  const original=JSON.stringify(h.list('documents')[0].payload.snapshot);
  await h.execute({type:'documentStatus',documentId:'i',status:'void',reason:'誤登録',expectedRevision:1});assert(!A.live(h.list('sales')[0].payload));assert.equal(JSON.stringify(h.list('documents')[0].payload.snapshot),original);
  const result=await h.execute({type:'documentStatus',documentId:'i',status:'void',reason:'再試行',expectedRevision:1});assert(result.unchanged);assert.equal(h.list('documents')[0].revision,2);

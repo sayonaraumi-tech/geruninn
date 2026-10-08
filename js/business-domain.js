@@ -134,6 +134,14 @@ function createService(client,{now=()=>new Date()}={}){
     await write('calendarLinks',calendarId,{...link.payload,cashSaleId:'',receiptSaleId:p.saleId,documentId:p.documentId,linkedReceiptId:p.documentId,customerName:p.customerName,officialAmount:amount,status:'領収済',title:[p.customerName,projectCategory(s),'¥'+amount.toLocaleString('ja-JP'),'領収済'].join('｜'),googlePatchPending:true},'status change');
     return {documentId:p.documentId,reconciled:true};
   }
+  if(cmd.type==='archiveDocument'){
+    if(who.role!=='admin')throw Error('履歴削除は管理者のみです。');
+    const row=await read('documents',cmd.documentId);
+    if(!row||!['void','duplicate','revised','cancelled'].includes(row.payload.status))throw Error('無効な履歴帳票を選択してください。');
+    if(row.payload.deletedAt)return {documentId:cmd.documentId,unchanged:true};
+    await write('documents',cmd.documentId,{...row.payload,deletedAt:now().toISOString(),deleteReason:'履歴から削除'},'status change',cmd.expectedRevision);
+    return {documentId:cmd.documentId};
+  }
   if(cmd.type==='deleteMisregistration'){
     if(who.role!=='admin')throw Error('誤登録削除は管理者のみです。');
     const row=await read('documents',cmd.documentId);if(!row)return {documentId:cmd.documentId,unchanged:true};
