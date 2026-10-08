@@ -1,4 +1,4 @@
-const CACHE='tsukinowa-pwa-simplification-20261008-1';
+const CACHE='tsukinowa-pwa-simplification-20261008-2';
 const APP_SHELL=['./index.html','./manifest.webmanifest','./js/cloud-core.js','./js/firebase-driver.js','./js/cloud-ui.js','./js/test-data-cleanup.js','./js/business-domain.js','./js/business-sync.js','./js/business-ui.js','./js/historical-import.js','./js/historical-import-ui.js','./js/vendor/pdf.min.mjs','./js/vendor/pdf.worker.min.mjs','./js/outstanding.js','./js/outstanding-ui.js','./js/accounting.js','./js/accounting-domain.js','./js/accounting-ui.js','./js/year-end.js','./js/year-end-ui.js','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil((async()=>{
   const cache=await caches.open(CACHE);
