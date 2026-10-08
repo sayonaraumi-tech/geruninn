@@ -23,6 +23,13 @@ async function clientFor(role){
 async function until(fn){const start=Date.now();while(!fn()){if(Date.now()-start>12000)throw Error('snapshot timeout');await new Promise(r=>setTimeout(r,30));}}
 const snapshot=(id,type='invoice')=>({documentId:id,docType:type,customerName:'共有テスト',invoiceDate:'2026-09-20',salesDate:'2026-09-10',items:[{content:'施工',qty:1,price:90909.09}],travelFee:0,paymentMethod:'現金'});
 const exec=(service,cmd)=>service.execute({operationId:crypto.randomUUID(),...cmd});
+test('platform channel and optional detail persist under unchanged admin/staff payment rules',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ await exec(s,{type:'saveDocument',snapshot:snapshot('platform-rules'),expectedRevision:0});
+ const cmd={type:'payment',paymentId:'platform-rules-pay',saleId:'sale_platform-rules',amount:1000,paymentDate:'2026-10-08',method:'プラットフォーム経由',platformName:'くらしのマーケット',manualConfirmed:true};
+ await exec(a,cmd);await exec(a,cmd);const p=(await admin.listRecords('payments'))[0];assert.equal(p.payload.method,cmd.method);assert.equal(p.payload.platformName,cmd.platformName);assert.equal(p.payload.confirmation,'bank-confirmed');assert.equal((await admin.listRecords('cashLedger')).length,0);
+ await assert.rejects(exec(s,{...cmd,paymentId:'staff-denied'}));assert.equal((await admin.listRecords('payments')).length,1);
+});
 test('unauthenticated, cross-company and out-of-scope staff reads denied',async()=>{
  await assertFails(getDoc(ref(env.unauthenticatedContext().firestore(),'documents')));await assertFails(getDoc(ref(db('admin','other'),'documents')));
  for(const n of ['documents','estimates','projects','sales','payments','calendarLinks'])await assertSucceeds(getDocs(collection(db('staff'),`companies/${company}/${n}`)));

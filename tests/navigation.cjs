@@ -9,7 +9,7 @@ const server=http.createServer((req,res)=>{
  if(name==='/sw.js'&&serveOldWorker){res.setHeader('Content-Type','text/javascript');return res.end(fs.readFileSync(file,'utf8').replace(/const CACHE='[^']+';/,`const CACHE='${oldCache}';`));}
  try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
 });
-const routes={calendar:'pageCalendar',estimates:'pageEstimates',projects:'pageProjects',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',suppliers:'pageSuppliers',monthly:'pageMonthly',settings:'pageSettings'};
+const routes={calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',monthly:'pageMonthly',settings:'pageSettings'};
 const mobileRoutes=['calendar','estimates','chohyo','savedDocs'];
 const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {initialize:async()=>{},observeAuth:f=>{cb=f;f(null);return()=>{};},claims:async u=>u.claims,signIn:async email=>cb({uid:'navigation-test',email,claims:{role:email.startsWith('admin')?'admin':'staff',companyId:'tsukinowa'}}),signOut:async()=>cb(null),listen:(p,m,next)=>{next([],{fromCache:false});return()=>{};}}};`;
 async function checkPage(page,route){
@@ -21,7 +21,7 @@ async function checkPage(page,route){
  await new Promise(r=>server.listen(0,'127.0.0.1',r));
  const base=`http://127.0.0.1:${server.address().port}`,browser=await chromium.launch({headless:true});
  try{
-  for(const width of [1440,390])for(const role of ['admin','staff']){
+  for(const width of [1280,390])for(const role of ['admin','staff']){
    const context=await browser.newContext({viewport:{width,height:900},isMobile:width===390,hasTouch:width===390,serviceWorkers:'block'});
    const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
    await context.route('https://**/*',r=>r.fulfill({body:''}));
@@ -33,9 +33,10 @@ async function checkPage(page,route){
    await page.locator('#cloudEmail').fill(role+'@example.com');await page.locator('#cloudPassword').fill('test');await page.locator('#cloudLogin').click();
    await page.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});
    await page.locator('#cloudDialog').press('Escape');
-   if(role==='admin'&&width===1440){await page.locator('#bizNav [data-page="monthly"]').click();await page.locator('[data-year-tab="1"]').click();assert(await page.locator('#annualRows').isVisible());await page.locator('[data-year-tab="3"]').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.locator('[data-year-tab="0"]').click();}
+   if(role==='admin'&&width===1280){await page.locator('#bizNav [data-page="monthly"]').click();await page.locator('[data-year-tab="1"]').click();assert(await page.locator('#annualRows').isVisible());await page.locator('[data-year-tab="3"]').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.locator('[data-year-tab="0"]').click();}
    if(role==='staff'){assert.equal(await page.locator('#cloudExport').isVisible(),false);for(const fn of ['exportBackup','yearEndExport','importBackup']){const dialog=page.waitForEvent('dialog');const attempt=page.evaluate(fn=>window[fn]('年間集計.csv'),fn);const denied=await dialog;assert(denied.message().includes('管理者'));await denied.dismiss();await attempt;}}
    const allowed=width===390||role==='staff'?mobileRoutes:Object.keys(routes);
+   assert.equal(await page.locator('#pageProjects,#pageSuppliers,#supplierNav,#bizNav [data-page="projects"],#bizNav [data-page="suppliers"]').count(),0);
    const before=await page.evaluate(()=>JSON.stringify({business:bizState,history:loadConfirmedHistory()}));
    for(const route of allowed){
     const button=page.locator(`#bizNav button[data-page="${route}"]`);
@@ -49,7 +50,7 @@ async function checkPage(page,route){
    assert.deepEqual(errors,[]);console.log(`PASS ${width}px ${role}: navigation clicks, active page/state, keyboard, existing visibility and unchanged business data`);
    await context.close();
   }
-  for(const width of [1440,390])for(const query of ['', '?page=estimates']){
+  for(const width of [1280,390])for(const query of ['', '?page=estimates']){
    const context=await browser.newContext({viewport:{width,height:900},isMobile:width===390,hasTouch:width===390,serviceWorkers:'block'});
    await context.route('https://**/*',r=>r.fulfill({body:''}));
    let release;const gate=new Promise(r=>release=r);

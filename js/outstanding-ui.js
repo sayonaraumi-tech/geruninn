@@ -10,15 +10,15 @@ function text(parent,tag,value){const node=document.createElement(tag);node.text
 function refresh(){
  const v=current(),box=el('balanceSummary');box.replaceChildren();
  text(box,'p',`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`);
- const table=document.createElement('table');table.className='biz-table';const head=table.createTHead().insertRow();for(const t of ['入金日','入金額','方法','備考','照合状態'])text(head,'th',t);
- const body=table.createTBody();for(const p of v.payments){const row=body.insertRow();for(const t of [p.date,bizMoney(p.amount),p.method,p.note,p.confirmation==='pending-bank'?'銀行照合待ち':p.confirmation==='bank-confirmed'?'銀行確認済':'登録済'])text(row,'td',t);}
+ const table=document.createElement('table');table.className='biz-table';const head=table.createTHead().insertRow();for(const t of ['入金日','入金額','入金経路','備考','照合状態'])text(head,'th',t);
+ const body=table.createTBody();for(const p of v.payments){const row=body.insertRow();for(const t of [p.date,bizMoney(p.amount),[root.TsukinowaAccounting.paymentChannel(p).channel,root.TsukinowaAccounting.paymentChannel(p).platformName].filter(Boolean).join(' / '),p.note,p.confirmation==='pending-bank'?'銀行照合待ち':p.confirmation==='bank-confirmed'?'銀行確認済':'登録済'])text(row,'td',t);}
  box.append(table);if(!v.payments.length)text(box,'p','入金履歴はありません。');
  text(box,'p','実際の入金を確認してから登録してください。銀行振込は銀行確認済として記帳します。');
  el('balancePDF').hidden=!v.active||v.outstandingAmount<=0;el('balancePaymentHost').hidden=!v.active||v.outstandingAmount<=0; if(v.outstandingAmount<=0)restorePaymentForm();
  return v;
 }
 root.openInvoiceBalance=function(id,action='history'){
- try{restorePaymentForm();target=id;account=root.TsukinowaBusinessUI.getClient()?.getState().user?.uid;const v=refresh();el('balanceHeading').textContent=`${v.customerName} / No.${v.invoiceNo}`;el('balanceMonth').value=v.month;el('balanceSaveStatus').textContent='';dialog.showModal();if(action==='payment'&&v.active&&v.outstandingAmount>0){el('balancePaymentHost').append(el('paymentRegistrationForm'));const select=el('paymentSale');if(![...select.options].some(o=>o.value===v.saleId))select.add(new Option(v.customerName,v.saleId));select.value=v.saleId;select.disabled=true;el('paymentAmount').value=v.outstandingAmount;el('paymentDate').value=todayISO();el('paymentType').value='銀行振込';el('paymentMemo').value='';el('paymentAmount').focus();}if(action==='pdf')return exportPDF();}catch(e){alert(e.message);}
+ try{restorePaymentForm();target=id;account=root.TsukinowaBusinessUI.getClient()?.getState().user?.uid;const v=refresh();el('balanceHeading').textContent=`${v.customerName} / No.${v.invoiceNo}`;el('balanceMonth').value=v.month;el('balanceSaveStatus').textContent='';dialog.showModal();if(action==='payment'&&v.active&&v.outstandingAmount>0){el('balancePaymentHost').append(el('paymentRegistrationForm'));const select=el('paymentSale');if(![...select.options].some(o=>o.value===v.saleId))select.add(new Option(v.customerName,v.saleId));select.value=v.saleId;select.disabled=true;el('paymentAmount').value=v.outstandingAmount;el('paymentDate').value=todayISO();el('paymentType').value='銀行振込';root.bizPaymentChannelChanged();el('paymentMemo').value='';el('paymentAmount').focus();}if(action==='pdf')return exportPDF();}catch(e){alert(e.message);}
 };
 function createSheet(n){
  const source=document.querySelector('.invoice'),sheet=document.createElement('div');sheet.className='invoice outstanding-notice';sheet.style.cssText='width:210mm;min-height:297mm;height:auto;box-sizing:border-box;background:white;--dens:1';
