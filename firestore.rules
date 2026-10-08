@@ -42,6 +42,7 @@ service cloud.firestore {
     && (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id))
       ? (p.get('status','active')=='active' && (admin(c)||(p.get('revisedFromDocumentId','')=='' && p.get('sourceType','')!='historicalPdfImport')))
       : (p.snapshot==resource.data.payload.snapshot && (receiptBackfill(c,id,p) ||
+        (admin(c) && resource.data.payload.get('status','active') in ['void','duplicate','revised','cancelled'] && resource.data.payload.get('deletedAt',null)==null && p.deletedAt is string && p.deleteReason=='履歴から削除' && p.diff(resource.data.payload).affectedKeys().hasOnly(['deletedAt','deleteReason'])) ||
         (admin(c) && p.diff(resource.data.payload).affectedKeys().hasOnly(['status','reason','revisedToDocumentId','duplicateOfDocumentId'])
         && resource.data.payload.get('status','active')=='active' && p.status in ['void','cancelled','duplicate','revised'] && p.reason is string && p.reason.size()>0)))));
   }

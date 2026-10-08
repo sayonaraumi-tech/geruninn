@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./accounting.js'):root.TsukinowaAccounting);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaAccountingDomain=api;})(globalThis,function(A){
 'use strict';
-const TYPES=['saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','bankUnmatch','bankExclude','voidPayment','backfillCash','migrateAccounting','accountingMigrationComplete'];
+const TYPES=['saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','bankUnmatch','bankExclude','backfillCash','migrateAccounting','accountingMigrationComplete'];
 async function mirrorCash(name,id,p,read,write){
  let eligible=false,type='expense',category='',description='',date='',linkedPaymentId='',linkedExpenseId='',linkedSupplierTransactionId='';
  if(name==='payments'){eligible=p.confirmation==='cash-received';type='income';category='現金入金';description=p.memo||'現場入金';date=p.paymentDate;linkedPaymentId=id;}
@@ -64,7 +64,6 @@ async function handle(cmd,{read,write,who,stable}){
   else{const n=b.matchType==='expense'?'expenses':'supplierTransactions',r=await read(n,b.matchId);if(!r||r.payload.bankTxnId!==b.bankTxnId)throw Error('関連取引が変更されています。');const p={...r.payload};delete p.bankTxnId;delete p.bankTransactionDate;await write(n,b.matchId,p,'adjustment');}
   await write('bankTransactions',cmd.bankTxnId,{...b,status:'未照合',matchType:'',matchId:'',paymentId:'',pendingBefore:null,unmatchReason:reason},'adjustment',cmd.expectedRevision);return {bankTxnId:cmd.bankTxnId};
  }
- if(cmd.type==='voidPayment'){const p=await read('payments',cmd.paymentId);if(!p)throw Error('入金がありません。');if(p.payload.bankTxnId||p.payload.confirmation==='bank-confirmed')throw Error('銀行照合から解除してください。');if(p.payload.deletedAt)return {unchanged:true};await write('payments',cmd.paymentId,{...p.payload,deletedAt:now(),deleteReason:required(cmd.reason,'取消理由')},'adjustment',cmd.expectedRevision);return {paymentId:cmd.paymentId};}
  if(cmd.type==='backfillCash'){if(!['payments','expenses','supplierTransactions'].includes(cmd.collection))throw Error('対象が不正です。');const r=await read(cmd.collection,cmd.id);if(r)await mirrorCash(cmd.collection,cmd.id,r.payload,read,write);return {id:cmd.id};}
  if(cmd.type==='migrateAccounting'){if(!['expenses','bankTransactions'].includes(cmd.collection))throw Error('対象が不正です。');const r=await read(cmd.collection,cmd.id);if(r)return {unchanged:true};await write(cmd.collection,cmd.id,cmd.payload,'migration',0);return {id:cmd.id};}
  if(cmd.type==='accountingMigrationComplete'){await write('migrations',cmd.sourceId,{migrationVersion:3,completed:true,sourceId:cmd.sourceId,backupKey:cmd.backupKey,count:cmd.count},'migration');return {completed:true};}

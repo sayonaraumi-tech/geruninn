@@ -1,12 +1,12 @@
 /* Read-only invoice balance projection. payments is the sole payment source. */
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./accounting.js'):root.TsukinowaAccounting);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaOutstanding=api;})(globalThis,function(A){
 'use strict';
-const active=r=>!!r&&!r.deletedAt&&!['void','cancelled','duplicate','revised'].includes(r.documentStatus||r.status);
+const active=r=>!!r&&A.live(r);
 function view(document,sale,paymentRows=[]){
  const d=document.payload||document,s=d.snapshot||d,id=d.documentId||s.documentId||s.historyId;
  const saleId=d.saleId||d.receivableId||sale?.id||s.saleId||'sale_'+id;
  const invoiceAmount=Number(d.amount??sale?.amount??0);
- const payments=paymentRows.map(r=>r.payload?{...r.payload,id:r.id}:r).filter(p=>active(p)&&p.confirmation!=='bank-marker'&&Number(p.amount)>0&&(p.saleId===saleId||(!p.saleId&&p.documentId===id)))
+ const payments=A.unique(paymentRows.map(r=>r.payload?{...r.payload,id:r.id}:r)).filter(p=>active(p)&&p.confirmation!=='bank-marker'&&Number(p.amount)>0&&(p.saleId===saleId||(!p.saleId&&p.documentId===id)))
  .map(p=>({...p,date:p.paymentDate||p.date||'',amount:Number(p.amount),method:p.method||'',note:p.memo||p.note||''})).sort((a,b)=>a.date.localeCompare(b.date)||String(a.id).localeCompare(String(b.id)));
  const paidAmount=payments.filter(A.confirmed).reduce((n,p)=>n+p.amount,0),outstandingAmount=invoiceAmount-paidAmount;
  const text=[s.billingPeriod,s.bizJobMemo,s.remarks,...(s.items||[]).map(i=>i.content)].join(' '),match=text.match(/(20\d{2})年\s*(\d{1,2})月/);

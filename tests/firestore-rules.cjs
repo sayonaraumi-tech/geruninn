@@ -369,3 +369,32 @@ test('admin manual bank confirmation writes only one payment, no document/number
 });
 
 test('manual same-day same-amount real deposits are distinct; replay operation is idempotent',async()=>{const admin=await clientFor('admin'),service=createService(admin);try{await exec(service,{type:'saveDocument',snapshot:{...snapshot('two-real'),paymentMethod:'銀行振込'},expectedRevision:0});const command={type:'payment',manualConfirmed:true,saleId:'sale_two-real',paymentId:'real-one',operationId:'deposit-one',amount:20000,paymentDate:'2026-10-08',method:'銀行振込',memo:''};await Promise.all([service.execute(command),service.execute(command)]).catch(e=>{e.message='first concurrent: '+e.message;throw e;});await service.execute({...command,paymentId:'real-two',operationId:'deposit-two'}).catch(e=>{e.message='second real: '+e.message;throw e;});assert.equal((await admin.listRecords('payments')).length,2);}finally{admin.dispose();}});
+
+// History removal is a document-only archive, with existing audit transaction enforcement.
+test('inactive document history archive: four states, admin only, immutable audit and live relations',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),service=createService(admin),staffService=createService(staff);
+ await exec(service,{type:'saveDocument',snapshot:snapshot('original'),expectedRevision:0});
+ await exec(service,{type:'saveDocument',snapshot:snapshot('revised'),revisedFromDocumentId:'original',expectedParentRevision:1,reason:'訂正',expectedRevision:0});
+ await exec(service,{type:'payment',saleId:'sale_original',paymentId:'real-payment',amount:500,paymentDate:'2026-09-21',method:'銀行振込',manualConfirmed:true});
+ const saleBefore=await admin.listRecords('sales'),paymentsBefore=await admin.listRecords('payments');
+ await assert.rejects(exec(service,{type:'archiveDocument',documentId:'revised',expectedRevision:1}),/無効/);
+ for(const state of ['void','duplicate','cancelled']){
+  await exec(service,{type:'saveDocument',snapshot:snapshot(state),expectedRevision:0});
+  await exec(service,{type:'documentStatus',documentId:state,status:state,reason:'誤登録',duplicateOfDocumentId:'revised',expectedRevision:1});
+ }
+ const beforeSales=await admin.listRecords('sales'),beforePayments=await admin.listRecords('payments');
+ for(const id of ['original','void','duplicate','cancelled']){
+  const record=(await admin.listRecords('documents')).find(d=>d.id===id);
+  await assert.rejects(exec(staffService,{type:'archiveDocument',documentId:id,expectedRevision:record.revision}),/管理者/);
+  await assert.rejects(exec(service,{type:'archiveDocument',documentId:id,expectedRevision:0}),/変更|更新|revision|競合/i);
+  await exec(service,{type:'archiveDocument',documentId:id,expectedRevision:record.revision});
+  assert((await admin.listRecords('documents')).find(d=>d.id===id).payload.deletedAt);
+  const audit=await getDocs(collection(db('admin'),'companies/tsukinowa/auditLogs'));
+  assert(audit.docs.some(d=>d.data().entityId===id&&d.data().after?.deleteReason==='履歴から削除'));
+  await assertFails(deleteDoc(audit.docs[0].ref));
+ }
+ assert.deepEqual(await admin.listRecords('sales'),beforeSales);assert.deepEqual(await admin.listRecords('payments'),beforePayments);
+ assert.deepEqual(beforePayments,paymentsBefore);assert.deepEqual(beforeSales.find(s=>s.id==='sale_original'),saleBefore.find(s=>s.id==='sale_original'));
+ // Direct forged active archive and snapshot edits are denied even for an administrator.
+ await assertFails(updateDoc(ref(db('admin'),'documents','revised'),{'payload.deletedAt':'2026-10-08','payload.deleteReason':'履歴から削除'}));
+});
