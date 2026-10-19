@@ -59,6 +59,24 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(()=>TsukinowaBusinessUI.patchPending());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);
  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);const beforeOriginal=await page.evaluate(()=>JSON.stringify([...testRecords]));const saves=await page.evaluate(()=>pdfSaves);await page.evaluate(()=>doPrint());await page.waitForFunction(n=>pdfSaves===n,saves+1);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimate.id);assert.equal(await page.locator('#customerName').isDisabled(),false);assert.equal(await page.evaluate(()=>collectFormState().calendarEventId),await page.evaluate(()=>bizState.calendar[0].id));assert.equal(await page.evaluate(()=>collectFormState().salesDate),'2026-10-20');
+ // Independent browser regression: imported cash without a customer appears in the actual sales table.
+ const cashResult=await page.evaluate(async()=>{
+  const event={googleEventId:'browser-unnamed',googleCalendarId:'shared',date:'2026-10-05',start:'2026-10-05T09:00:00+09:00',end:'2026-10-05T10:00:00+09:00',location:'文京区',title:'クロス張り替え、14000、文京区、km、現金'};
+  const run=title=>testService.execute({type:'calendar',operationId:crypto.randomUUID(),event:{...event,title}});
+  const list=n=>[...testRecords].filter(([p])=>p.includes('/'+n+'/')).map(([,r])=>r.payload);
+  const docs=JSON.stringify(list('documents')),numbers=JSON.stringify([...testRecords].filter(([p])=>p.includes('/operations/documentNumber_'))),pdf=pdfSaves;
+  await run(event.title);await run(event.title);
+  const sale=()=>list('sales').find(s=>s.googleEventId===event.googleEventId),id=sale().id;
+  await run('山田様、'+event.title);const named=sale().customer;await run(event.title);const unnamed=sale().customer;
+  const pay=()=>list('payments').filter(p=>p.saleId===id),ledger=()=>list('cashLedger').filter(p=>p.linkedPaymentId===pay()[0].id);
+  const payments=JSON.stringify(pay()),cash=JSON.stringify(list('cashLedger'));
+  await run(event.title.replace('14000','15000'));await run(event.title.replace('、現金',''));
+  return {named,unnamed,id,sale:sale(),payments:pay(),cashCount:ledger().length,preserved:payments===JSON.stringify(pay())&&cash===JSON.stringify(list('cashLedger')),noDocuments:docs===JSON.stringify(list('documents'))&&numbers===JSON.stringify([...testRecords].filter(([p])=>p.includes('/operations/documentNumber_')))&&pdf===pdfSaves,count:list('sales').filter(s=>s.googleEventId===event.googleEventId).length};
+ });
+ assert.equal(cashResult.named,'山田様');assert.equal(cashResult.unnamed,'現金客');assert.equal(cashResult.count,1);assert.equal(cashResult.sale.amount,14000);assert(cashResult.sale.accountingReviewRequired);assert.equal(cashResult.payments.length,1);assert.equal(cashResult.payments[0].method,'現金');assert.equal(cashResult.payments[0].confirmation,'cash-received');assert.equal(cashResult.cashCount,1);assert(cashResult.preserved);assert(cashResult.noDocuments);
+ await page.waitForFunction(id=>bizState.sales.some(s=>s.id===id),cashResult.id);await page.evaluate(()=>{bizSwitchPage('sales');document.getElementById('salesMonth').value='2026-10';renderSales();});
+ const cashRow=page.locator('#salesRows tr').filter({hasText:'現金客'});assert.equal(await cashRow.count(),1);assert.match(await cashRow.innerText(),/要確認/);assert.match(await cashRow.innerText(),/14,000/);assert.equal(await cashRow.getByRole('button',{name:'入金',exact:true}).count(),0);
+ console.log(`PASS ${width}px unnamed cash: one sale/payment/mirror, customer add/remove, amount/cash review, no documents/PDF/number, sales table settled`);
  assert.deepEqual(errors,[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  console.log(`PASS ${width}px: four new formal documents/PDF without Google; original open/redownload/bottom PDF zero save calls and zero database/number/accounting/Calendar writes; readonly controls; sales button/payment form/balance dialog confirmed bank payments, partial/final balances, double-click one payment, identical real second deposit accepted, no PDF/document/number writes; modified content rejected; saved workDate acceptance without prompt; pending Google visible`);await page.close();
  }}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

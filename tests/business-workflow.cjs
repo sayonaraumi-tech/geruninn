@@ -31,18 +31,47 @@ test('legacy channel projection is read-only; missing methods and platform alias
  for(const p of rows.slice(3,6))assert.equal(A.paymentChannel(p).platformName,'くらしのマーケット');assert.equal(JSON.stringify(rows),before);
 });
 const event={googleEventId:'cash-event',googleCalendarId:'shared',date:'2026-10-05',start:'2026-10-05',end:'2026-10-06',title:'下村 健朗、クロス張替、足立区、11万、現金、km',location:'現場'};
-test('cash Google parsing, repeat/concurrent synchronization, amount/date/customer update, cancellation audit and formal lock',async()=>{
+test('cash Google parsing, repeat/concurrent synchronization, date/customer update, cancellation audit and formal lock',async()=>{
  const parsed=B.parseCalendar(event.title);assert.deepEqual(parsed,{amount:110000,payment:'現金',area:'足立区',customer:'下村健朗',work:'クロス張替',projectCategory:'クロス張替'});
  const h=await harness();await Promise.all([h.execute({type:'calendar',event}),h.execute({type:'calendar',event})]);
  assert.equal(h.list('calendarLinks').length,1);assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);
  let sale=h.list('sales')[0].payload;assert.equal(sale.amount,110000);assert.equal(sale.invoiceDate,'');assert.equal(A.receivables([sale],h.list('payments').map(r=>r.payload),'2026-10-06')[0].status,'入金済');assert.equal(A.receivables([sale],h.list('payments').map(r=>r.payload),'2026-10-06')[0].paid,110000);
- await h.execute({type:'calendar',event:{...event,date:'2026-10-07',title:'別 顧客、穴補修、足立区、12万、現金'}});
- sale=h.list('sales')[0].payload;assert.equal(sale.customer,'別顧客');assert.equal(sale.amount,120000);assert.equal(sale.salesDate,'2026-10-07');assert.equal(h.list('payments')[0].payload.amount,120000);assert.equal(h.list('cashLedger')[0].payload.amount,120000);
+ await h.execute({type:'calendar',event:{...event,date:'2026-10-07',title:'別 顧客、穴補修、足立区、11万、現金'}});
+ sale=h.list('sales')[0].payload;assert.equal(sale.customer,'別顧客');assert.equal(sale.amount,110000);assert.equal(sale.salesDate,'2026-10-07');assert.equal(h.list('payments')[0].payload.amount,110000);assert.equal(h.list('cashLedger')[0].payload.amount,110000);
  const link=h.list('calendarLinks')[0];await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'formal',docType:'invoice',customerName:'正式顧客',invoiceDate:'2026-10-08',salesDate:'2026-10-07',calendarEventId:link.id,items:[{content:'穴補修',qty:1,price:100000}]}});
  assert.equal(h.list('sales').length,1);assert.equal(h.list('sales')[0].payload.amount,110000);
- await h.execute({type:'calendar',event:{...event,title:'変更 顧客、クロス張替、足立区、99万、現金'}});assert.equal(h.list('sales')[0].payload.amount,110000);assert.equal(h.list('sales')[0].payload.customer,'正式顧客');assert.equal(h.list('payments')[0].payload.amount,120000);
+ await h.execute({type:'calendar',event:{...event,title:'変更 顧客、クロス張替、足立区、99万、現金'}});assert.equal(h.list('sales')[0].payload.amount,110000);assert.equal(h.list('sales')[0].payload.customer,'正式顧客');assert.equal(h.list('payments')[0].payload.amount,110000);
  await h.execute({type:'calendar',event:{...event,googleStatus:'cancelled'}});assert.equal(h.list('sales').length,1);assert(h.list('sales')[0].payload.accountingReviewRequired);
 });
+test('unnamed cash keeps stable anchors through customer edits; changed amount or cash requires review',async()=>{
+ const title='クロス張り替え、14000、文京区、km、現金',h=await harness(),e={...event,title};
+ assert.deepEqual(B.parseCalendar(title),{amount:14000,payment:'現金',area:'文京区',customer:'',work:'クロス張り替え',projectCategory:'クロス張替'});
+ await Promise.all([h.execute({type:'calendar',event:e}),h.execute({type:'calendar',event:e})]);
+ const ids=()=>['calendarLinks','sales','payments','cashLedger'].map(n=>h.list(n).map(r=>r.id)),anchors=ids();
+ for(const [next,customer]of [[title,'現金客'],['山田様、'+title,'山田様'],[title,'現金客']]){
+  await h.execute({type:'calendar',event:{...e,title:next}});assert.deepEqual(ids(),anchors);assert(anchors.every(a=>a.length===1));
+  const sale=h.list('sales')[0].payload,pay=h.list('payments')[0].payload;
+  assert.equal(sale.customer,customer);assert.equal(sale.sourceType,'calendar-cash');assert.equal(sale.amount,14000);assert.equal(sale.documentId,'');assert.equal(sale.invoiceDate,'');assert.equal(sale.invoiceNo,undefined);
+  assert.equal(h.list('calendarLinks')[0].payload.customerName,customer);assert.equal(pay.confirmation,'cash-received');assert.equal(pay.method,'現金');assert.equal(pay.amount,14000);assert.equal(h.list('cashLedger')[0].payload.amount,14000);
+  assert.equal(A.receivables([sale],[pay],'2026-10-06')[0].outstanding,0);
+ }
+ const payment=JSON.stringify(h.list('payments')),cash=JSON.stringify(h.list('cashLedger'));
+ for(const next of [title.replace('14000','15000'),title.replace('、現金','')]){
+  await h.execute({type:'calendar',event:{...e,title:next}});assert.deepEqual(ids(),anchors);
+  const sale=h.list('sales')[0].payload;assert.equal(sale.amount,14000);assert.equal(sale.customer,'現金客');assert(sale.accountingReviewRequired);assert.match(sale.reviewReason,/現金・金額/);assert(h.list('calendarLinks')[0].payload.accountingReviewRequired);
+  assert.equal(A.receivables([sale],h.list('payments').map(r=>r.payload),'2026-10-06')[0].status,'要確認');assert.equal(JSON.stringify(h.list('payments')),payment);assert.equal(JSON.stringify(h.list('cashLedger')),cash);
+ }
+ assert.equal(h.list('documents').length,0);assert.equal(h.list('operations').filter(r=>r.id.startsWith('documentNumber_')).length,0);
+});
+
+test('formal receipt takes over unnamed cash anchors without duplicate accounting',async()=>{
+ const h=await harness(),e={...event,title:'クロス張り替え、14000、文京区、km、現金'};
+ await h.execute({type:'calendar',event:e});const link=h.list('calendarLinks')[0],saleId=h.list('sales')[0].id,payId=h.list('payments')[0].id;
+ await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'unnamed-receipt',docType:'receipt',customerName:'山田様',invoiceDate:e.date,receiptTotal:14000,paymentMethod:'現金',tadashi:'クロス張り替え代',calendarEventId:link.id}});
+ await h.execute({type:'calendar',event:e});
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('sales')[0].id,saleId);assert.equal(h.list('sales')[0].payload.customer,'山田様');assert.equal(h.list('sales')[0].payload.sourceType,'receipt-cash');assert.equal(h.list('payments').length,1);assert.equal(h.list('payments')[0].id,payId);assert.equal(h.list('cashLedger').length,1);assert.equal(h.list('cashLedger')[0].payload.amount,14000);
+});
+
 test('ordinary events without explicit cash/amount create no accounting; standalone forms and filenames use shared classifier',async()=>{
  const h=await harness();for(const title of ['下村 健朗、クロス張替、足立区、11万','下村 健朗、クロス張替、足立区、現金'])await h.execute({type:'calendar',event:{...event,title}});
  assert.equal(h.list('sales').length,0);assert.equal(h.list('payments').length,0);

@@ -284,10 +284,23 @@ test('staff Google cash synchronization atomically updates one sale/payment/cash
  const link=await exec(service,{type:'calendar',event});await exec(service,{type:'calendar',event});
  const all=async n=>(await getDocs(collection(db('admin'),`companies/${company}/${n}`))).docs.map(d=>({id:d.id,...d.data()}));
  assert.equal((await all('sales')).length,1);assert.equal((await all('payments')).length,1);assert.equal((await all('cashLedger')).length,1);
- await exec(service,{type:'calendar',event:{...event,date:'2026-10-06',title:'別 顧客、穴補修、足立区、12万、現金'}});assert.equal((await all('sales'))[0].payload.amount,120000);assert.equal((await all('payments'))[0].payload.amount,120000);assert.equal((await all('cashLedger'))[0].payload.amount,120000);
+ await exec(service,{type:'calendar',event:{...event,date:'2026-10-06',title:'別 顧客、穴補修、足立区、11万、現金'}});assert.equal((await all('sales'))[0].payload.amount,110000);assert.equal((await all('payments'))[0].payload.amount,110000);assert.equal((await all('cashLedger'))[0].payload.amount,110000);
+ // No customer is required, including when staff create a new cash anchor.
+ const unnamed={...event,googleEventId:'unnamedcash',title:'クロス張り替え、14000、文京区、km、現金'};
+ const unnamedLink=await exec(service,{type:'calendar',event:unnamed});
+ const unnamedSale=async()=>(await all('sales')).find(r=>r.payload.calendarEventId===unnamedLink.id);
+ for(const [title,customer]of [[unnamed.title,'現金客'],['山田様、'+unnamed.title,'山田様'],[unnamed.title,'現金客']]){
+  await exec(service,{type:'calendar',event:{...unnamed,title}});assert.equal((await unnamedSale()).payload.customer,customer);
+ }
+ const pays=JSON.stringify(await all('payments')),cash=JSON.stringify(await all('cashLedger'));
+ for(const title of [unnamed.title.replace('14000','15000'),unnamed.title.replace('、現金','')]){
+  await exec(service,{type:'calendar',event:{...unnamed,title}});
+  assert((await unnamedSale()).payload.accountingReviewRequired);assert.equal((await unnamedSale()).payload.amount,14000);assert.equal(JSON.stringify(await all('payments')),pays);assert.equal(JSON.stringify(await all('cashLedger')),cash);
+ }
+ assert.equal((await all('sales')).length,2);assert.equal((await all('payments')).length,2);assert.equal((await all('cashLedger')).length,2);
  // Staff can lock the same stable accounting anchor with a formal invoice.
  await exec(service,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('cashformal'),calendarEventId:link.id}});
- await exec(service,{type:'calendar',event:{...event,title:'変更、クロス張替、99万、現金'}});assert.equal((await all('sales')).length,1);assert.equal((await all('sales'))[0].payload.amount,100000);
+ await exec(service,{type:'calendar',event:{...event,title:'変更、クロス張替、99万、現金'}});assert.equal((await all('sales')).length,2);assert.equal((await all('sales')).find(r=>r.payload.calendarEventId===link.id).payload.amount,100000);
  await exec(service,{type:'calendar',event:{...event,googleStatus:'cancelled'}});assert((await all('sales'))[0].payload.accountingReviewRequired);
 });
 
