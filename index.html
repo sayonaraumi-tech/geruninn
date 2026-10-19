@@ -1232,14 +1232,31 @@ body{padding-top:72px}
 </div>
 
 
+<style>#bizEventModal .biz-section-head{align-items:flex-start}#bizEventModal h2{font-size:18px;overflow-wrap:anywhere;min-width:0}#bizEventModal .biz-section-head button{flex-shrink:0}</style>
 <div id="bizEventModal" class="biz-hidden" style="position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.42);padding:18px;overflow:auto;">
  <div style="max-width:680px;margin:6vh auto;background:#fff;border-radius:16px;padding:18px;box-shadow:0 18px 60px rgba(0,0,0,.25)">
   <div class="biz-section-head"><h2 id="eventModalTitle">日程</h2><button class="biz-btn" onclick="closeEventModal()">閉じる</button></div>
   <div id="eventModalBody" class="biz-muted" style="font-size:13px;line-height:1.9"></div>
+  <div id="eventSaleStatus" role="status" style="margin-top:12px"></div>
+  <form id="eventSaleForm" class="biz-hidden" onsubmit="bizConfirmCalendarSale(event)" style="margin-top:16px">
+   <h3>売上登録の確認</h3>
+   <p class="biz-muted">帳票・PDFは作成しません。現金は入金済みとして記録し、それ以外は未収として登録します。</p>
+   <div class="biz-form-grid">
+    <div class="biz-field"><label for="eventSaleDate">売上日</label><input id="eventSaleDate" type="date" required></div>
+    <div class="biz-field"><label for="eventSaleCustomer">取引先</label><input id="eventSaleCustomer" placeholder="現金客"></div>
+    <div class="biz-field"><label for="eventSaleContent">内容</label><input id="eventSaleContent" required></div>
+    <div class="biz-field"><label for="eventSaleAmount">金額（円）</label><input id="eventSaleAmount" type="number" min="1" step="1" required></div>
+    <div class="biz-field"><label for="eventSaleMethod">入金経路</label><select id="eventSaleMethod"><option>銀行振込</option><option>現金</option><option>プラットフォーム経由</option><option>その他</option></select></div>
+    <div class="biz-field"><label for="eventSaleMemo">備考（任意）</label><input id="eventSaleMemo"></div>
+   </div>
+   <p id="eventSaleMessage" role="status"></p>
+   <div class="biz-actions"><button id="eventSaleConfirm" class="biz-btn primary" type="submit">確認して登録</button><button class="biz-btn" type="button" onclick="document.getElementById('eventSaleForm').classList.add('biz-hidden')">キャンセル</button></div>
+  </form>
   <div class="biz-actions" style="margin-top:16px">
    <button class="biz-btn" onclick="bizCreateDocFromCurrentEvent('estimate')">見積書作成</button>
    <button class="biz-btn primary" onclick="bizCreateDocFromCurrentEvent('invoice')">請求書作成</button>
    <button class="biz-btn" onclick="bizCreateDocFromCurrentEvent('receipt')">領収書作成</button>
+   <button id="eventSaleButton" class="biz-btn primary" hidden onclick="bizOpenCalendarSale()">売上登録</button>
   </div>
  </div>
 </div>
