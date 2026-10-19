@@ -23,6 +23,19 @@ async function clientFor(role){
 async function until(fn){const start=Date.now();while(!fn()){if(Date.now()-start>12000)throw Error('snapshot timeout');await new Promise(r=>setTimeout(r,30));}}
 const snapshot=(id,type='invoice')=>({documentId:id,docType:type,customerName:'共有テスト',invoiceDate:'2026-09-20',salesDate:'2026-09-10',items:[{content:'施工',qty:1,price:90909.09}],travelFee:0,paymentMethod:'現金'});
 const exec=(service,cmd)=>service.execute({operationId:crypto.randomUUID(),...cmd});
+test('calendar manual sales are admin-only, cash mirrors atomically and bank stays unpaid',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ for(const method of ['現金','銀行振込']){
+ const event={id:'manual-'+method,date:'2026-10-19',title:'太陽様 クロス張り替え、14000、km'},link=await exec(a,{type:'calendar',event}),cmd={type:'registerCalendarSale',id:link.id,sale:{salesDate:event.date,customer:'太陽様',content:'クロス張り替え',amount:14000,paymentMethod:method}};
+ await assert.rejects(exec(s,cmd),/管理者/);await exec(a,cmd);await exec(a,cmd);
+ const sale=(await admin.listRecords('sales')).find(r=>r.payload.calendarEventId===link.id);assert.equal(sale.payload.amount,14000);assert.equal(sale.payload.customer,'太陽様');
+ const payments=(await admin.listRecords('payments')).filter(r=>r.payload.saleId===sale.id);assert.equal(payments.length,method==='現金'?1:0);if(payments.length)assert.equal(payments[0].payload.confirmation,'cash-received');
+ await assert.rejects(staff.put('calendarLinks',link.id,{...(await admin.listRecords('calendarLinks')).find(r=>r.id===link.id).payload,saleId:'changed'},{operationId:crypto.randomUUID(),expectedRevision:(await admin.listRecords('calendarLinks')).find(r=>r.id===link.id).revision}));
+ await exec(s,{type:'saveDocument',expectedRevision:0,snapshot:{documentId:'formal-'+method,docType:'invoice',calendarEventId:link.id,customerName:'太陽様',invoiceDate:event.date,salesDate:event.date,items:[{content:'クロス張り替え',qty:1,price:14000/1.1}]}});
+ assert.equal((await admin.listRecords('sales')).find(r=>r.id===sale.id).payload.documentId,'formal-'+method);
+ }
+ assert.equal((await admin.listRecords('sales')).length,2);assert.equal((await admin.listRecords('cashLedger')).length,1);assert.equal((await admin.listRecords('documents')).length,2);
+});
 test('platform channel and optional detail persist under unchanged admin/staff payment rules',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
  await exec(s,{type:'saveDocument',snapshot:snapshot('platform-rules'),expectedRevision:0});

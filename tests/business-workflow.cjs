@@ -9,6 +9,42 @@ async function harness(){
 }
 
 const A=require('../js/accounting');
+test('manual calendar cash confirmation, concurrent replay, sync preservation and receipt/invoice takeover',async()=>{
+ const h=await harness(),event={googleEventId:'manual-cash',googleCalendarId:'shared',date:'2026-10-19',title:'太陽様 クロス張り替え、14000、文京区、km、現金'};
+ const p=B.parseCalendar(event.title);assert.equal(p.customer,'太陽様');assert.equal(p.work,'クロス張り替え');assert.equal(p.amount,14000);
+ // Model a pre-existing calendarLink which has never triggered automatic accounting.
+ const id=await h.service.eventId(event);h.rows.set('companies/tsukinowa/calendarLinks/'+id,{revision:1,payload:{...event,id}});
+ const cmd={type:'registerCalendarSale',id,sale:{salesDate:event.date,customer:p.customer,content:p.work,amount:p.amount,paymentMethod:p.payment,memo:'確認'}};
+ await Promise.all([h.execute(cmd),h.execute(cmd)]);await h.execute(cmd);
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);assert.equal(h.list('documents').length,0);
+ let sale=h.list('sales')[0].payload;assert.equal(sale.customer,'太陽様');assert.equal(sale.content,'クロス張り替え');assert.equal(h.list('payments')[0].payload.confirmation,'cash-received');assert.equal(h.list('cashLedger')[0].payload.amount,14000);assert.equal(A.ledger([sale],h.list('payments').map(r=>r.payload)).sales[0].outstanding,0);
+ const accounting=JSON.stringify(['sales','payments','cashLedger'].map(n=>h.list(n)));await h.execute({type:'calendar',event:{...event,title:'別人様 穴補修、20000、現金'}});assert.equal(JSON.stringify(['sales','payments','cashLedger'].map(n=>h.list(n))),accounting);
+ await assert.rejects(h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'mismatched-receipt',docType:'receipt',saleId:sale.id,customerName:'太陽様',invoiceDate:'2026-10-20',paymentMethod:'現金',receiptTotal:14000,tadashi:p.work,calendarEventId:id}}),/一致/);
+ await assert.rejects(h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'small-invoice',docType:'invoice',customerName:'太陽様',invoiceDate:event.date,calendarEventId:id,items:[{content:p.work,qty:1,price:1000}]}}),/下回/);
+ await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'manual-receipt',docType:'receipt',customerName:'太陽様',invoiceDate:event.date,paymentMethod:'現金',receiptTotal:14000,tadashi:p.work,calendarEventId:id}});
+ await h.execute(cmd);assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);
+ await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'manual-invoice',docType:'invoice',customerName:'太陽様',invoiceDate:event.date,salesDate:event.date,calendarEventId:id,items:[{content:p.work,qty:1,price:14000/1.1}]}});
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('sales')[0].payload.documentId,'manual-invoice');
+});
+test('manual noncash methods retain unpaid sale, unnamed customer fallback and formal invoice reuse',async()=>{
+ for(const method of ['銀行振込','プラットフォーム経由','その他']){
+ const h=await harness(),link=await h.execute({type:'calendar',event:{googleEventId:method,date:'2026-10-19',title:'クロス張り替え、14000、km'}}),cmd={type:'registerCalendarSale',id:link.id,sale:{salesDate:'2026-10-19',customer:'',content:'クロス張り替え',amount:14000,paymentMethod:method}};
+ await h.execute(cmd);const s=h.list('sales')[0].payload;assert.equal(s.customer,'現金客');assert.equal(s.paymentMethod,method);assert.equal(h.list('payments').length,0);assert.equal(h.list('cashLedger').length,0);assert.equal(A.ledger([s],[]).sales[0].outstanding,14000);
+ await h.execute({type:'calendar',event:{googleEventId:method,date:'2026-10-19',title:'クロス張り替え、14000、現金'}});assert.equal(h.list('payments').length,0);
+ await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'formal',docType:'invoice',customerName:'正式顧客',invoiceDate:'2026-10-19',calendarEventId:link.id,items:[{content:'クロス張り替え',qty:1,price:14000/1.1}]}});await h.execute(cmd);assert.equal(h.list('sales').length,1);assert.equal(h.list('sales')[0].id,s.id);
+ }
+});
+test('automatic cash and existing formal sales block manual registration; invalid input writes nothing',async()=>{
+ for(const formal of [false,true]){const h=await harness(),event={googleEventId:'existing',date:'2026-10-19',title:formal?'工事':'クロス張り替え、14000、現金'},link=await h.execute({type:'calendar',event});if(formal)await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'existing',docType:'invoice',calendarEventId:link.id,customerName:'顧客',invoiceDate:event.date,items:[{content:'工事',qty:1,price:1000}]}});const before=JSON.stringify(['sales','payments','cashLedger'].map(n=>h.list(n)));await h.execute({type:'registerCalendarSale',id:link.id,sale:{}});assert.equal(JSON.stringify(['sales','payments','cashLedger'].map(n=>h.list(n))),before);}
+ const h=await harness(),link=await h.execute({type:'calendar',event:{id:'invalid',date:'2026-10-19',title:'予定'}});await assert.rejects(h.execute({type:'registerCalendarSale',id:link.id,sale:{amount:0}}));assert.equal(h.list('sales').length,0);
+});
+test('legacy duplicate links share one manual sale across Google resync; unnamed cash uses 現金客',async()=>{
+ const h=await harness(),event={googleEventId:'alias-google',date:'2026-10-19',title:'クロス張り替え、14000、現金'};
+ for(const id of ['first','second'])h.rows.set('companies/tsukinowa/calendarLinks/'+id,{revision:1,payload:{...event,id}});
+ await h.execute({type:'registerCalendarSale',id:'second',sale:{salesDate:event.date,content:'クロス張り替え',amount:14000,paymentMethod:'現金'}});
+ await h.execute({type:'calendar',event});await h.execute({type:'registerCalendarSale',id:'first',sale:{}});
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('sales')[0].payload.customer,'現金客');assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);assert(h.list('calendarLinks').every(r=>r.payload.saleId===h.list('sales')[0].id));
+});
 test('platform payment survives repeat registration, bank match/unmatch and historical supplier accounting',async()=>{
  const h=await harness();await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'platform',docType:'invoice',customerName:'顧客',invoiceDate:'2026-10-08',items:[{content:'施工',qty:1,price:10000}]}});
  await h.execute({type:'saveSupplier',supplierId:'supplier',supplier:{supplierName:'材料会社',openingDate:'2026-10-01',openingBalance:1000000},expectedRevision:0});

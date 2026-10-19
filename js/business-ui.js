@@ -19,6 +19,32 @@ function showGooglePending(){
  if(message)el('cloudRealtime').textContent=message;
 }
 function receiptOptions(){const select=el('receiptSale');if(!select)return;const value=select.value;select.replaceChildren(new Option('関連付けなし（独立した領収書）',''));for(const s of bizState.sales)select.add(new Option(`${s.customer} / ${s.invoiceNo||s.documentId||s.id} / 未収 ${bizMoney(bizOutstanding(s))}`,s.id));select.value=value;el('cloudReceiptFields').hidden=!enabled||docType!=='receipt';}
+let calendarSaleSaving=false;
+const openCalendarDetail=root.openEventModal;
+function eventSale(){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(!e)return null;return bizState.sales.find(s=>root.TsukinowaAccounting.live(s)&&(s.calendarEventId===e.id||e.googleEventId&&s.googleEventId===e.googleEventId||[e.saleId,e.cashSaleId,e.receiptSaleId].includes(s.id)||[e.documentId,e.linkedInvoiceId,e.linkedReceiptId].filter(Boolean).includes(s.documentId)));}
+function refreshCalendarSale(){
+ const button=el('eventSaleButton');if(!button)return;const sale=eventSale();
+ button.hidden=!enabled||client?.getState().role!=='admin';button.disabled=!!sale||calendarSaleSaving;button.textContent=sale?'登録済':'売上登録';
+ el('eventSaleStatus').textContent=sale?`売上：登録済 ／ 金額 ${bizMoney(sale.amount)} ／ 入金状況 ${bizOutstanding(sale)===0?'入金済':'未収 '+bizMoney(bizOutstanding(sale))}`:'売上：未登録';
+ if(sale)el('eventSaleForm').classList.add('biz-hidden');
+}
+root.openEventModal=function(id){openCalendarDetail(id);el('eventSaleForm').classList.add('biz-hidden');el('eventSaleMessage').textContent='';refreshCalendarSale();};
+root.bizOpenCalendarSale=function(){
+ if(!enabled||!ready()||client.getState().role!=='admin'||eventSale()||calendarSaleSaving)return;
+ const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(!e)return;const p=root.TsukinowaBusiness.parseCalendar(e.googleLatestTitle||e.title||e.originalTitle);
+ for(const [name,value]of Object.entries({Date:e.date,Customer:p.customer||e.customerName||'現金客',Content:p.work||'',Amount:p.amount||e.amount||'',Method:p.payment||e.paymentMethod||'銀行振込',Memo:''}))el('eventSale'+name).value=value;
+ el('eventSaleForm').classList.remove('biz-hidden');el('eventSaleConfirm').disabled=false;el('eventSaleDate').focus();
+};
+root.bizConfirmCalendarSale=async function(event){
+ event?.preventDefault();if(calendarSaleSaving||!enabled||!ready()||client.getState().role!=='admin'||eventSale())return;
+ if(!el('eventSaleForm').reportValidity())return;
+ calendarSaleSaving=true;el('eventSaleConfirm').disabled=true;refreshCalendarSale();
+ const id=bizCurrentCalendarId,sale={salesDate:el('eventSaleDate').value,customer:el('eventSaleCustomer').value,content:el('eventSaleContent').value,amount:el('eventSaleAmount').value,paymentMethod:el('eventSaleMethod').value,memo:el('eventSaleMemo').value};
+ el('eventSaleMessage').textContent='保存中…';
+ try{const op=command({type:'registerCalendarSale',id,sale});if(!op)throw Error('保存できません。');await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);if(pending)throw Error(pending.error||'未同期です。オンラインで同期完了を確認してください。');await sync.reload();el('eventSaleMessage').textContent='売上を登録しました。';}
+ catch(e){el('eventSaleMessage').textContent=e.message;}
+ finally{calendarSaleSaving=false;el('eventSaleConfirm').disabled=false;refreshCalendarSale();}
+};
 function hydrate(value){
  rows=value;root.TsukinowaAccountingUI?.hydrate(value);applying=true;
  try{
@@ -28,7 +54,7 @@ function hydrate(value){
   history=(value.documents||[]).filter(r=>!r.payload.deletedAt&&!root.TsukinowaTestCleanup.removed(r.payload)).map(r=>({...copy(r.payload.snapshot),documentId:r.id,historyId:r.id,cloudRevision:r.revision,documentStatus:r.payload.status||'active',statusReason:r.payload.reason||'',revisedFromDocumentId:r.payload.revisedFromDocumentId||'',duplicateOfDocumentId:r.payload.duplicateOfDocumentId||'',revisedToDocumentId:r.payload.revisedToDocumentId||'',savedAt:root.TsukinowaCloudCore.displayTimestamp(r.createdAt)})).sort((a,b)=>b.savedAt.localeCompare(a.savedAt));
   bizRefreshAll();renderConfirmedHistory();receiptOptions();
  }finally{applying=false;}
- completePendingInvoice();root.TsukinowaBalanceUI?.refresh();
+ completePendingInvoice();root.TsukinowaBalanceUI?.refresh();refreshCalendarSale();
  if(client?.getState().role==='admin')for(const r of value.documents||[]){const p=r.payload,id=p.calendarEventId||p.snapshot?.calendarEventId,link=(value.calendarLinks||[]).find(l=>l.id===id)?.payload;if(p.docType==='receipt'&&p.saleId&&root.TsukinowaAccounting.live(p)&&link?.cashSaleId&&link.cashSaleId!==p.saleId&&!cashReconciles.has(r.id)){cashReconciles.add(r.id);setTimeout(()=>command({type:'reconcileReceiptCalendarCash',documentId:r.id}),0);}}
  for(const r of value.documents||[]){const p=r.payload,s=p.snapshot;if(root.TsukinowaAccounting.live(p)&&p.docType==='receipt'&&!p.saleId&&!s?.saleId&&s?.paymentMethod==='現金'&&p.amount>0&&s.customerName?.trim()&&root.TsukinowaCloudCore.normalizeDates(s.invoiceDate,'invoiceDate')&&!receiptRepairs.has(r.id)){receiptRepairs.add(r.id);setTimeout(()=>command({type:'backfillReceiptCash',documentId:r.id}),0);}}
 }
