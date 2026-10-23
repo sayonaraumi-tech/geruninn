@@ -75,16 +75,19 @@ test('migration twice preserves local originals and existing cloud records, mark
  const first=await migrateLegacy({client,storage:local}),second=await migrateLegacy({client,storage:local});assert(second.skipped);const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().after?.legacy?.id==='old-audit'));assert.equal(local.getItem(LOCAL_KEYS.business),raw);assert(local.getItem(first.backupKey));assert.equal((await getDocs(collection(db('admin'),`companies/${company}/sales`))).size,1);
  const broken=storage();broken.setItem(LOCAL_KEYS.business,'{broken');await assert.rejects(migrateLegacy({client,storage:broken}));assert.equal(broken.getItem(LOCAL_KEYS.business),'{broken');client.dispose();
 });
-test('receipt only records payment; bank confirmation preserves invoice and cannot be forged by staff',async()=>{
- const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);await exec(a,{type:'saveDocument',snapshot:snapshot('inv'),expectedRevision:0});
- const receipt={...snapshot('receipt','receipt'),saleId:'sale_inv',receiptTotal:20000,paymentDate:'2026-09-21',paymentMethod:'銀行振込'};
- await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});for(let i=0;i<3;i++)await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:1});
+test('formal bank receipt confirms collection while preserving invoice; conflicting amount is rejected',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);try{
+ await exec(a,{type:'saveDocument',snapshot:snapshot('inv'),expectedRevision:0});
+ const receipt={...snapshot('receipt','receipt'),saleId:'sale_inv',receiptTotal:100000,paymentDate:'2026-09-21',paymentMethod:'銀行振込'};
+ await assert.rejects(exec(s,{type:'saveDocument',snapshot:{...receipt,receiptTotal:120000},expectedRevision:0}),/一致/);
+ const saved=await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});for(let i=0;i<3;i++)await exec(s,{type:'saveDocument',snapshot:saved.snapshot,expectedRevision:1});
  assert.equal((await getDocs(collection(db('admin'),`companies/${company}/payments`))).size,1);assert.equal((await getDoc(ref(db('admin'),'sales','sale_inv'))).data().payload.amount,100000);
+ assert.equal((await getDoc(ref(db('admin'),'payments','pay_receipt'))).data().payload.confirmation,'bank-confirmed');
  await assert.rejects(exec(s,{type:'confirmBank',bankId:'bank1',saleId:'sale_inv',amount:20000,paymentDate:'2026-09-22'}));
- await exec(a,{type:'confirmBank',bankId:'bank1',saleId:'sale_inv',amount:20000,paymentDate:'2026-09-22',pendingPaymentId:'pay_receipt'});await exec(a,{type:'confirmBank',bankId:'bank1',saleId:'sale_inv',amount:20000,paymentDate:'2026-09-22',pendingPaymentId:'pay_receipt'});
- const pays=await getDocs(collection(db('admin'),`companies/${company}/payments`));assert.equal(pays.docs.reduce((n,d)=>n+d.data().payload.amount,0),20000);assert.equal((await getDoc(ref(db('admin'),'payments','pay_receipt'))).data().payload.confirmation,'bank-confirmed');
- await assert.rejects(exec(s,{type:'saveDocument',snapshot:{...receipt,receiptTotal:30000},expectedRevision:1}));admin.dispose();staff.dispose();
+ await assert.rejects(exec(s,{type:'saveDocument',snapshot:{...receipt,receiptTotal:30000},expectedRevision:1}));
+ }finally{admin.dispose();staff.dispose();}
 });
+
 const A=require('../js/accounting.js');
 async function records(name){return (await getDocs(collection(db('admin'),`companies/${company}/${name}`))).docs.map(d=>({...d.data().payload,id:d.id,createdAt:d.data().createdAt,createdBy:d.data().createdBy,updatedAt:d.data().updatedAt,updatedBy:d.data().updatedBy}));}
 test('cash collection and expense are atomic, idempotent and auditable; soft deletion recomputes cash',async()=>{
@@ -332,13 +335,13 @@ test('production gate: legacy slash construction date, undated acceptance, two-w
  await Promise.all([exec(s,{type:'acceptEstimate',estimateId:'est_gate-est',workDate:'2026/10/10'}),exec(s,{type:'acceptEstimate',estimateId:'est_gate-est',workDate:'2026/10/10'})]);assert.equal((await records('calendarLinks')).length,1);assert.equal((await records('calendarLinks'))[0].googleCreatePending,false);
  }finally{c.dispose();}
 });
-test('production gate: staff independent cash receipt110000, linked receipt only payment, bank receipt no sale, read-only retries',async()=>{
+test('production gate: staff independent cash receipt110000, linked receipt only payment, bank receipt paid sale, read-only retries',async()=>{
  const c=await clientFor('staff'),s=createService(c);try{
  const receipt={...snapshot('cash-gate','receipt'),customerName:'下村 健朗',receiptTotal:110000,invoiceDate:'2026/10/5',salesDate:'',tadashi:'クロス張替'};
  const saved=await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});for(let i=0;i<3;i++)await exec(s,{type:'saveDocument',snapshot:saved.snapshot,expectedRevision:1});
  assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);const sale=(await records('sales'))[0];assert.equal(sale.sourceId,'cash-gate');assert.equal(sale.sourceType,'receipt-cash');assert.equal(sale.invoiceDate,'');assert.equal(sale.salesDate,'2026-10-05');assert.equal(A.receivables([sale],await records('payments'),'2026-10-31')[0].outstanding,0);
- await exec(s,{type:'saveDocument',snapshot:{...receipt,documentId:'bank-gate',paymentMethod:'銀行振込'},expectedRevision:0});assert.equal((await records('sales')).length,1);
- await exec(s,{type:'saveDocument',snapshot:snapshot('cash-invoice'),expectedRevision:0});await exec(s,{type:'saveDocument',snapshot:{...receipt,documentId:'linked-gate',saleId:'sale_cash-invoice'},expectedRevision:0});assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);
+ await exec(s,{type:'saveDocument',snapshot:{...receipt,documentId:'bank-gate',invoiceDate:'2026-10-06',paymentMethod:'銀行振込'},expectedRevision:0});assert.equal((await records('sales')).length,2);
+ await exec(s,{type:'saveDocument',snapshot:snapshot('cash-invoice'),expectedRevision:0});await exec(s,{type:'saveDocument',snapshot:{...receipt,documentId:'linked-gate',invoiceDate:'2026-10-07',receiptTotal:100000,saleId:'sale_cash-invoice'},expectedRevision:0});assert.equal((await records('sales')).length,3);assert.equal((await records('payments')).length,3);
  }finally{c.dispose();}
 });
 test('production gate: every collection normalizes invalid/empty/legacy dates before writes, no NaN and required invalid date atomic rejection',async()=>{
@@ -430,4 +433,15 @@ test('inactive document history archive: four states, admin only, immutable audi
  assert.deepEqual(beforePayments,paymentsBefore);assert.deepEqual(beforeSales.find(s=>s.id==='sale_original'),saleBefore.find(s=>s.id==='sale_original'));
  // Direct forged active archive and snapshot edits are denied even for an administrator.
  await assertFails(updateDoc(ref(db('admin'),'documents','revised'),{'payload.deletedAt':'2026-10-08','payload.deleteReason':'履歴から削除'}));
+});
+
+ test('staff formal noncash receipts create paid sales, schedule, pending Google create; no cash mirror',async()=>{
+ const c=await clientFor('staff'),s=createService(c);try{for(const [i,method]of ['銀行振込','プラットフォーム経由','その他'].entries()){
+  const r=await exec(s,{type:'saveDocument',expectedRevision:0,snapshot:{documentId:'noncash'+i,docType:'receipt',customerName:'顧客'+i,invoiceDate:'2026-10-23',receiptTotal:12000,paymentMethod:method,platformName:'平台',tadashi:'クロス張替'}});
+  const e=(await c.listRecords('calendarLinks')).find(e=>e.id===r.snapshot.calendarEventId);assert(e.payload.googleCreatePending);assert.equal(e.payload.status,'領収済');
+  await exec(s,{type:'calendarPrepareCreate',id:e.id,calendarId:'shared'});await exec(s,{type:'calendarCreated',id:e.id,googleEventId:e.payload.googleEventId,calendarId:'shared'});
+ }assert.equal((await records('cashLedger')).length,0);const ledger=A.ledger(await records('sales'),await records('payments'));assert(ledger.sales.every(s=>s.outstanding===0));assert.equal(ledger.payments.length,3);
+ // A free-standing bank-confirmed payment still requires admin privileges.
+ await assert.rejects(c.transact('forged-bank',{},async({write,read})=>{const sale=await read('sales','sale_noncash0');await write('sales','sale_noncash0',{...sale.payload,paymentIds:[...sale.payload.paymentIds,'forged'],paymentVersion:(sale.payload.paymentVersion||0)+1});await write('payments','forged',{paymentId:'forged',saleId:'sale_noncash0',amount:100,paymentDate:'2026-10-23',confirmation:'bank-confirmed',method:'銀行振込',documentId:''});}));
+ }finally{c.dispose();}
 });

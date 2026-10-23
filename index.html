@@ -3372,7 +3372,7 @@ function openEventModal(id){
   bizCurrentCalendarId=id;
   const p=bizParseShortTitle(e.title||e.originalTitle||'');
   document.getElementById('eventModalTitle').textContent=`${bizFmtDate(e.date)} ${e.title||''}`;
-  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
+  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(e.paymentMethod||p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
   document.getElementById('bizEventModal').classList.remove('biz-hidden');
 }
 function closeEventModal(){document.getElementById('bizEventModal')?.classList.add('biz-hidden')}
