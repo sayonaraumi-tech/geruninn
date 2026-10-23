@@ -26,6 +26,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  const estimateId=await desktop.evaluate(()=>bizState.estimates[0].id);await desktop.evaluate(id=>bizAcceptEstimate(id,false),estimateId);await phone.waitForFunction(()=>bizState.estimates[0]?.status==='受注');await desktop.waitForFunction(()=>bizState.estimates[0]?.status==='受注');
  await desktop.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimateId);await desktop.evaluate(()=>saveConfirmedHistory());await phone.waitForFunction(()=>bizState.sales.length===1);
  const invoiceId=await phone.evaluate(()=>bizState.sales[0].documentId);
+ await desktop.waitForFunction(id=>loadConfirmedHistory().some(h=>h.documentId===id)&&TsukinowaBusinessUI.getSync().getQueue().length===0,invoiceId);
  await desktop.evaluate(()=>{window.pdfSaves=0;window.html2pdf=()=>{const canvas=document.createElement('canvas');canvas.width=210;canvas.height=297;const pdf={internal:{getNumberOfPages:()=>1},deletePage(){},addPage(){},addImage(){},save(){window.pdfSaves++}};const worker={set(){return worker},from(){return worker},toCanvas(){return worker},toPdf(){return worker},get:key=>Promise.resolve(key==='canvas'?canvas:pdf)};return worker;};window.mockPdfRenderer=window.html2pdf;});
  for(let i=0;i<3;i++){await desktop.evaluate(id=>redownloadSavedDoc(loadConfirmedHistory().findIndex(s=>s.documentId===id)),invoiceId);await desktop.waitForFunction(n=>window.pdfSaves===n,i+1);await desktop.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);}
  assert.equal(await desktop.evaluate(()=>bizState.sales.length),1);
@@ -45,7 +46,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.locator('#customerName').fill('管理者訂正');await desktop.evaluate(()=>{document.getElementById('customerCompany').value='法人テスト';document.getElementById('customerAddress').value='東京都';});
  await desktop.getByRole('button',{name:'正式保存',exact:true}).click();
  await phone.waitForFunction(id=>loadConfirmedHistory().some(d=>d.documentId===id&&d.documentStatus==='revised'),invoiceId);
- assert.equal(await desktop.evaluate(()=>bizState.sales.length),1);assert.equal(await desktop.evaluate(()=>bizState.sales[0].customer),'管理者訂正');
+ await desktop.waitForFunction(()=>bizState.sales.length===1&&bizState.sales[0].customer==='管理者訂正');assert.equal(await desktop.evaluate(()=>bizState.sales[0].customer),'管理者訂正');
  assert.equal(await desktop.evaluate(()=>bizOutstanding(bizState.sales[0])),29000);
  await phone.evaluate(()=>bizSwitchPage('savedDocs'));assert.equal(await phone.getByRole('button',{name:'訂正版を作成',exact:true}).count(),0);assert((await phone.locator('#allSavedDocsList').innerText()).includes('訂正済'));
  await phone.evaluate(id=>{applyFormState(loadConfirmedHistory().find(s=>s.documentId===id));document.getElementById('customerName').value='古い編集';saveConfirmedHistory();},invoiceId);
