@@ -41,10 +41,25 @@ service cloud.firestore {
    return n!='documents' || (p.documentId==id && p.get('status','active') in ['active','void','cancelled','duplicate','revised']
     && (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id))
       ? (p.get('status','active')=='active' && (admin(c)||(p.get('revisedFromDocumentId','')=='' && p.get('sourceType','')!='historicalPdfImport')))
-      : (p.snapshot==resource.data.payload.snapshot && (receiptBackfill(c,id,p) ||
+      : (p.snapshot==resource.data.payload.snapshot && (receiptBackfill(c,id,p) || receiptAccountingRepair(c,id,p) ||
         (admin(c) && resource.data.payload.get('status','active') in ['void','duplicate','revised','cancelled'] && resource.data.payload.get('deletedAt',null)==null && p.deletedAt is string && p.deleteReason=='履歴から削除' && p.diff(resource.data.payload).affectedKeys().hasOnly(['deletedAt','deleteReason'])) ||
         (admin(c) && p.diff(resource.data.payload).affectedKeys().hasOnly(['status','reason','revisedToDocumentId','duplicateOfDocumentId'])
         && resource.data.payload.get('status','active')=='active' && p.status in ['void','cancelled','duplicate','revised'] && p.reason is string && p.reason.size()>0)))));
+  }
+  function receiptAccountingRepair(c,id,p) {
+   let old=resource.data.payload;
+   let sale=getAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)).data.payload;
+   let payment=getAfter(/databases/$(database)/documents/companies/$(c)/payments/$(p.paymentId)).data.payload;
+   let link=getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(p.calendarEventId)).data.payload;
+   return admin(c) && old.docType=='receipt' && active(old) && active(p) && old.amount>0
+    && p.diff(old).affectedKeys().hasOnly(['saleId','paymentId','calendarEventId','googleEventId','calendarId','paymentDate'])
+    && active(sale) && sale.amount==old.amount && sale.customer==old.snapshot.customerName
+    && payment.documentId==id && payment.saleId==p.saleId && payment.amount==old.amount
+    && payment.paymentDate==p.paymentDate && payment.method==old.snapshot.paymentMethod && payment.get('deletedAt',null)==null
+    && ((payment.method=='現金' && payment.confirmation=='cash-received') || (payment.method in ['銀行振込','プラットフォーム経由','その他','オンライン決済'] && payment.confirmation=='bank-confirmed'))
+    && link.linkedReceiptId==id && link.receiptSaleId==p.saleId && link.saleId==p.saleId
+    && link.officialAmount==old.amount && link.customerName==old.snapshot.customerName && link.status=='領収済'
+    && link.googleEventId==p.googleEventId;
   }
   function paymentGuard(c,n,id) {
    let p=request.resource.data.payload;
