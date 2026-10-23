@@ -445,3 +445,24 @@ test('inactive document history archive: four states, admin only, immutable audi
  await assert.rejects(c.transact('forged-bank',{},async({write,read})=>{const sale=await read('sales','sale_noncash0');await write('sales','sale_noncash0',{...sale.payload,paymentIds:[...sale.payload.paymentIds,'forged'],paymentVersion:(sale.payload.paymentVersion||0)+1});await write('payments','forged',{paymentId:'forged',saleId:'sale_noncash0',amount:100,paymentDate:'2026-10-23',confirmation:'bank-confirmed',method:'銀行振込',documentId:''});}));
  }finally{c.dispose();}
 });
+
+test('legacy repair under real rules, concurrent logins, immutable snapshot and admin guard',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin);
+ for(const method of ['現金','銀行振込','プラットフォーム経由','その他']){
+  const id='legacy-'+method,s={documentId:id,docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',invoiceNo:'20261023-1200-'+method,receiptTotal:1000,paymentMethod:method,tadashi:'工事代 '+method};
+  await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents',id),{schemaVersion:2,companyId:company,createdBy:'legacy',createdAt:new Date(),updatedAt:new Date(),revision:1,payload:{documentId:id,docType:'receipt',status:'active',confirmed:true,amount:1000,customerName:s.customerName,invoiceDate:s.invoiceDate,snapshot:s}}));
+  await assert.rejects(exec(createService(staff),{type:'backfillReceiptAccounting',documentId:id}),/管理者/);
+  const cmd={type:'backfillReceiptAccounting',documentId:id};
+  const same={...cmd,operationId:crypto.randomUUID()};
+  await Promise.all([a.execute(same),createService(admin).execute(same),exec(createService(admin),cmd)]);
+  const d=(await getDoc(ref(db('admin'),'documents',id))).data();assert.deepEqual(d.payload.snapshot,s);
+  const revision=d.revision;await exec(createService(admin),cmd);assert.equal((await getDoc(ref(db('admin'),'documents',id))).data().revision,revision);
+  assert.equal((await admin.listRecords('sales')).filter(r=>r.payload.documentId===id).length,1);assert.equal((await admin.listRecords('payments')).filter(r=>r.payload.documentId===id).length,1);
+  const link=(await admin.listRecords('calendarLinks')).find(r=>r.payload.linkedReceiptId===id);assert(link.payload.googleCreatePending);assert.equal(link.payload.status,'領収済');
+  const frozen=JSON.stringify(await admin.listRecords('payments'));await exec(a,{type:'saveDocument',snapshot:s,expectedRevision:d.revision});assert.equal(JSON.stringify(await admin.listRecords('payments')),frozen);
+ }
+ assert.equal((await admin.listRecords('cashLedger')).length,1);
+ const docRow=(await admin.listRecords('documents'))[0];
+ await assert.rejects(admin.put('documents',docRow.id,{...docRow.payload,amount:2000},{expectedRevision:docRow.revision,operationId:crypto.randomUUID()}));
+ admin.dispose();staff.dispose();
+});

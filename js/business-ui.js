@@ -56,7 +56,14 @@ function hydrate(value){
  }finally{applying=false;}
  completePendingInvoice();root.TsukinowaBalanceUI?.refresh();refreshCalendarSale();
  if(client?.getState().role==='admin')for(const r of value.documents||[]){const p=r.payload,id=p.calendarEventId||p.snapshot?.calendarEventId,link=(value.calendarLinks||[]).find(l=>l.id===id)?.payload;if(p.docType==='receipt'&&p.saleId&&root.TsukinowaAccounting.live(p)&&link?.cashSaleId&&link.cashSaleId!==p.saleId&&!cashReconciles.has(r.id)){cashReconciles.add(r.id);setTimeout(()=>command({type:'reconcileReceiptCalendarCash',documentId:r.id}),0);}}
- for(const r of value.documents||[]){const p=r.payload,s=p.snapshot;if(root.TsukinowaAccounting.live(p)&&p.docType==='receipt'&&!p.saleId&&!s?.saleId&&s?.paymentMethod==='現金'&&p.amount>0&&s.customerName?.trim()&&root.TsukinowaCloudCore.normalizeDates(s.invoiceDate,'invoiceDate')&&!receiptRepairs.has(r.id)){receiptRepairs.add(r.id);setTimeout(()=>command({type:'backfillReceiptCash',documentId:r.id}),0);}}
+ if(client?.getState().role==='admin')for(const r of value.documents||[]){
+  if(!root.TsukinowaBusiness.receiptAccountingNeedsRepair(r,value)||receiptRepairs.has(r.id))continue;
+  receiptRepairs.add(r.id);const owner=sync;
+  setTimeout(()=>{
+   if(sync!==owner||client?.getState().role!=='admin')return;
+   if(!sync.getQueue().some(x=>x.command.type==='backfillReceiptAccounting'&&x.command.documentId===r.id))command({type:'backfillReceiptAccounting',documentId:r.id});
+  },0);
+ }
 }
 function completePendingInvoice(){if(pendingInvoice&&bizState.estimates.some(e=>e.id===pendingInvoice&&e.status?.startsWith('受注'))){const id=pendingInvoice;pendingInvoice=null;setTimeout(()=>bizConvertEstimateRecordToInvoice(id),0);}}
 function download(value,name,type='application/json'){const a=document.createElement('a'),url=URL.createObjectURL(new Blob([typeof value==='string'?value:JSON.stringify(value,null,2)],{type}));a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
