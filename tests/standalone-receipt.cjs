@@ -11,7 +11,7 @@ async function harness(role='admin'){
 
 const receipt={documentId:'standalone',docType:'receipt',customerName:'同じ顧客',receiptTotal:'1000',invoiceDate:'2026-10-05',paymentMethod:'現金',tadashi:'工事代',remarks:'備考'};
 const save=(snapshot,extra={})=>({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot,...extra});
-for(const method of ['現金','銀行振込','プラットフォーム経由','その他'])test('formal independent receipt: '+method,async()=>{
+for(const method of ['現金','銀行振込','プラットフォーム経由','その他','オンライン決済'])test('formal independent receipt: '+method,async()=>{
  const h=await harness('staff'),r=await h.service.execute(save({...receipt,paymentMethod:method,platformName:'テスト平台'}));
  assert.match(r.invoiceNo,/^\d{8}-\d{4}-\d{2,}$/);assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,method==='現金'?1:0);
  const pay=h.list('payments')[0].payload,e=h.list('calendarLinks')[0].payload;
@@ -71,8 +71,8 @@ function seedLegacy(h,method='現金',extra={}){
  const payload={documentId:'legacy',docType:'receipt',status:'active',confirmed:true,amount:1000,customerName:snapshot.customerName,invoiceDate:snapshot.invoiceDate,snapshot};
  h.rows.set('companies/tsukinowa/documents/legacy',{revision:1,payload});return payload;
 }
-const repair=(h,operationId=crypto.randomUUID())=>h.service.execute({type:'backfillReceiptAccounting',documentId:'legacy',operationId});
-for(const method of ['現金','銀行振込','プラットフォーム経由','その他'])test('legacy accounting repair: '+method,async()=>{
+const repair=(h,operationId=crypto.randomUUID())=>h.service.execute({type:'repairReceipt',documentId:'legacy',operationId});
+for(const method of ['現金','銀行振込','プラットフォーム経由','その他','オンライン決済'])test('legacy accounting repair: '+method,async()=>{
  const h=await harness(),p=seedLegacy(h,method),original=C.canonical(p.snapshot);
  await repair(h);assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('calendarLinks').length,1);assert.equal(h.list('cashLedger').length,method==='現金'?1:0);
  const pay=h.list('payments')[0].payload,e=h.list('calendarLinks')[0].payload;
@@ -137,9 +137,26 @@ test('complete invoice installments share the latest schedule and skip repair af
  const inv=await exec({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'installment-invoice',docType:'invoice',customerName:receipt.customerName,invoiceDate:receipt.invoiceDate,salesDate:receipt.invoiceDate,items:[{content:'工事',qty:1,price:2000/1.1}]}});
  for(const id of ['first','second'])await exec(save({...receipt,documentId:id,saleId:'sale_installment-invoice'}));
  let rows=Object.fromEntries(B.COLLECTIONS.map(n=>[n,h.list(n)]));
- for(const r of h.list('documents').filter(r=>r.payload.docType==='receipt')){assert.equal(B.receiptAccountingNeedsRepair(r,rows),false);assert((await exec({type:'backfillReceiptAccounting',documentId:r.id})).skipped);}
+ for(const r of h.list('documents').filter(r=>r.payload.docType==='receipt')){assert.equal(B.receiptAccountingNeedsRepair(r,rows),false);assert((await exec({type:'repairReceipt',documentId:r.id})).skipped);}
  await exec(save({...inv.snapshot,documentId:'revised-invoice',customerName:'訂正後の請求先'},{revisedFromDocumentId:'installment-invoice',expectedParentRevision:1,reason:'宛名訂正'}));
  rows=Object.fromEntries(B.COLLECTIONS.map(n=>[n,h.list(n)]));
  for(const r of h.list('documents').filter(r=>r.payload.docType==='receipt'))assert.equal(B.receiptAccountingNeedsRepair(r,rows),false);
  assert.equal(h.list('payments').length,2);
+});
+
+test('old queued repair names replay through the common planner without changing fingerprint',async()=>{
+ const h=await harness();seedLegacy(h);
+ for(const type of ['backfillReceiptCash','backfillReceiptAccounting']){
+  const command={type,documentId:'legacy',operationId:type};await h.service.execute(command);const before=JSON.stringify([...h.rows]);await h.service.execute(command);assert.equal(JSON.stringify([...h.rows]),before);
+ }
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('calendarLinks').length,1);
+});
+
+test('explicit standalone calendar date conflict is atomic for new and historical receipts',async()=>{
+ for(const legacy of [false,true]){
+  const h=await harness(),p=legacy?seedLegacy(h):null,date='2026-10-24';
+  h.rows.set('companies/tsukinowa/calendarLinks/wrong-date',{revision:1,payload:{id:'wrong-date',date,customerName:legacy?p.customerName:receipt.customerName,content:receipt.tadashi,amount:1000,googleEventId:'existing'}});
+  if(legacy)p.calendarEventId='wrong-date';const before=JSON.stringify([...h.rows]);
+  await assert.rejects(legacy?repair(h):h.service.execute(save({...receipt,calendarEventId:'wrong-date'})),/要確認/);assert.equal(JSON.stringify([...h.rows]),before);
+ }
 });

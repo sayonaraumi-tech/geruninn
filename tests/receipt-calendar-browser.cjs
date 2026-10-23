@@ -48,5 +48,17 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  });
  await page.waitForFunction(()=>bizState.calendar.length===2&&bizState.calendar.every(e=>!e.googlePatchPending));
  assert.equal(posts.length,1);assert.equal(remote.size,2);assert.match(remote.get('existing').summary,/別顧客.*領収済/);assert.match(remote.get('existing').description,/現場メモ/);assert.match(remote.get('existing').description,/月輪システム/);
+ // Exercise the visible retry control against fourteen persisted commands.
+ await page.evaluate(async()=>{
+  const sync=TsukinowaBusinessUI.getSync(),execute=sync.service.execute;let allowed=false;window.queueAttempts=[];
+  sync.service.execute=async cmd=>{if(!cmd.operationId.startsWith('retry-test-'))return execute(cmd);queueAttempts.push(cmd.operationId);if(!allowed)throw Object.assign(Error('rules denied'),{code:'permission-denied'});return {ok:true};};
+  for(let i=0;i<14;i++)sync.enqueue({type:'test',operationId:'retry-test-'+i});
+  await sync.flush();window.queueBefore=sync.getQueue();await sync.flush();if(queueAttempts.length!==1)throw Error('ordinary flush retried blocked entry');
+  window.allowQueue=()=>allowed=true;
+ });
+ assert.equal(await page.evaluate(()=>queueBefore.length),14);assert(await page.evaluate(()=>queueBefore[0].blocked));
+ await page.evaluate(()=>{allowQueue();document.getElementById('bizEventModal').style.display='none';bizOpenCloudAccount();});await page.locator('#cloudRetryQueue').click();
+ await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);
+ assert.deepEqual(await page.evaluate(()=>queueAttempts),['retry-test-0',...Array.from({length:14},(_,i)=>'retry-test-'+i)]);
  assert.deepEqual(errors,[]);console.log('PASS '+mode+' receipt '+width+'px: offline save, reconnect POST, existing PATCH, repeat login, deduplication and detail UI');await page.close();
  }}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

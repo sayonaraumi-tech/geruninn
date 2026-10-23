@@ -10,6 +10,7 @@ function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'�
 // Presentation metadata only: never used to calculate tax or sales.
 const CATEGORY_RULES=[['クロス張替',/クロス|壁紙/],['穴補修',/穴.*(?:補修|修理|埋)|(?:補修|修理).*穴/],['ドア補修',/(?:ドア|扉).*補修|補修.*(?:ドア|扉)/],['窓枠補修',/窓枠/],['CF/クッションフロア',/\bCF\b|クッションフロア/i],['巾木',/巾木|幅木/],['障子',/障子/],['天井塗装',/天井.*塗装|塗装.*天井/],['ガラスシート',/ガラス.*(?:シート|フィルム)/],['ダイノック',/ダイノック|ダイノク/],['フロアタイル',/フロアタイル/]];
 function rawContent(s){return (s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean).join(' / ')||s.content||s.snapshot?.content||(s.linkedInvoice?.items||[]).map(i=>String(i.content||'')).filter(Boolean).join(' / ')||s.linkedInvoice?.content||s.tadashi||s.snapshot?.tadashi||'';}
+function receiptTitle(s,amount){return [s.customerName,s.tadashi||summary(s),'¥'+amount.toLocaleString('ja-JP'),'領収済'].join('｜');}
 function projectCategory(s){const texts=(s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean);if(!texts.length)texts.push(rawContent(s)||s.projectCategory||'');const found=new Set();for(const text of texts){let matched=false;for(const [name,re]of CATEGORY_RULES)if(re.test(text.normalize('NFKC'))){found.add(name);matched=true;}}return [...CATEGORY_RULES.map(r=>r[0]),'その他'].filter(n=>found.has(n)).join('・')||'その他';}
 // Filename selection is independent of the multi-category Calendar metadata.
 const FEE_ITEM=/出張費|材料費|雑費|諸経費|交通費|駐車(?:場)?(?:代|料金|費)|処分費|運搬費/;
@@ -48,6 +49,8 @@ function createService(client,{now=()=>new Date()}={}){
  const eventId=event=>stable('cal',event.googleEventId||event.id);
  async function execute(cmd,numberRetries=0){
  cmd=core.normalizeDates(cmd);
+ // Compatibility dispatch only: keep persisted commands and fingerprints intact.
+ const receiptRepair=['repairReceipt','backfillReceiptCash','backfillReceiptAccounting'].includes(cmd.type);
  // Identity belongs to the submitted operation, never to its business contents.
  if(cmd.type==='payment'&&cmd.manualConfirmed){if(client.getState().role!=='admin')throw Error('確認済み入金の登録は管理者のみです。');if(!cmd.paymentId||!cmd.operationId)throw Error('入金の操作IDがありません。');}
  if(cmd.type==='deleteMisregistration')cmd={...cmd,operationId:'delete_error_'+cmd.documentId+'_'+cmd.expectedRevision};
@@ -55,7 +58,7 @@ function createService(client,{now=()=>new Date()}={}){
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
  const importSeed=cmd.type==='historicalPdfImport'?{documents:await client.listRecords('documents'),sales:await client.listRecords('sales')}:null;
- const repairing=cmd.type==='backfillReceiptAccounting';
+ const repairing=receiptRepair;
  if(repairing&&client.getState().role!=='admin')throw Error('領収書の補録は管理者のみです。');
  const calendarSeed=(repairing||['calendar','registerCalendarSale'].includes(cmd.type)||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('calendarLinks'):[];
  const saleSeed=(repairing||cmd.type==='registerCalendarSale'||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('sales'):[];
@@ -128,23 +131,22 @@ function createService(client,{now=()=>new Date()}={}){
     const ids=new Set([...(sale?.payload.paymentIds||[]),...paymentSeed.filter(p=>p.payload.saleId===saleId).map(p=>p.id),...(ownPaymentId?[ownPaymentId]:[])]);
     const ps=[];for(const id of ids){const p=await read('payments',id);if(p&&!p.payload.deletedAt&&p.payload.confirmation!=='bank-marker')ps.push(p.payload);}return ps;
   }
-  if(cmd.type==='backfillReceiptAccounting'){
-    const id=cmd.documentId,row=await read('documents',id);if(!row)return {skipped:true};
-    const p=row.payload,s=core.normalizeDates(p.snapshot||{}),amount=Number(p.amount),date=s.invoiceDate||p.invoiceDate||s.paymentDate||p.paymentDate;
+  async function reconcileReceipt(id,p,{saving=false,parent=null}={}){
+    const row=await read('documents',id),s=core.normalizeDates(p.snapshot||{}),amount=Number(p.amount),date=s.invoiceDate||p.invoiceDate||s.paymentDate||p.paymentDate;
     if(!A.live(p)||p.docType!=='receipt'||!s.customerName?.trim()||!(amount>0)||!date)return {skipped:true};
-    const current={documents:[{id,payload:p}],sales:[],payments:[],calendarLinks:[],cashLedger:[]};
-    for(const [n,key]of [['sales',p.saleId],['payments',p.paymentId],['calendarLinks',p.calendarEventId],['cashLedger',p.paymentId&&'cash_'+p.paymentId]])if(key){const r=await read(n,key);if(r)current[n].push({id:key,...r});}
-    if(!receiptAccountingNeedsRepair({id,payload:p},current))return {documentId:id,skipped:true};
+    const current={documents:[{id,payload:p}],sales:[],receivables:[],payments:[],calendarLinks:[],cashLedger:[]};
+    for(const [n,key]of [[anchorCollection(p.saleId),p.saleId],['payments',p.paymentId],['calendarLinks',p.calendarEventId],['cashLedger',p.paymentId&&'cash_'+p.paymentId]])if(key){const r=await read(n,key);if(r)current[n].push({id:key,...r});}
+    if(!saving&&!receiptAccountingNeedsRepair({id,payload:p},current))return {documentId:id,skipped:true};
     A.date(date);const paymentDate=A.date(s.paymentDate||p.paymentDate||date),method=s.paymentMethod;
     if(total(s)!==amount||!['現金','銀行振込','プラットフォーム経由','その他','オンライン決済'].includes(method))throw Error('領収書の金額・支払方法を確認してください。要確認');
     // Read every candidate again inside the transaction; list results are discovery only.
     const tracked=async(n,id)=>{const r=await read(n,id);observed.push([n,id,r?.revision||0]);return r;};
-    observed.push(['documents',id,row.revision]);
+    observed.push(['documents',id,row?.revision||0]);
     const norm=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
-    const conflict=()=>{throw Error('領収書の売上・入金・日程に競合があります。要確認');};
+    const conflict=()=>{throw Error('領収書の売上・入金・日程が一致しません。要確認');};
     const anchorId=p.saleId||s.saleId,anchor=anchorId?await tracked(anchorCollection(anchorId),anchorId):null;
     const calendars=[];const explicit=p.calendarEventId||s.calendarEventId||anchor?.payload.calendarEventId;
-    for(const key of new Set([explicit,...calendarSeed.map(r=>r.id)].filter(Boolean))){
+    for(const key of new Set((explicit?[explicit]:calendarSeed.map(r=>r.id)).filter(Boolean))){
       const r=await tracked('calendarLinks',key),e=r?.payload;if(!e)continue;
       const parsed=parseCalendar(e.googleLatestTitle||e.title);
       const linked=key===explicit||e.linkedReceiptId===id||e.documentId===id||p.googleEventId&&e.googleEventId===p.googleEventId||anchorId&&[e.saleId,e.receiptSaleId,e.cashSaleId].includes(anchorId);
@@ -152,10 +154,11 @@ function createService(client,{now=()=>new Date()}={}){
       if(!linked&&!details)continue;
       if(!A.live(e)||e.googleStatus==='cancelled')conflict();
       const knownAmount=Number(e.officialAmount??e.amount??parsed.amount);
-      if((details||knownAmount>0)&&knownAmount!==amount)conflict();
-      if(e.linkedReceiptId&&e.linkedReceiptId!==id)conflict();
+      if(!e.manualSaleConfirmed&&(details||knownAmount>0)&&knownAmount!==amount&&!(anchor&&s.saleId===anchorId&&anchor.payload.amount===knownAmount&&knownAmount>=amount))conflict();
+      if(e.linkedReceiptId&&![id,parent?.payload.documentId].includes(e.linkedReceiptId)&&!s.saleId)throw Error('この日程には既に領収書があります。要確認');
       calendars.push({id:key,...r});
     }
+    if(saving&&explicit&&!calendars.length)conflict();
     if(calendars.length>1)conflict();
     let calendar=calendars[0],link=calendar?.payload||{};
     if(p.googleEventId&&link.googleEventId&&p.googleEventId!==link.googleEventId)conflict();
@@ -167,30 +170,39 @@ function createService(client,{now=()=>new Date()}={}){
     for(const key of saleIds){const r=await tracked(anchorCollection(key),key);if(!r)continue;if(!A.live(r.payload))conflict();candidates.push({id:key,...r});}
     if(candidates.length>1)conflict();
     const sale=candidates[0],a=sale?.payload,saleId=sale?.id||'sale_'+id;
+    const invoiceReceipt=a&&(s.saleId===saleId||a.documentId&&![id,parent?.payload.documentId].includes(a.documentId))&&!['receipt','receipt-cash','calendar-cash','calendar-manual'].includes(a.sourceType);
+    if(calendar&&!invoiceReceipt&&(link.workDate||link.date)&&(link.workDate||link.date)!==date)conflict();
     const unnamedCash=a?.sourceType==='calendar-cash'&&!a.documentId&&a.customer==='現金客'&&calendar?.id===a.calendarEventId;
-    if(a&&(a.amount!==amount||!unnamedCash&&norm(a.customer)!==norm(s.customerName)))conflict();
-    if(a&&!a.documentId&&(!['calendar-cash','calendar-manual'].includes(a.sourceType)||(a.salesDate||a.saleDate)!==date))conflict();
+    if(a&&((a.amount!==amount&&!(invoiceReceipt&&a.amount>=amount))||!unnamedCash&&!parent&&!(saving&&invoiceReceipt)&&norm(a.customer)!==norm(s.customerName)))conflict();
+    if(a&&!a.documentId&&!invoiceReceipt&&(!['calendar-cash','calendar-manual'].includes(a.sourceType)||(a.salesDate||a.saleDate)!==date))conflict();
     // An existing invoice remains the accounting anchor; never replace its document identity.
-    if(a?.documentId&&a.documentId!==id){const d=await tracked('documents',a.documentId);if(!d||!A.live(d.payload)||!['invoice','onoda'].includes(d.payload.docType)||d.payload.amount!==amount)conflict();}
+    if(a?.documentId&&![id,parent?.payload.documentId].includes(a.documentId)){const d=await tracked('documents',a.documentId);if(!d||!A.live(d.payload)||!['invoice','onoda'].includes(d.payload.docType)||d.payload.amount!==a.amount)conflict();}
     if(link.linkedInvoiceId&&link.linkedInvoiceId!==a?.documentId)conflict();
-    if(link.documentId&&![id,a?.documentId].includes(link.documentId))conflict();
+    if(link.documentId&&!invoiceReceipt&&![id,a?.documentId,parent?.payload.documentId].includes(link.documentId))conflict();
     const payments=[];
-    for(const key of new Set([p.paymentId,'pay_'+id,...(a?.paymentIds||[]),...paymentSeed.filter(r=>r.payload.saleId===saleId||r.payload.documentId===id).map(r=>r.id)].filter(Boolean))){
+    for(const key of new Set([p.paymentId,parent?.payload.paymentId,'pay_'+id,...(a?.paymentIds||[]),...paymentSeed.filter(r=>r.payload.saleId===saleId||r.payload.documentId===id).map(r=>r.id)].filter(Boolean))){
       const r=await tracked('payments',key);if(!r)continue;
-      const v=r.payload,compatible=A.confirmed(v)||v.confirmation==='pending-bank'&&method!=='現金'&&!v.bankTxnId;
-      if(v.deletedAt||!compatible||v.saleId!==saleId||v.amount!==amount||v.paymentDate!==paymentDate||v.method!==method||v.documentId&&v.documentId!==id)conflict();payments.push({id:key,...r});
+      const v=r.payload;
+      if(invoiceReceipt&&v.documentId&&![id,parent?.payload.documentId].includes(v.documentId))continue;
+      const compatible=A.confirmed(v)||v.confirmation==='pending-bank'&&method!=='現金'&&!v.bankTxnId;
+      if(v.deletedAt||!compatible||v.saleId!==saleId||v.amount!==amount||v.paymentDate!==paymentDate||v.method!==method||v.documentId&&![id,parent?.payload.documentId].includes(v.documentId))conflict();payments.push({id:key,...r});
     }
     if(payments.length>1)conflict();
-    const payment=payments[0],paymentId=payment?.id||'pay_'+id;
+    const payment=payments[0],paymentId=payment?.id||parent?.payload.paymentId||'pay_'+id;
+    if(invoiceReceipt){const others=await relatedPayments(saleId,paymentId);if(others.filter(A.confirmed).reduce((n,v)=>n+v.amount,0)+amount>a.amount)conflict();}
+    if(parent&&payment&&A.confirmed(payment.payload)&&(payment.payload.amount!==amount||payment.payload.paymentDate!==paymentDate||payment.payload.method!==method))conflict();
     const googleEventId=link.googleEventId||p.googleEventId||s.googleEventId||'r'+(await client.digest('receipt_'+id)).slice(0,48);
     const calendarEventId=calendar?.id||explicit||await eventId({googleEventId});
     if(!calendar){const existing=await tracked('calendarLinks',calendarEventId);if(existing)conflict();}
     const end=new Date(date+'T00:00:00Z');end.setUTCDate(end.getUTCDate()+1);
     const calendarId=link.googleCalendarId||link.calendarId||p.calendarId||s.calendarId||'';
-    const nextLink={...link,id:calendarEventId,documentId:id,linkedReceiptId:id,receiptSaleId:saleId,saleId,customerName:s.customerName,content:s.tadashi||summary(s),officialAmount:amount,projectCategory:projectCategory(s),paymentMethod:method,status:'領収済',documentStatus:'active',date,workDate:date,start:date,end:end.toISOString().slice(0,10),source:'google',googleEventId,calendarId,googleCalendarId:calendarId,title:[s.customerName,s.tadashi||summary(s),'¥'+amount.toLocaleString('ja-JP'),'領収済'].join('｜')};
-    const document={...p,saleId,paymentId,calendarEventId,googleEventId,calendarId,paymentDate};
+    const nextLink={...link,id:calendarEventId,documentId:id,linkedReceiptId:id,receiptSaleId:saleId,saleId,customerName:s.customerName,content:s.tadashi||summary(s),officialAmount:invoiceReceipt?a.amount:amount,projectCategory:projectCategory(s),paymentMethod:method,status:'領収済',documentStatus:'active',date,workDate:date,start:date,end:end.toISOString().slice(0,10),source:'google',googleEventId,calendarId,googleCalendarId:calendarId,title:receiptTitle(s,invoiceReceipt?a.amount:amount)};
+    if(invoiceReceipt&&calendar)for(const key of ['date','workDate','start','end']){if(link[key]!==undefined)nextLink[key]=link[key];else delete nextLink[key];}
+    if(saving&&!Object.hasOwn(link,'saleId'))delete nextLink.saleId;
+    if(saving)Object.assign(s,{calendarEventId});
+    const document={...p,snapshot:saving?s:p.snapshot,saleId,paymentId,calendarEventId,googleEventId,calendarId,paymentDate};
     const sourceType=method==='現金'?'receipt-cash':'receipt';
-    const nextSale=a?.documentId&&a.documentId!==id?{...a,calendarEventId,googleEventId,calendarId}:{...(a||{}),id:saleId,sourceType,sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:date,saleDate:date,invoiceDate:'',paymentMethod:method,calendarEventId,googleEventId,calendarId};
+    const nextSale=invoiceReceipt?(saving?a:{...a,calendarEventId,googleEventId,calendarId}):{...(a||{}),id:saleId,sourceType,sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:date,saleDate:date,invoiceDate:'',paymentMethod:method,calendarEventId,googleEventId,calendarId};
     const nextPayment={...(payment?.payload||{}),id:paymentId,paymentId,saleId,documentId:id,sourceId:id,sourceType,amount,paymentDate,date:paymentDate,method,confirmation:method==='現金'?'cash-received':'bank-confirmed',platformName:s.platformName||payment?.payload.platformName||'',memo:payment?.payload.memo||'領収書から登録'};
     // A complete graph is a true no-op, including Google flags after successful sync.
     const same=(x,y)=>core.canonical(x??null)===core.canonical(y??null);
@@ -199,25 +211,15 @@ function createService(client,{now=()=>new Date()}={}){
     if(same(p,document)&&same(a,nextSale)&&same(payment?.payload,nextPayment)&&same(link,nextLink)&&cashComplete)return {documentId:id,skipped:true};
     nextLink.googleCreatePending=link.googleEventId?!!link.googleCreatePending:!(p.googleEventId||s.googleEventId);
     nextLink.googlePatchPending=true;
-    await write('documents',id,document);
+    if(parent)await write('documents',parent.payload.documentId,{...parent.payload,status:'revised',reason:cmd.reason,revisedToDocumentId:id},'status change',cmd.expectedParentRevision);
+    const revision=await write('documents',id,document,undefined,saving?cmd.expectedRevision:undefined);
     await write(anchorCollection(saleId),saleId,nextSale);
     await write('payments',paymentId,nextPayment,'payment');
     await write('calendarLinks',calendarEventId,nextLink);
-    return {documentId:id,saleId,paymentId,repaired:true};
+    return saving?{documentId:id,saleId,paymentId,revision,snapshot:s,invoiceNo:s.invoiceNo,numberingMinute:s.numberingMinute,numberingSequence:s.numberingSequence}:{documentId:id,saleId,paymentId,repaired:true};
   }
-  if(cmd.type==='backfillReceiptCash'){
-    const row=await read('documents',cmd.documentId);if(!row)return {skipped:true};const p=row.payload,s=core.normalizeDates(p.snapshot||{});observed.push(['documents',cmd.documentId,row.revision]);
-    if(!A.live(p)||p.docType!=='receipt'||s.saleId||p.saleId||s.paymentMethod!=='現金'||!(total(s)>0)||!s.customerName?.trim()||!s.invoiceDate)return {skipped:true};
-    let saleId='sale_'+cmd.documentId,paymentId='pay_'+cmd.documentId;const amount=total(s),calendarId=p.calendarEventId||s.calendarEventId;
-    const calendar=calendarId?await read('calendarLinks',calendarId):null;let inherited=null;
-    if(calendar?.payload.cashSaleId){const a=await read('sales',calendar.payload.cashSaleId),pay=await read('payments','pay_'+calendar.payload.cashSaleId);if(a?.payload.sourceType==='calendar-cash'&&!a.payload.documentId&&!a.payload.deletedAt&&pay?.payload.sourceType==='calendar-cash'&&!pay.payload.documentId&&!pay.payload.deletedAt&&!pay.payload.bankTxnId&&pay.payload.amount===amount&&pay.payload.paymentDate===s.invoiceDate){saleId=a.payload.id;paymentId=pay.payload.paymentId;inherited={sale:a.payload,payment:pay.payload};}else return {skipped:true,reviewRequired:true};}
-    const sale=await read('sales',saleId),payment=await read('payments',paymentId);
-    if((sale||payment)&&!inherited)throw Error('既存の売上・入金があります。領収書の関連付けを管理者が確認してください。');
-    await write('documents',cmd.documentId,{...p,saleId,paymentId},'update');
-    await write('sales',saleId,{...(inherited?.sale||{}),id:saleId,sourceType:'receipt-cash',sourceId:cmd.documentId,documentId:cmd.documentId,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:s.invoiceDate,saleDate:s.invoiceDate,invoiceDate:'',paymentMethod:'現金'});
-    await write('payments',paymentId,{...(inherited?.payment||{}),id:paymentId,paymentId,sourceType:'receipt-cash',sourceId:cmd.documentId,documentId:cmd.documentId,saleId,amount,paymentDate:s.invoiceDate,date:s.invoiceDate,method:'現金',confirmation:'cash-received',memo:'領収書から登録'},'payment');
-    if(calendar)await write('calendarLinks',calendarId,{...calendar.payload,documentId:cmd.documentId,linkedReceiptId:cmd.documentId,receiptSaleId:saleId,customerName:s.customerName,officialAmount:amount,status:'領収済',googlePatchPending:true});
-    return {documentId:cmd.documentId,saleId,paymentId,repaired:true};
+  if(receiptRepair){
+    const row=await read('documents',cmd.documentId);return row?reconcileReceipt(cmd.documentId,row.payload):{skipped:true};
   }
   if(cmd.type==='reconcileReceiptCalendarCash'){
     if(who.role!=='admin')return {skipped:true};
@@ -231,7 +233,7 @@ function createService(client,{now=()=>new Date()}={}){
     const at=now().toISOString(),reason='同じ日程に関連する正式現金領収書へ統合（自動取込の重複）';
     await write('sales',oldId,{...a,documentStatus:'duplicate',deletedAt:at,deleteReason:reason,duplicateOfSaleId:p.saleId},'status change');
     await write('payments','pay_'+oldId,{...b,deletedAt:at,deleteReason:reason,duplicateOfPaymentId:v.paymentId},'adjustment');
-    await write('calendarLinks',calendarId,{...link.payload,cashSaleId:'',receiptSaleId:p.saleId,documentId:p.documentId,linkedReceiptId:p.documentId,customerName:p.customerName,officialAmount:amount,status:'領収済',title:[p.customerName,projectCategory(s),'¥'+amount.toLocaleString('ja-JP'),'領収済'].join('｜'),googlePatchPending:true},'status change');
+    await write('calendarLinks',calendarId,{...link.payload,cashSaleId:'',receiptSaleId:p.saleId,documentId:p.documentId,linkedReceiptId:p.documentId,customerName:p.customerName,officialAmount:amount,status:'領収済',title:receiptTitle({...s,customerName:p.customerName},amount),googlePatchPending:true},'status change');
     return {documentId:p.documentId,reconciled:true};
   }
   if(cmd.type==='archiveDocument'){
@@ -319,86 +321,29 @@ function createService(client,{now=()=>new Date()}={}){
     if((old?.revision||0)!==cmd.expectedRevision){const e=Error('帳票が別の端末で更新されました。保存内容を保持したまま再確認してください。');e.code='conflict';throw e;}
     if(old)throw Error('正式帳票は上書きできません。「訂正版を作成」を使用してください。');
 
-    let calendar=s.calendarEventId?await read('calendarLinks',s.calendarEventId):null;
     if(s.docType==='receipt'){
-      if(!s.calendarEventId&&s.saleId){const anchor=await read(anchorCollection(s.saleId),s.saleId);if(anchor?.payload.calendarEventId){s.calendarEventId=anchor.payload.calendarEventId;calendar=await read('calendarLinks',s.calendarEventId);}}
-      const norm=v=>String(v||'').normalize('NFKC').replace(/\s/g,'');
-      if(s.calendarEventId&&!calendar)throw Error('対象日程が見つかりません。要確認');
-      if(calendar&&(calendar.payload.deletedAt||calendar.payload.googleStatus==='cancelled'))throw Error('取消済みの日程です。要確認');
-      if(!calendar){
-        const candidates=[];
-        for(const seed of calendarSeed){const row=await read('calendarLinks',seed.id),e=row?.payload;if(!e||e.deletedAt||e.googleStatus==='cancelled')continue;
-          const parsed=parseCalendar(e.googleLatestTitle||e.title),sameGoogle=s.googleEventId&&e.googleEventId===s.googleEventId&&(!s.calendarId||s.calendarId===(e.googleCalendarId||e.calendarId));
-          const sameSale=s.saleId&&[e.saleId,e.receiptSaleId,e.cashSaleId].includes(s.saleId);
-          const sameDetails=(e.workDate||e.date)===s.invoiceDate&&norm(e.customerName||parsed.customer)===norm(s.customerName)&&norm(e.content||parsed.work)===norm(s.tadashi||summary(s));
-          if(sameSale||sameGoogle||sameDetails){if(!sameSale&&!sameGoogle&&Number(e.officialAmount??e.amount??parsed.amount)!==amount)throw Error('日程と領収書の金額が一致しません。要確認');candidates.push({...row,id:seed.id});}
-        }
-        if(candidates.length>1)throw Error('複数の日程候補があります。日程を指定してください。要確認');
-        calendar=candidates[0]||null;
-      }
-      if(calendar)s.calendarEventId=s.calendarEventId||calendar.id;
-      else{
-        const googleEventId=s.googleEventId||'r'+(await client.digest('receipt_'+id)).slice(0,48);
-        s.calendarEventId=await eventId({googleEventId});
-        const end=new Date(A.date(s.invoiceDate)+'T00:00:00Z');end.setUTCDate(end.getUTCDate()+1);
-        calendar={id:s.calendarEventId,payload:{id:s.calendarEventId,date:s.invoiceDate,workDate:s.invoiceDate,start:s.invoiceDate,end:end.toISOString().slice(0,10),source:'google',googleEventId,calendarId:s.calendarId||'',googleCalendarId:s.calendarId||'',googleCreatePending:!s.googleEventId}};
-      }
-      if(!calendar.payload.googleEventId){
-        const e=calendar.payload,end=new Date(A.date(e.date||s.invoiceDate)+'T00:00:00Z');end.setUTCDate(end.getUTCDate()+1);
-        calendar={...calendar,payload:{...e,date:e.date||s.invoiceDate,end:/^\d{4}-\d{2}-\d{2}$/.test(e.end||'')?e.end:end.toISOString().slice(0,10),googleEventId:'r'+(await client.digest('receipt_'+id)).slice(0,48),googleCreatePending:true}};
-      }
+      const number=await reserveDocumentNumber(numberingMinute(now()),id);allocated=number;Object.assign(s,number);
+      const document={status:'active',reason:cmd.reason||'',revisedFromDocumentId:parent?.payload.documentId||'',documentId:id,docType:'receipt',amount,customerName:s.customerName,salesDate:s.salesDate||s.invoiceDate,workDate:'',invoiceDate:s.invoiceDate,paymentDate:s.paymentDate,snapshot:s,saleId:s.saleId||parent?.payload.saleId||'',paymentId:parent?.payload.paymentId||'',calendarEventId:s.calendarEventId||'',googleEventId:s.googleEventId||'',calendarId:s.calendarId||'',estimateId:s.estimateId||'',projectId:s.projectId||'',confirmed:true};
+      return reconcileReceipt(id,document,{saving:true,parent});
     }
+    const calendar=s.calendarEventId?await read('calendarLinks',s.calendarEventId):null;
     const link=calendar?.payload||null;
     if(['invoice','onoda'].includes(s.docType)&&link?.linkedInvoiceId&&link.linkedInvoiceId!==id&&link.linkedInvoiceId!==parent?.payload.documentId)throw Error('この予定には既に正式請求書があります。保存帳票から元の請求書を開いてください。');
     if(s.docType==='estimate'&&link?.linkedEstimateId&&link.linkedEstimateId!=='est_'+id&&link.linkedEstimateId!==(parent?(parent.payload.estimateId||'est_'+parent.payload.documentId):''))throw Error('この予定には既に見積があります。見積履歴から開いてください。');
     const saleId=link?.saleId||link?.cashSaleId||link?.receiptSaleId||parent?.payload.saleId||parent?.payload.receivableId|| (parent&&['invoice','onoda'].includes(s.docType)?'sale_'+parent.payload.documentId:'sale_'+id);
     const estimateId=parent?(parent.payload.estimateId||'est_'+parent.payload.documentId):'est_'+id;
-    let paymentId=parent?.payload.paymentId||(parent&&s.docType==='receipt'?'pay_'+parent.payload.documentId:'pay_'+id);
     if(s.docType==='estimate')s.estimateId=estimateId;
     const minute=numberingMinute(now());
     const number=await reserveDocumentNumber(minute,id);allocated=number;
     Object.assign(s,number);
-    let calendarReceiptSale=s.docType==='receipt'?(link?.receiptSaleId||link?.saleId||link?.cashSaleId||''):'';
-    if(s.docType==='receipt'){
-      const ids=new Set([s.saleId,calendarReceiptSale].filter(Boolean));
-      for(const seed of saleSeed){const a=seed.payload;if(A.live(a)&&(a.calendarEventId===s.calendarEventId||link.googleEventId&&a.googleEventId===link.googleEventId))ids.add(seed.id);}
-      if(ids.size>1)throw Error('複数の関連売上があります。要確認');
-      calendarReceiptSale=[...ids][0]||'';
-      if(!s.saleId&&link.linkedReceiptId&&link.linkedReceiptId!==parent?.payload.documentId)throw Error('この日程には既に領収書があります。要確認');
-    }
-    const independentReceipt=s.docType==='receipt'&&!s.saleId&&!calendarReceiptSale;
-    const receiptSaleId=independentReceipt?(parent?.payload.saleId||'sale_'+id):s.saleId||calendarReceiptSale;
-    let inheritedSale=null;
-    if(s.docType==='receipt'&&receiptSaleId&&!independentReceipt){
-      const anchor=await read(anchorCollection(receiptSaleId),receiptSaleId);
-      if(anchor){
-        const a=anchor.payload,ps=await relatedPayments(receiptSaleId);
-        if(parent&&a.documentId===parent.payload.documentId&&['receipt','receipt-cash'].includes(a.sourceType))inheritedSale=anchor;
-        // Explicit invoice installments keep the existing receivable; independent receipts are paid in full.
-        const installment=s.saleId&&!['calendar-cash','calendar-manual','receipt','receipt-cash'].includes(a.sourceType)&&amount<a.amount;
-        if(a.amount!==amount&&!installment)throw Error('売上と領収書の金額が一致しません。要確認');
-        if(!a.documentId&&['calendar-cash','calendar-manual'].includes(a.sourceType)){if((a.salesDate||a.saleDate)!==s.invoiceDate)throw Error('日程売上と領収書が一致しません。要確認');inheritedSale=anchor;}
-        const paid=ps.filter(A.confirmed);
-        if(installment){if(paid.filter(p=>p.documentId!==parent?.payload.documentId).reduce((n,p)=>n+p.amount,0)+amount>a.amount)throw Error('領収金額が残額を超えます。要確認');}
-        else if(paid.length){if(paid.length!==1||paid[0].amount!==amount||paid[0].paymentDate!==s.paymentDate||paid[0].method!==s.paymentMethod||paid[0].documentId&&paid[0].documentId!==parent?.payload.documentId)throw Error('確認済み入金と領収書が一致しません。要確認');paymentId=paid[0].paymentId||paid[0].id;}
-        else if(ps.length)throw Error('既存入金を確認してから領収書を関連付けてください。要確認');
-      }
-    }
-    const document={status:'active',reason:cmd.reason||'',revisedFromDocumentId:parent?.payload.documentId||'',saleId:['invoice','onoda'].includes(s.docType)?saleId:receiptSaleId||'',paymentId:s.docType==='receipt'&&receiptSaleId?paymentId:'',documentId:id,docType:s.docType,amount,customerName:s.customerName||'',salesDate:s.docType==='estimate'?'':s.salesDate||s.invoiceDate||'',workDate:s.docType==='estimate'?(s.workDate||s.salesDate||''):'',invoiceDate:s.invoiceDate||'',paymentDate:s.paymentDate||'',snapshot:s,googleEventId:link?.googleEventId||s.googleEventId||'',calendarId:link?.calendarId||s.calendarId||'',calendarEventId:s.calendarEventId||'',estimateId:s.estimateId||'',projectId:s.projectId||'',confirmed:true};
-    let estimate=null,sale=null,payment=null;
+    const document={status:'active',reason:cmd.reason||'',revisedFromDocumentId:parent?.payload.documentId||'',saleId:['invoice','onoda'].includes(s.docType)?saleId:'',paymentId:'',documentId:id,docType:s.docType,amount,customerName:s.customerName||'',salesDate:s.docType==='estimate'?'':s.salesDate||s.invoiceDate||'',workDate:s.docType==='estimate'?(s.workDate||s.salesDate||''):'',invoiceDate:s.invoiceDate||'',paymentDate:s.paymentDate||'',snapshot:s,googleEventId:link?.googleEventId||s.googleEventId||'',calendarId:link?.calendarId||s.calendarId||'',calendarEventId:s.calendarEventId||'',estimateId:s.estimateId||'',projectId:s.projectId||'',confirmed:true};
+    let estimate=null,sale=null;
     if(s.docType==='estimate')estimate=await read('estimates',estimateId);
     if(s.docType==='invoice'||s.docType==='onoda'){sale=await read(anchorCollection(saleId),saleId);if(sale&&(sale.payload.manualConfirmed||['receipt','receipt-cash'].includes(sale.payload.sourceType))){const ps=await relatedPayments(saleId);if(amount<ps.filter(A.confirmed).reduce((n,p)=>n+p.amount,0))throw Error('請求金額が確認済み入金を下回ります。入金を確認してください。');}}
-    if(independentReceipt){sale=await read('sales',receiptSaleId);payment=await read('payments',paymentId);}
-    if(s.docType==='receipt'&&receiptSaleId&&!independentReceipt){
-      sale=await read(anchorCollection(receiptSaleId),receiptSaleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
-      if(amount<=0||!s.paymentDate)throw Error('入金額と入金日を確認してください。');
-      payment=await read('payments',paymentId);if(payment?.payload.deletedAt)throw Error('取消済み入金に関連する領収書です。管理者に確認してください。');if(payment?.payload.confirmation==='bank-confirmed'&&(payment.payload.amount!==amount||payment.payload.saleId!==receiptSaleId||payment.payload.paymentDate!==s.paymentDate))throw Error('銀行確認済の入金額・対象・日付は領収書から変更できません。');
-    }
     if(parent){
-      const ps=await relatedPayments(['invoice','onoda'].includes(s.docType)?saleId:receiptSaleId||'',s.docType==='receipt'?paymentId:'');
+      const ps=await relatedPayments(saleId);
       const paid=ps.filter(A.confirmed).reduce((n,p)=>n+p.amount,0);
       if(['invoice','onoda'].includes(s.docType)&&amount<paid)throw Error('訂正金額が確認済み入金を下回ります。先に返金・取消を処理してください。');
-      if(s.docType==='receipt'&&payment&&A.confirmed(payment.payload)&&(amount!==payment.payload.amount||s.paymentDate!==payment.payload.paymentDate||s.paymentMethod!==parent.payload.snapshot.paymentMethod))throw Error('確認済み領収書の金額・入金日・方法は変更できません。先に入金を訂正してください。');
       await write('documents',parent.payload.documentId,{...parent.payload,status:'revised',reason:cmd.reason,revisedToDocumentId:id},'status change',cmd.expectedParentRevision);
     }
     const revision=await write('documents',id,document,undefined,cmd.expectedRevision);
@@ -408,21 +353,9 @@ function createService(client,{now=()=>new Date()}={}){
     }else if(s.docType==='invoice'||s.docType==='onoda'){
       refs.saleId=saleId;
       await write(anchorCollection(refs.saleId),refs.saleId,{...(sale?.payload||{}),id:refs.saleId,documentStatus:'active',sourceId:id,documentId:id,docType:s.docType,invoiceNo:s.invoiceNo||'',customer:s.customerName||'',amount,salesDate:document.salesDate,saleDate:document.salesDate,invoiceDate:document.invoiceDate,content:summary(s),paymentMethod:s.paymentMethod||'銀行振込',calendarEventId:s.calendarEventId||'',googleEventId:document.googleEventId,calendarId:document.calendarId,estimateId:s.estimateId||'',projectId:s.projectId||''});
-    }else if(s.docType==='receipt'&&receiptSaleId){
-      if(independentReceipt||inheritedSale){refs.saleId=receiptSaleId;await write('sales',receiptSaleId,{...(sale?.payload||{}),id:receiptSaleId,sourceType:s.paymentMethod==='現金'?'receipt-cash':'receipt',sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:s.tadashi||summary(s),projectCategory:projectCategory(s),amount,salesDate:s.invoiceDate,saleDate:s.invoiceDate,invoiceDate:'',paymentMethod:s.paymentMethod,calendarEventId:s.calendarEventId,googleEventId:document.googleEventId,calendarId:document.calendarId});}
-      refs.paymentId=paymentId;
-      await write('payments',refs.paymentId,{...(payment?.payload||{}),id:refs.paymentId,paymentId:refs.paymentId,sourceId:id,documentId:id,saleId:receiptSaleId,...(independentReceipt||inheritedSale?{sourceType:s.paymentMethod==='現金'?'receipt-cash':'receipt'}:{}),amount,paymentDate:s.paymentDate,date:s.paymentDate,method:s.paymentMethod||'現金',confirmation:payment?.payload.confirmation==='bank-confirmed'?'bank-confirmed':s.paymentMethod==='現金'?'cash-received':'bank-confirmed',platformName:s.platformName||payment?.payload.platformName||'',memo:'領収書から登録'},'payment');
     }
-    if(link&&s.docType!=='estimate'&&(s.docType!=='receipt'||receiptSaleId)){
-      const status=s.docType==='estimate'?'見積済':s.docType==='receipt'?'領収済':'請求済';
-      const linkedAmount=s.docType==='receipt'&&sale?sale.payload.amount:amount;
-      const customer=document.customerName;
-      const next={...link,documentStatus:'active',documentId:id,customerName:customer,officialAmount:linkedAmount,status,googlePatchPending:true};
-      if(refs.estimateId){next.estimateId=refs.estimateId;next.linkedEstimateId=refs.estimateId;}
-      if(refs.saleId&&['invoice','onoda'].includes(s.docType))next.linkedInvoiceId=id;
-      if(s.docType==='receipt'){next.receiptSaleId=receiptSaleId;next.content=s.tadashi||summary(s);next.paymentMethod=s.paymentMethod;}
-      if(refs.paymentId)next.linkedReceiptId=id;
-      next.title=[customer,s.docType==='receipt'?s.tadashi||summary(s):summary(s),s.docType==='receipt'?'¥'+linkedAmount.toLocaleString('ja-JP'):linkedAmount,status].filter(x=>x!==''&&x!==null).join('｜');
+    if(link&&s.docType!=='estimate'){
+      const next={...link,documentStatus:'active',documentId:id,customerName:document.customerName,officialAmount:amount,status:'請求済',googlePatchPending:true,linkedInvoiceId:id,title:[document.customerName,summary(s),amount,'請求済'].filter(x=>x!==''&&x!==null).join('｜')};
       await write('calendarLinks',s.calendarEventId,next);
     }
     return {documentId:id,revision,snapshot:s,invoiceNo:s.invoiceNo,numberingMinute:s.numberingMinute,numberingSequence:s.numberingSequence,...refs};
@@ -496,7 +429,7 @@ function createService(client,{now=()=>new Date()}={}){
  });}catch(error){
   // Some Firestore rule checks reject an occupied reservation before the SDK retries it.
   // Retry only when another formal save actually consumed the proposed number.
-  if(['acceptEstimate','backfillReceiptCash','backfillReceiptAccounting'].includes(cmd.type)&&numberRetries<4&&String(error.code||'').includes('permission-denied')){for(const [collection,id,revision] of observed){const latest=(await client.listRecords(collection)).find(r=>r.id===id);if((latest?.revision||0)!==revision)return execute(cmd,numberRetries+1);}}
+  if((cmd.type==='acceptEstimate'||receiptRepair)&&numberRetries<4&&String(error.code||'').includes('permission-denied')){for(const [collection,id,revision] of observed){const latest=(await client.listRecords(collection)).find(r=>r.id===id);if((latest?.revision||0)!==revision)return execute(cmd,numberRetries+1);}}
   if(cmd.type==='saveDocument'&&allocated&&numberRetries<4&&String(error.code||'').includes('permission-denied')){
    if(await client.isDocumentNumberReserved(allocated.invoiceNo))return execute(cmd,numberRetries+1);
   }

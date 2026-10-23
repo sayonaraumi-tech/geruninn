@@ -44,8 +44,18 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
    }
   })().finally(()=>{running=null;if(!stopped)status();});status();return running;
  }
+ async function retryBlocked(){
+  if(stopped)return;
+  if(running)await running;
+  if(stopped)return;
+  if(queue[0]?.blocked){
+   const next=queue.map((item,i)=>i?item:{...item,blocked:false,error:null});
+   storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();
+  }
+  return flush();
+ }
  function archiveBlocked(){if(!queue[0]?.blocked)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[0]));const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();return key;}
- return {start,enqueue,flush,reload,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
+ return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
 }
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');

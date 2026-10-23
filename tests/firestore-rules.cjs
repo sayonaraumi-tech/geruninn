@@ -364,10 +364,10 @@ test('production gate: only isolated system-error documents can be deleted, clou
 });
 
 test('production gate: previously saved independent cash receipt is backfilled without renumbering or snapshot change',async()=>{
- const c=await clientFor('staff'),s=createService(c);try{
+ const c=await clientFor('admin'),s=createService(c);try{
  const old={...snapshot('old-cash','receipt'),customerName:'下村 健朗',receiptTotal:110000,invoiceDate:'2026-10-05',invoiceNo:'20261005-2236-01',saleId:''};
  await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents','old-cash'),{schemaVersion:2,companyId:'tsukinowa',revision:1,createdBy:'uid-staff',createdAt:serverTimestamp(),updatedBy:'uid-staff',updatedAt:serverTimestamp(),lastOperationId:'old',lastAuditId:'old',payload:{documentId:'old-cash',docType:'receipt',status:'active',confirmed:true,customerName:old.customerName,invoiceDate:old.invoiceDate,amount:110000,saleId:'',paymentId:'',snapshot:old}}));
- await exec(s,{type:'backfillReceiptCash',documentId:'old-cash'});await exec(s,{type:'backfillReceiptCash',documentId:'old-cash'});const doc=(await c.listRecords('documents'))[0].payload;assert.deepEqual(doc.snapshot,old);assert.equal(doc.snapshot.invoiceNo,'20261005-2236-01');assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
+ await exec(s,{type:'repairReceipt',documentId:'old-cash'});await exec(s,{type:'repairReceipt',documentId:'old-cash'});const doc=(await c.listRecords('documents'))[0].payload;assert.deepEqual(doc.snapshot,old);assert.equal(doc.snapshot.invoiceNo,'20261005-2236-01');assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
  }finally{c.dispose();}
 });
 test('cash calendar receipt reuses existing anchors and formal authority for staff, including legacy backfill',async()=>{
@@ -380,7 +380,7 @@ test('cash calendar receipt reuses existing anchors and formal authority for sta
  const second=await exec(s,{type:'calendar',event:{...event,googleEventId:'legacy-anchor'}});
  const old={...receipt,documentId:'legacy-anchor-receipt',calendarEventId:second.id,invoiceNo:'20261005-2236-01'};
  await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents',old.documentId),{schemaVersion:2,companyId:company,revision:1,createdBy:'uid-staff',createdAt:serverTimestamp(),updatedBy:'uid-staff',updatedAt:serverTimestamp(),lastOperationId:'old',lastAuditId:'old',payload:{documentId:old.documentId,docType:'receipt',status:'active',confirmed:true,customerName:old.customerName,invoiceDate:old.invoiceDate,calendarEventId:second.id,amount:110000,saleId:'',snapshot:old}}));
- await exec(s,{type:'backfillReceiptCash',documentId:old.documentId});assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,2);assert.deepEqual((await c.listRecords('documents')).find(d=>d.id===old.documentId).payload.snapshot,old);
+ const admin=await clientFor('admin');try{await exec(createService(admin),{type:'repairReceipt',documentId:old.documentId});}finally{admin.dispose();}assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,2);assert.deepEqual((await c.listRecords('documents')).find(d=>d.id===old.documentId).payload.snapshot,old);
  }finally{c.dispose();}
 });
 test('explicit calendar duplicate reconciliation preserves originals and audit, archives only exact imported cash duplicate',async()=>{
@@ -451,8 +451,8 @@ test('legacy repair under real rules, concurrent logins, immutable snapshot and 
  for(const method of ['現金','銀行振込','プラットフォーム経由','その他']){
   const id='legacy-'+method,s={documentId:id,docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',invoiceNo:'20261023-1200-'+method,receiptTotal:1000,paymentMethod:method,tadashi:'工事代 '+method};
   await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents',id),{schemaVersion:2,companyId:company,createdBy:'legacy',createdAt:new Date(),updatedAt:new Date(),revision:1,payload:{documentId:id,docType:'receipt',status:'active',confirmed:true,amount:1000,customerName:s.customerName,invoiceDate:s.invoiceDate,snapshot:s}}));
-  await assert.rejects(exec(createService(staff),{type:'backfillReceiptAccounting',documentId:id}),/管理者/);
-  const cmd={type:'backfillReceiptAccounting',documentId:id};
+  await assert.rejects(exec(createService(staff),{type:'repairReceipt',documentId:id}),/管理者/);
+  const cmd={type:'repairReceipt',documentId:id};
   const same={...cmd,operationId:crypto.randomUUID()};
   await Promise.all([a.execute(same),createService(admin).execute(same),exec(createService(admin),cmd)]);
   const d=(await getDoc(ref(db('admin'),'documents',id))).data();assert.deepEqual(d.payload.snapshot,s);
