@@ -90,12 +90,24 @@ service cloud.firestore {
   }
   function receiptCashSale(c,id,p) {
    let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId));
-   return p.get('sourceType','')=='receipt-cash' && (id=='sale_'+p.documentId || exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && resource.data.payload.get('sourceType','')=='calendar-cash' && resource.data.payload.get('documentId','')=='' && id=='calendar_cash_'+resource.data.payload.calendarEventId && d.data.payload.calendarEventId==resource.data.payload.calendarEventId) && p.sourceId==p.documentId
+   return p.get('sourceType','') in ['receipt-cash','receipt'] && (id=='sale_'+p.documentId || exists(/databases/$(database)/documents/companies/$(c)/sales/$(id)) && resource.data.payload.get('sourceType','') in ['calendar-cash','calendar-manual'] && resource.data.payload.get('documentId','')=='' && id=='calendar_cash_'+resource.data.payload.calendarEventId && d.data.payload.calendarEventId==resource.data.payload.calendarEventId && p.amount==resource.data.payload.amount && p.salesDate==resource.data.payload.salesDate) && p.sourceId==p.documentId
     && d.data.lastOperationId==request.resource.data.lastOperationId && d.data.payload.docType=='receipt'
-    && d.data.payload.snapshot.get('saleId','') in ['',id] && d.data.payload.snapshot.paymentMethod=='現金'
+    && d.data.payload.snapshot.get('saleId','') in ['',id] && d.data.payload.snapshot.paymentMethod==p.paymentMethod
     && d.data.payload.saleId==id && d.data.payload.amount==p.amount && p.amount>0
     && d.data.payload.customerName==p.customer && p.customer.size()>0
     && d.data.payload.invoiceDate==p.salesDate && p.saleDate==p.salesDate && p.invoiceDate=='';
+  }
+  function formalReceiptPayment(c,id,p) {
+   let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId));
+   let old=before(c,'payments',id);
+   return d.data.lastOperationId==request.resource.data.lastOperationId
+    && d.data.payload.docType=='receipt' && active(d.data.payload)
+    && d.data.payload.saleId==p.saleId && d.data.payload.paymentId==id && p.paymentId==id
+    && d.data.payload.amount==p.amount && p.amount>0
+    && d.data.payload.paymentDate==p.paymentDate && p.date==p.paymentDate
+    && d.data.payload.snapshot.paymentMethod==p.method
+    && ((p.method=='現金' && p.confirmation=='cash-received') || (p.method in ['銀行振込','プラットフォーム経由','その他','オンライン決済'] && p.confirmation=='bank-confirmed'))
+    && (old==null || (old.get('documentId','')=='' && old.get('deletedAt',null)==null && old.saleId==p.saleId && old.amount==p.amount && old.paymentDate==p.paymentDate && old.method==p.method && old.confirmation==p.confirmation && old.get('bankTxnId','')==p.get('bankTxnId','')));
   }
   function receiptCashPayment(c,id,p) {
    let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId));
@@ -131,7 +143,7 @@ service cloud.firestore {
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.customerName==p.customer
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.salesDate==p.salesDate
       && getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(p.documentId)).data.payload.invoiceDate==p.invoiceDate)))
-    || (n=='payments' && (calendarCashPayment(c,id,p)||receiptCashPayment(c,id,p)))
+    || (n=='payments' && (calendarCashPayment(c,id,p)||receiptCashPayment(c,id,p)||formalReceiptPayment(c,id,p)))
     || (n=='payments' && p.paymentId==id && p.amount>0 && p.confirmation in ['cash-received','pending-bank']
       && (existsAfter(/databases/$(database)/documents/companies/$(c)/sales/$(p.saleId)) || existsAfter(/databases/$(database)/documents/companies/$(c)/receivables/$(p.saleId)))
       && !exists(/databases/$(database)/documents/companies/$(c)/payments/$(id))));
