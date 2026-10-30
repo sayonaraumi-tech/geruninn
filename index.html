@@ -1449,7 +1449,7 @@ body{padding-top:72px}
         <div class="totals-row"><span class="lbl">小計</span><span class="val" id="dSubtotal">35,720</span></div>
         <div class="totals-row non-tax-row hidden" id="dNonTaxRow"><span class="lbl">非課税</span><span class="val" id="dNonTax">0 円</span></div>
         <div class="totals-row"><span class="lbl">消費税【10%】</span><span class="val" id="dTax">3,572</span></div>
-        <div class="totals-row" id="dCurrentAmountRow" hidden style="display:none"><span class="lbl">今回工事請求額</span><span class="val" id="dCurrentAmount"></span></div>
+        <div class="totals-row" id="dCurrentAmountRow" hidden style="display:none"><span class="lbl">今回請求額</span><span class="val" id="dCurrentAmount"></span></div>
         <div class="totals-row" id="dCarryoverRow" hidden style="display:none"><span class="lbl" id="dCarryoverLabel"></span><span class="val" id="dCarryoverAmount"></span></div>
         <div class="totals-row grand"><span class="lbl" id="dGrandLabel">合計</span><span class="val" id="dGrandTotal">39,292</span></div>
         <div class="totals-row payment-row hidden" id="paymentDisplayRow"><span class="lbl">お支払方法</span><span class="val" id="dPayment">銀行振込</span></div>
@@ -2160,7 +2160,7 @@ function recalc() {
   for (const id of ['dCurrentAmountRow','dCarryoverRow']) {
     const row = document.getElementById(id); row.hidden = !showCarryover; row.style.display = showCarryover ? 'flex' : 'none';
   }
-  document.getElementById('dGrandLabel').textContent = showCarryover ? '今回ご請求総額' : '合計';
+  document.getElementById('dGrandLabel').textContent = '合計';
   if (showCarryover) {
     document.getElementById('dCurrentAmount').textContent = fmtNum(total) + ' 円';
     document.getElementById('dCarryoverLabel').textContent = amounts.carryoverLabel;

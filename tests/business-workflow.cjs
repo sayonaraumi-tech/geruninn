@@ -176,7 +176,7 @@ test('Onoda carryover is snapshot-only: no tax/revenue/receivable duplication, p
  const h=await harness(),snapshot={documentId:'onoda-carryover',docType:'onoda',customerName:'dynast合同会社',invoiceDate:'2026-10-31',salesDate:'2026-10-31',items:[{content:'施工',qty:10,price:1000},{content:'高速代',qty:1,price:2000,taxable:false}],carryoverMonth:'8月分',carryoverAmount:9000};
  const original=structuredClone(snapshot.items),base={...snapshot,carryoverAmount:0};
  assert.equal(B.total(base),13000);assert.equal(B.total(snapshot),13000);
- assert.deepEqual(B.onodaTotals(snapshot),{taxableSubtotal:10000,nonTaxSubtotal:2000,subtotal:12000,tax:1000,currentAmount:13000,carryoverAmount:9000,carryoverLabel:'8月分未入金残高',paymentTotal:22000});
+ assert.deepEqual(B.onodaTotals(snapshot),{taxableSubtotal:10000,nonTaxSubtotal:2000,subtotal:12000,tax:1000,currentAmount:13000,carryoverAmount:9000,carryoverLabel:'8月分繰越額',paymentTotal:22000});
  assert.equal(B.onodaTotals({...base,carryoverAmount:undefined}).carryoverAmount,0);
  for(const docType of ['invoice','estimate','receipt'])assert.equal(B.total({...snapshot,docType}),B.total({...base,docType}));
  await h.execute({type:'saveDocument',expectedRevision:0,snapshot});
@@ -187,4 +187,15 @@ test('Onoda carryover is snapshot-only: no tax/revenue/receivable duplication, p
  assert.equal(h.list('payments').length,count);
  await h.execute({type:'payment',paymentId:'current-only',saleId:sale.id,amount:13000,paymentDate:'2026-11-01',method:'銀行振込',manualConfirmed:true});
  assert.equal(h.list('payments')[0].payload.amount,13000);assert.equal(h.list('sales')[0].payload.amount,13000);
+});
+
+
+test('Onoda formal carryover labels preserve all financial totals',()=>{
+ const base={docType:'onoda',items:[{qty:1,price:767000},{qty:1,price:710,taxable:false}]};
+ for(const [month,label] of [['7','7月分繰越額'],['7月','7月分繰越額'],['7月分','7月分繰越額'],['','前回繰越額']]){
+  const totals=B.onodaTotals({...base,carryoverMonth:month,carryoverAmount:9000});
+  assert.equal(totals.carryoverLabel,label);assert.equal(totals.currentAmount,844410);assert.equal(totals.carryoverAmount,9000);assert.equal(totals.paymentTotal,853410);assert.equal(totals.tax,76700);
+  const without=B.onodaTotals(base);for(const key of ['taxableSubtotal','nonTaxSubtotal','subtotal','tax','currentAmount'])assert.equal(totals[key],without[key]);
+ }
+ for(const amount of [0,'',undefined])assert.equal(B.onodaTotals({...base,carryoverAmount:amount}).carryoverAmount,0);
 });
