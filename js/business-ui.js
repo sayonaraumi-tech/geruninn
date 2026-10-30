@@ -142,6 +142,9 @@ root.convertEstimateToInvoice=function(){if(!enabled)return original.convertEsti
 
 const paymentFlights=new Map();
 async function registerPayment(value){
+ const sale=bizState.sales.find(s=>s.id===value.saleId);
+ const snapshot=history.find(h=>h.docType==='onoda'&&(h.saleId===value.saleId||h.documentId===sale?.documentId));
+ if(snapshot&&TsukinowaBusiness.onodaTotals(snapshot).carryoverAmount&&value.amount>bizOutstanding(sale||{id:value.saleId,amount:0}))throw Error('前月未入金分を含む合算入金は、本月分と過去分を元の売上・未収へ分けて登録してください。自動分配は行いません。');
  if(paymentFlights.has(value.saleId))return paymentFlights.get(value.saleId);
  const task=(async()=>{
   if(!enabled){const sale=bizState.sales.find(s=>s.id===value.saleId);if(!sale||bizOutstanding(sale)<=0)throw Error('有効な未入金の対象売上を選択してください。');bizState.payments.push({...value,id:'pay_'+uuid(),date:value.paymentDate,confirmation:value.method==='現金'?'cash-received':'bank-confirmed',createdAt:new Date().toISOString()});bizAudit('入金登録',`${sale.customer} ${value.amount}円`);bizPersist();bizRefreshAll();return true;}

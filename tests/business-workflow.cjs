@@ -171,3 +171,20 @@ test('manual confirmed bank payment is partial/final, concurrent/repeated idempo
 test('Onoda filenames always use the target month end including leap February',()=>{for(const [date,expected] of [['2026-08-01','26／8／31'],['2026-09-12','26／9／30'],['2026-10-06','26／10／31'],['2026-02-01','26／2／28'],['2024-02-01','24／2／29']])assert.equal(B.documentFilename({docType:'onoda',invoiceDate:date}),expected+' dynast合同会社様'+Number(date.slice(5,7))+'月分クロス張替請求書.pdf');});
 
 test('lost payment response replays the persisted operation and standard reload once',async()=>{const h=await harness();await h.execute({type:'saveDocument',expectedRevision:0,snapshot:{documentId:'retry-network',docType:'invoice',invoiceDate:'2026-10-08',customerName:'顧客',items:[{content:'施工',qty:1,price:1000}]}});const store=new Map();let reloads=0;const sync=require('../js/business-sync').createSync({client:h.client,storage:{getItem:k=>store.get(k)||null,setItem:(k,v)=>store.set(k,v)},onData:()=>reloads++});const run=sync.service.execute;let lose=true;sync.service.execute=async cmd=>{const result=await run(cmd);if(lose){lose=false;const e=Error('response lost');e.code='unavailable';throw e;}return result;};const command={type:'payment',operationId:'network-retry',paymentId:'pay-network',manualConfirmed:true,saleId:'sale_retry-network',amount:500,paymentDate:'2026-10-08',method:'銀行振込',memo:''};sync.enqueue(command);await sync.flush();assert.equal(h.list('payments').length,1);assert.equal(sync.getQueue().length,1);await sync.flush();assert.equal(h.list('payments').length,1);assert.equal(sync.getQueue().length,0);assert.equal(reloads,1);assert.equal(sync.getRows().payments.length,1);sync.stop();});
+
+test('Onoda carryover is snapshot-only: no tax/revenue/receivable duplication, payments allocated manually',async()=>{
+ const h=await harness(),snapshot={documentId:'onoda-carryover',docType:'onoda',customerName:'dynast合同会社',invoiceDate:'2026-10-31',salesDate:'2026-10-31',items:[{content:'施工',qty:10,price:1000},{content:'高速代',qty:1,price:2000,taxable:false}],carryoverMonth:'8月分',carryoverAmount:9000};
+ const original=structuredClone(snapshot.items),base={...snapshot,carryoverAmount:0};
+ assert.equal(B.total(base),13000);assert.equal(B.total(snapshot),13000);
+ assert.deepEqual(B.onodaTotals(snapshot),{taxableSubtotal:10000,nonTaxSubtotal:2000,subtotal:12000,tax:1000,currentAmount:13000,carryoverAmount:9000,carryoverLabel:'8月分未入金残高',paymentTotal:22000});
+ assert.equal(B.onodaTotals({...base,carryoverAmount:undefined}).carryoverAmount,0);
+ for(const docType of ['invoice','estimate','receipt'])assert.equal(B.total({...snapshot,docType}),B.total({...base,docType}));
+ await h.execute({type:'saveDocument',expectedRevision:0,snapshot});
+ const doc=h.list('documents')[0].payload,sale=h.list('sales')[0].payload;
+ assert.equal(doc.amount,13000);assert.equal(sale.amount,13000);assert.equal(h.list('sales').length,1);assert.equal(doc.snapshot.carryoverAmount,9000);assert.equal(doc.snapshot.carryoverMonth,'8月分');assert.deepEqual(doc.snapshot.items,original);
+ const count=h.list('payments').length;
+ await assert.rejects(h.execute({type:'payment',paymentId:'combined',saleId:sale.id,amount:22000,paymentDate:'2026-11-01',method:'銀行振込',manualConfirmed:true}),/分けて登録/);
+ assert.equal(h.list('payments').length,count);
+ await h.execute({type:'payment',paymentId:'current-only',saleId:sale.id,amount:13000,paymentDate:'2026-11-01',method:'銀行振込',manualConfirmed:true});
+ assert.equal(h.list('payments')[0].payload.amount,13000);assert.equal(h.list('sales')[0].payload.amount,13000);
+});

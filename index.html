@@ -1174,7 +1174,7 @@ body{padding-top:72px}
 <div id="pageSales" class="biz-page app-page">
  <div class="biz-title"><div><h1>売上・入金</h1><div class="biz-muted">請求書を正式保存すると自動で売上に入ります。銀行・現金の入金日は別管理です。</div></div><div class="biz-actions"><button class="biz-btn" onclick="openManualSale()">手動売上</button></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>売上台帳</h2><div class="biz-actions"><input type="month" id="salesMonth" onchange="renderSales()"></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>売上日</th><th>取引先</th><th>内容</th><th class="biz-money">請求額</th><th>請求日</th><th class="biz-money">入金済</th><th class="biz-money">未収</th><th>状態</th><th></th></tr></thead><tbody id="salesRows"></tbody></table></div></div>
- <div class="biz-section" id="paymentRegistrationForm"><div class="biz-section-head"><h2>入金登録</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>対象売上</label><select id="paymentSale"></select></div><div class="biz-field"><label>入金日</label><input type="date" id="paymentDate"></div><div class="biz-field"><label for="paymentType">入金経路</label><select id="paymentType" onchange="bizPaymentChannelChanged()"><option>銀行振込</option><option>現金</option><option>プラットフォーム経由</option><option>その他</option></select></div><div class="biz-field" id="paymentPlatformField" hidden><label for="paymentPlatformName">プラットフォーム名（任意）</label><input id="paymentPlatformName" placeholder="くらしのマーケット"></div><div class="biz-field"><label>入金額</label><input type="number" id="paymentAmount"></div><div class="biz-field span2"><label>備考</label><input id="paymentMemo" placeholder="一部入金・現金受領など"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" id="paymentSubmit" onclick="addPayment()">入金登録</button></div></div></div>
+ <div class="biz-section" id="paymentRegistrationForm"><div class="biz-section-head"><h2>入金登録</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>対象売上</label><select id="paymentSale" onchange="bizOnodaPaymentHint()"></select><p id="onodaPaymentHint" hidden>小野田の前月未入金残高は今回の売上に含まれません。合算で受領した場合も、本月分と過去分を元の売上・未収へ分けて登録してください。自動分配は行いません。</p></div><div class="biz-field"><label>入金日</label><input type="date" id="paymentDate"></div><div class="biz-field"><label for="paymentType">入金経路</label><select id="paymentType" onchange="bizPaymentChannelChanged()"><option>銀行振込</option><option>現金</option><option>プラットフォーム経由</option><option>その他</option></select></div><div class="biz-field" id="paymentPlatformField" hidden><label for="paymentPlatformName">プラットフォーム名（任意）</label><input id="paymentPlatformName" placeholder="くらしのマーケット"></div><div class="biz-field"><label>入金額</label><input type="number" id="paymentAmount"></div><div class="biz-field span2"><label>備考</label><input id="paymentMemo" placeholder="一部入金・現金受領など"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" id="paymentSubmit" onclick="addPayment()">入金登録</button></div></div></div>
 </div>
 
 <div id="pageExpenses" class="biz-page app-page">
@@ -1325,6 +1325,12 @@ body{padding-top:72px}
   </div>
 
   <div class="editor-card">
+    <div id="onodaCarryover" hidden>
+      <h3>未入金残高（任意）</h3>
+      <div class="form-row"><label for="carryoverMonth">対象月</label><input id="carryoverMonth" placeholder="8月分" maxlength="40" oninput="recalc()"></div>
+      <div class="form-row"><label for="carryoverAmount">金額（円）</label><input id="carryoverAmount" type="number" min="0" step="1" value="0" oninput="recalc()"></div>
+      <p>0円・未入力の場合は表示しません。以前の売上・消費税は再計上しません。入金は本月分と過去分をそれぞれ元の売上・未収へ分けて登録してください。</p>
+    </div>
     <div class="form-row" id="travelFeeRow">
       <div class="form-group full">
         <label>出張費（円）— 不需要填 0</label>
@@ -1443,7 +1449,9 @@ body{padding-top:72px}
         <div class="totals-row"><span class="lbl">小計</span><span class="val" id="dSubtotal">35,720</span></div>
         <div class="totals-row non-tax-row hidden" id="dNonTaxRow"><span class="lbl">非課税</span><span class="val" id="dNonTax">0 円</span></div>
         <div class="totals-row"><span class="lbl">消費税【10%】</span><span class="val" id="dTax">3,572</span></div>
-        <div class="totals-row grand"><span class="lbl">合計</span><span class="val" id="dGrandTotal">39,292</span></div>
+        <div class="totals-row" id="dCurrentAmountRow" hidden style="display:none"><span class="lbl">今回工事請求額</span><span class="val" id="dCurrentAmount"></span></div>
+        <div class="totals-row" id="dCarryoverRow" hidden style="display:none"><span class="lbl" id="dCarryoverLabel"></span><span class="val" id="dCarryoverAmount"></span></div>
+        <div class="totals-row grand"><span class="lbl" id="dGrandLabel">合計</span><span class="val" id="dGrandTotal">39,292</span></div>
         <div class="totals-row payment-row hidden" id="paymentDisplayRow"><span class="lbl">お支払方法</span><span class="val" id="dPayment">銀行振込</span></div>
       </div>
     </div>
@@ -1836,6 +1844,7 @@ function setDocType(type) {
   // 编辑器其他元素的显隐
   const isReceipt = (type === 'receipt');
   const isOnoda = (type === 'onoda');
+  document.getElementById('onodaCarryover').hidden = !isOnoda;
   const isEstimate = (type === 'estimate');
   const estimateConvertWrap = document.getElementById('estimateConvertWrap');
   if (estimateConvertWrap) estimateConvertWrap.style.display = isEstimate ? '' : 'none';
@@ -2093,10 +2102,11 @@ function recalc() {
               '<td class="c4">' + (amt ? fmtNum(amt) : '') + '</td></tr>';
     });
     document.getElementById('invItems').innerHTML = rows;
-    subtotal = taxableSub + nonTaxableSub;
-    nonTaxableTotal = nonTaxableSub;
-    tax = Math.round(taxableSub * 0.1);  // 只对課税部分征税
-    total = subtotal + tax;
+    const amounts = TsukinowaBusiness.onodaTotals(collectFormState());
+    subtotal = amounts.subtotal;
+    nonTaxableTotal = amounts.nonTaxSubtotal;
+    tax = amounts.tax;
+    total = amounts.currentAmount;
   } else {
     // 請求書/見積書：累加明细 + 出張費
     const travelFee = parseFloat(document.getElementById('travelFee').value) || 0;
@@ -2144,6 +2154,18 @@ function recalc() {
       nonTaxRow.classList.add('hidden');
       nonTaxRow.style.display = '';
     }
+  }
+  const amounts = docType === 'onoda' ? TsukinowaBusiness.onodaTotals(collectFormState()) : null;
+  const showCarryover = !!amounts?.carryoverAmount;
+  for (const id of ['dCurrentAmountRow','dCarryoverRow']) {
+    const row = document.getElementById(id); row.hidden = !showCarryover; row.style.display = showCarryover ? 'flex' : 'none';
+  }
+  document.getElementById('dGrandLabel').textContent = showCarryover ? '今回ご請求総額' : '合計';
+  if (showCarryover) {
+    document.getElementById('dCurrentAmount').textContent = fmtNum(total) + ' 円';
+    document.getElementById('dCarryoverLabel').textContent = amounts.carryoverLabel;
+    document.getElementById('dCarryoverAmount').textContent = fmtNum(amounts.carryoverAmount) + ' 円';
+    total = amounts.paymentTotal;
   }
   document.getElementById('dGrandTotal').textContent = fmtNum(total) + ' 円';
   document.getElementById('dTotalHero').textContent  = fmtNum(total);
@@ -2605,6 +2627,7 @@ function purgeOldOnodaDrafts() { /* 過去月の入力データも保持する�
 function collectFormState() {
   const v = id => document.getElementById(id)?.value ?? '';
   return {
+    ...(docType === 'onoda' ? {carryoverMonth: v('carryoverMonth').trim(), carryoverAmount: Number(v('carryoverAmount')) || 0} : {}),
     version: 1,
     docType,
     calendarEventId: bizCurrentCalendarId,
@@ -2651,6 +2674,8 @@ function applyFormState(state, forceType) {
     setv('tadashi', state.tadashi);
     setv('receiptTotal', state.receiptTotal);
     setv('travelFee', state.travelFee);
+    setv('carryoverMonth', targetType === 'onoda' ? (state.carryoverMonth || state.unpaidMonthLabel || '') : '');
+    setv('carryoverAmount', targetType === 'onoda' ? (state.carryoverAmount || 0) : 0);
     if (Array.isArray(state.items) && state.items.length) {
       items = JSON.parse(JSON.stringify(state.items));
     }
@@ -2675,6 +2700,8 @@ function makeBlankOnodaMonth() {
     document.getElementById('invoiceRegNo').value = COMPANY_INVOICE_REG_NO;
     document.getElementById('paymentMethod').value = '銀行振込';
     document.getElementById('remarks').value = '';
+    document.getElementById('carryoverMonth').value = '';
+    document.getElementById('carryoverAmount').value = 0;
     items = [{ content: '', qty: 1, unit: 'm', unitAuto: true, price: 1000, taxable: true }];
     renderItemEditor();
     recalc();
@@ -2883,7 +2910,7 @@ function bizLoad(){if(window.TsukinowaCloudCore){const old=TsukinowaCloudCore.re
 function bizPersist(){try{localStorage.setItem(BIZ_KEY,JSON.stringify(bizState))}catch(_){} /* Phase 1: legacy writes remain local; cloud writes use the record repository explicitly. */}
 function bizAudit(action,detail){bizState.audit.unshift({id:bizId('log'),at:new Date().toISOString(),user:'local',action,detail});bizState.audit=bizState.audit.slice(0,1000)}
 function bizSwitchPage(page){document.querySelectorAll('.app-page').forEach(x=>x.classList.remove('active'));document.querySelectorAll('#bizNav button').forEach(x=>x.classList.toggle('active',x.dataset.page===page));const map={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',monthly:'pageMonthly',settings:'pageSettings'};document.getElementById(map[page]||'pageDashboard')?.classList.add('active');if(page==='chohyo')window.scrollTo({top:0});if(page==='calendar')bizCalendarCheckMonth();bizRefreshAll()}
-function bizCalcDocumentTotal(state){if(state.docType==='receipt')return Number(state.receiptTotal)||0;let subtotal=0,nonTax=0;if(state.docType==='onoda'){(state.items||[]).forEach(i=>{const a=(Number(i.qty)||0)*(Number(i.price)||0);subtotal+=a;if(i.taxable===false)nonTax+=a});return Math.round(subtotal+(subtotal-nonTax)*.1)}(state.items||[]).forEach(i=>subtotal+=(Number(i.qty)||0)*(Number(i.price)||0));subtotal+=Number(state.travelFee)||0;return Math.round(subtotal*1.1)}
+function bizCalcDocumentTotal(state){return TsukinowaBusiness.total(state)}
 function bizSummaryContent(state){if(state.docType==='onoda')return ((state.invoiceDate||'').slice(0,7)||'')+'月分 小野田月次施工';const xs=(state.items||[]).map(x=>x.content).filter(Boolean);return (state.bizJobMemo||xs.slice(0,2).join(' / ')||state.remarks||'工事').slice(0,120)}
 function bizOnDocumentConfirmed(state){
   if(!state)return;
@@ -2904,8 +2931,9 @@ function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
 function bizRefreshAll(){const m=bizNowMonth();['calendarMonth','salesMonth','expenseMonth','monthlyMonth'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=m});['paymentDate','expDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=todayISO()});const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderMonthly();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
 function renderDashboard(){const m=bizNowMonth();document.getElementById('dashPeriod').textContent=m.replace('-','年')+'月';const sales=bizState.sales.filter(x=>bizMonth(x.saleDate)===m);const pays=bizState.payments.filter(x=>bizMonth(x.date)===m&&x.confirmation!=='pending-bank');const exps=bizState.expenses.filter(x=>!x.deletedAt&&bizMonth(x.date)===m);const sum=a=>a.reduce((x,y)=>x+(Number(y.amount)||0),0);document.getElementById('kpiSales').textContent=bizMoney(sum(sales));document.getElementById('kpiPayments').textContent=bizMoney(sum(pays));document.getElementById('kpiReceivable').textContent=bizMoney(bizState.sales.reduce((a,s)=>a+bizOutstanding(s),0));document.getElementById('kpiExpenses').textContent=bizMoney(sum(exps));const unpaid=bizState.sales.filter(s=>bizOutstanding(s)>0).length;const unmatched=bizState.bank.filter(b=>!b.matched).length;document.getElementById('attentionList').innerHTML=`未入金 <b>${unpaid}</b>件 ／ 銀行未照合 <b>${unmatched}</b>件 ／ カレンダー取込 <b>${bizState.calendar.length}</b>件`;document.getElementById('dashSalesRows').innerHTML=bizState.sales.slice(0,10).map(s=>`<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate||'—')}</td><td>${bizOutstanding(s)<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金 '+bizMoney(bizOutstanding(s))+'</span>'}</td></tr>`).join('')||'<tr><td colspan="6" class="biz-muted">まだ売上はありません。</td></tr>'}
 function renderSales(){const m=document.getElementById('salesMonth')?.value||bizNowMonth();const rows=bizState.sales.filter(s=>!m||bizMonth(s.saleDate)===m);document.getElementById('salesRows').innerHTML=rows.map(s=>{const paid=bizPaid(s),out=bizOutstanding(s);return `<tr><td>${bizEsc(s.saleDate)}</td><td>${bizEsc(s.customer)}</td><td>${bizEsc(s.content)}</td><td class="biz-money">${bizMoney(s.amount)}</td><td>${bizEsc(s.invoiceDate||'—')}</td><td class="biz-money">${bizMoney(paid)}</td><td class="biz-money">${bizMoney(out)}</td><td>${s.accountingReviewRequired?'<span class="biz-badge warn">要確認</span>':out<=0?'<span class="biz-badge ok">入金済</span>':'<span class="biz-badge warn">未入金</span>'}</td><td>${out>0?`<button class="biz-btn" onclick="selectSaleForPayment(\'${s.id}\')">入金</button>`:'—'}</td></tr>`}).join('')||'<tr><td colspan="9" class="biz-muted">対象月の売上はありません。</td></tr>';renderPaymentSaleOptions()}
-function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const previous=sel.value,source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const unpaid=source.filter(s=>TsukinowaAccounting.live(s)&&bizOutstanding(s)>0);sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('');sel.value=previous}
-function selectSaleForPayment(id){bizSwitchPage('sales');const s=bizState.sales.find(x=>x.id===id);if(!s)return;document.getElementById('paymentSale').value=id;document.getElementById('paymentAmount').value=bizOutstanding(s);document.getElementById('paymentType').value=TsukinowaAccounting.paymentChannel({method:s.paymentMethod||'銀行振込'}).channel;bizPaymentChannelChanged();document.getElementById('paymentDate').scrollIntoView({behavior:'smooth',block:'center'})}
+function bizOnodaPaymentHint(){const id=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===id);document.getElementById('onodaPaymentHint').hidden=sale?.docType!=='onoda';}
+function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const previous=sel.value,source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const unpaid=source.filter(s=>TsukinowaAccounting.live(s)&&bizOutstanding(s)>0);sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('');sel.value=previous;bizOnodaPaymentHint()}
+function selectSaleForPayment(id){bizSwitchPage('sales');const s=bizState.sales.find(x=>x.id===id);if(!s)return;document.getElementById('paymentSale').value=id;bizOnodaPaymentHint();document.getElementById('paymentAmount').value=bizOutstanding(s);document.getElementById('paymentType').value=TsukinowaAccounting.paymentChannel({method:s.paymentMethod||'銀行振込'}).channel;bizPaymentChannelChanged();document.getElementById('paymentDate').scrollIntoView({behavior:'smooth',block:'center'})}
 function bizPaymentChannelChanged(){const platform=document.getElementById('paymentType').value==='プラットフォーム経由';document.getElementById('paymentPlatformField').hidden=!platform;if(!platform)document.getElementById('paymentPlatformName').value='';}
 async function addPayment(){const button=document.getElementById('paymentSubmit');if(button.disabled)return;button.disabled=true;try{const saleId=document.getElementById('paymentSale').value,amount=TsukinowaAccounting.money(document.getElementById('paymentAmount').value),paymentDate=TsukinowaAccounting.date(document.getElementById('paymentDate').value);if(!saleId)throw Error('対象請求書を選択してください。');if(await TsukinowaBusinessUI.registerPayment({...TsukinowaBalanceUI.paymentContext(),saleId,amount,paymentDate,method:document.getElementById('paymentType').value,platformName:document.getElementById('paymentType').value==='プラットフォーム経由'?document.getElementById('paymentPlatformName').value.trim():'',memo:document.getElementById('paymentMemo').value})){document.getElementById('paymentAmount').value='';document.getElementById('paymentMemo').value='';document.getElementById('paymentPlatformName').value='';TsukinowaBalanceUI.paymentSaved();}}catch(e){alert(e.message);}finally{button.disabled=false;}}
 
