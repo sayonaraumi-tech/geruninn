@@ -5,6 +5,10 @@ const H=typeof module==='object'&&module.exports?require('./historical-import.js
 const anchorCollection=id=>String(id).startsWith('receivable_')?'receivables':'sales';
 const clone=x=>JSON.parse(JSON.stringify(x));
 function cleanSnapshot(s){const out=core.normalizeDates(s);for(const k of ['savedAt','scrollY','cloudRevision','historyId','version','_cloudIdentity','documentStatus','statusReason','revisedFromDocumentId','duplicateOfDocumentId','revisedToDocumentId'])delete out[k];for(const k of ['customerCompany','customerAddress'])if(!out[k])delete out[k];return out;}
+function onodaCarryoverLabel(value){
+ const month=String(value||'').trim();
+ return month ? month.replace(/(?:月分?|分)$/, '')+'月分繰越額' : '前回繰越額';
+}
 // Carryover is presentation only; total() remains current-month revenue.
 function onodaTotals(s){
  let taxableSubtotal=0,nonTaxSubtotal=0;
@@ -12,7 +16,7 @@ function onodaTotals(s){
  const subtotal=taxableSubtotal+nonTaxSubtotal,tax=Math.round(taxableSubtotal*.1),currentAmount=subtotal+tax;
  const raw=Number(s.carryoverAmount),carryoverAmount=s.docType==='onoda'&&Number.isSafeInteger(raw)&&raw>0?raw:0;
  const month=String(s.carryoverMonth||s.unpaidMonthLabel||'').trim();
- return {taxableSubtotal,nonTaxSubtotal,subtotal,tax,currentAmount,carryoverAmount,carryoverLabel:(month||'前回')+'未入金残高',paymentTotal:currentAmount+carryoverAmount};
+ return {taxableSubtotal,nonTaxSubtotal,subtotal,tax,currentAmount,carryoverAmount,carryoverLabel:onodaCarryoverLabel(month),paymentTotal:currentAmount+carryoverAmount};
 }
 function total(s){if(s.docType==='onoda')return onodaTotals(s).currentAmount;if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0;(s.items||[]).forEach(i=>{subtotal+=(Number(i.qty)||0)*(Number(i.price)||0);});subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+subtotal*.1);}
 function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'月分 小野田月次施工':(s.bizJobMemo||(s.items||[]).map(x=>x.content).filter(Boolean).slice(0,2).join(' / ')||s.remarks||'工事').slice(0,120);}
