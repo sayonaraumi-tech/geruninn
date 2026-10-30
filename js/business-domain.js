@@ -5,7 +5,16 @@ const H=typeof module==='object'&&module.exports?require('./historical-import.js
 const anchorCollection=id=>String(id).startsWith('receivable_')?'receivables':'sales';
 const clone=x=>JSON.parse(JSON.stringify(x));
 function cleanSnapshot(s){const out=core.normalizeDates(s);for(const k of ['savedAt','scrollY','cloudRevision','historyId','version','_cloudIdentity','documentStatus','statusReason','revisedFromDocumentId','duplicateOfDocumentId','revisedToDocumentId'])delete out[k];for(const k of ['customerCompany','customerAddress'])if(!out[k])delete out[k];return out;}
-function total(s){if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0,nonTax=0;(s.items||[]).forEach(i=>{const a=(Number(i.qty)||0)*(Number(i.price)||0);subtotal+=a;if(s.docType==='onoda'&&i.taxable===false)nonTax+=a;});if(s.docType!=='onoda')subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+(subtotal-nonTax)*.1);}
+// Carryover is presentation only; total() remains current-month revenue.
+function onodaTotals(s){
+ let taxableSubtotal=0,nonTaxSubtotal=0;
+ (s.items||[]).forEach(i=>{const a=(Number(i.qty)||0)*(Number(i.price)||0);if(i.taxable===false)nonTaxSubtotal+=a;else taxableSubtotal+=a;});
+ const subtotal=taxableSubtotal+nonTaxSubtotal,tax=Math.round(taxableSubtotal*.1),currentAmount=subtotal+tax;
+ const raw=Number(s.carryoverAmount),carryoverAmount=s.docType==='onoda'&&Number.isSafeInteger(raw)&&raw>0?raw:0;
+ const month=String(s.carryoverMonth||s.unpaidMonthLabel||'').trim();
+ return {taxableSubtotal,nonTaxSubtotal,subtotal,tax,currentAmount,carryoverAmount,carryoverLabel:(month||'前回')+'未入金残高',paymentTotal:currentAmount+carryoverAmount};
+}
+function total(s){if(s.docType==='onoda')return onodaTotals(s).currentAmount;if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0;(s.items||[]).forEach(i=>{subtotal+=(Number(i.qty)||0)*(Number(i.price)||0);});subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+subtotal*.1);}
 function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'月分 小野田月次施工':(s.bizJobMemo||(s.items||[]).map(x=>x.content).filter(Boolean).slice(0,2).join(' / ')||s.remarks||'工事').slice(0,120);}
 // Presentation metadata only: never used to calculate tax or sales.
 const CATEGORY_RULES=[['クロス張替',/クロス|壁紙/],['穴補修',/穴.*(?:補修|修理|埋)|(?:補修|修理).*穴/],['ドア補修',/(?:ドア|扉).*補修|補修.*(?:ドア|扉)/],['窓枠補修',/窓枠/],['CF/クッションフロア',/\bCF\b|クッションフロア/i],['巾木',/巾木|幅木/],['障子',/障子/],['天井塗装',/天井.*塗装|塗装.*天井/],['ガラスシート',/ガラス.*(?:シート|フィルム)/],['ダイノック',/ダイノック|ダイノク/],['フロアタイル',/フロアタイル/]];
@@ -431,6 +440,14 @@ function createService(client,{now=()=>new Date()}={}){
     const amount=A.money(cmd.amount),paymentDate=A.date(cmd.paymentDate);
     if(!['現金','銀行振込','プラットフォーム経由','その他','オンライン決済'].includes(cmd.method||'現金'))throw Error('入金経路を確認してください。');
     if(cmd.documentId&&sale.payload.documentId!==cmd.documentId)throw Error('対象請求書が訂正されています。読み込み直してください。');
+    // Never attribute a combined monthly/old-balance receipt to this month's sale.
+    if(sale.payload.docType==='onoda'){
+      const doc=sale.payload.documentId?await read('documents',sale.payload.documentId):null;
+      if(onodaTotals(doc?.payload.snapshot||{}).carryoverAmount){
+        const paid=(await relatedPayments(cmd.saleId,cmd.paymentId)).filter(A.confirmed).reduce((n,p)=>n+Number(p.amount||0),0);
+        if(amount>Math.max(0,sale.payload.amount-paid))throw Error('前月未入金分を含む合算入金は、本月分と過去分を元の売上・未収へ分けて登録してください。自動分配は行いません。');
+      }
+    }
     const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':cmd.manualConfirmed?'bank-confirmed':'pending-bank',memo:cmd.memo||'',...(cmd.method==='プラットフォーム経由'&&String(cmd.platformName||'').trim()?{platformName:String(cmd.platformName).trim()}:{}),documentId:''};
     if(old){if(core.canonical(old.payload)!==core.canonical(payload))throw Error('入金IDが既存の入金と競合しています。');return {paymentId:cmd.paymentId,unchanged:true};}
     await write('payments',cmd.paymentId,payload,'payment',0);return {paymentId:cmd.paymentId};
@@ -504,5 +521,5 @@ function formalDocumentNeedsRepair(row,rows){
  if(!A.live(p)||!formalType(p.docType)||!p.saleId||!s.customerName?.trim()||!(p.amount>0)||!formalDate(s))return false;
  return !current||!current.googleEventId||current.linkedInvoiceId!==row.id;
 }
-return {formalDocumentNeedsRepair,formalCalendarTitle,receiptAccountingNeedsRepair,calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
+return {formalDocumentNeedsRepair,formalCalendarTitle,receiptAccountingNeedsRepair,calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,onodaTotals,cleanSnapshot,summary};
 });
