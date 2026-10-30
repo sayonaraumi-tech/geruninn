@@ -13,6 +13,28 @@ const invoice={documentId:'wooc',docType:'invoice',customerName:'株式会社WOO
 const exec=(h,cmd)=>h.service.execute({operationId:crypto.randomUUID(),...cmd});
 const save=(h,s=invoice)=>exec(h,{type:'saveDocument',snapshot:s,expectedRevision:0});
 const rows=h=>Object.fromEntries(B.COLLECTIONS.map(n=>[n,h.list(n)]));
+for(const docType of ['invoice','onoda','receipt'])test(docType+' short calendar title preserves full records and repairs the same event once',async()=>{
+ const h=await harness(),s={...invoice,docType,receiptTotal:72600,paymentMethod:'銀行振込',tadashi:'カーペット張替 / カーペット処理代',items:[{content:'カーペット張替',qty:1,price:60000},{content:'カーペット処理代',qty:1,price:6000}]};
+ const expected='株式会社WOOC｜カーペット張替｜¥72,600｜'+(docType==='receipt'?'領収済':'請求済');
+ assert.equal(B.formalCalendarTitle(s,72600),expected);
+ assert.equal(B.formalCalendarTitle({...s,items:[s.items[0]]},72600),expected);
+ assert.match(B.formalCalendarTitle({...s,items:[{content:'CF/クッションフロア'}]},72600),/｜CF\/クッションフロア｜/);
+ for(const field of ['summary','tadashi','content'])assert.equal(B.formalCalendarTitle({...s,items:[{content:'  '}],summary:'',tadashi:'',content:'',[field]:'カーペット張替 / 追加作業'},72600),expected);
+ assert.match(B.formalCalendarTitle({docType,customerName:'顧客',items:[]},1),/｜.+｜¥1｜/);
+ await save(h,s);const e=h.list('calendarLinks')[0],key='companies/tsukinowa/calendarLinks/'+e.id;
+ assert.equal(e.payload.title,expected);assert(e.payload.googleCreatePending);assert(e.payload.googlePatchPending);
+ assert.deepEqual(h.list('documents')[0].payload.snapshot.items,s.items);
+ assert.equal(h.list('sales')[0].payload.content,docType==='receipt'?s.tadashi:B.summary(s));
+ const content=e.payload.content,protectedRows=JSON.stringify(Object.fromEntries(B.COLLECTIONS.filter(n=>!['calendarLinks','auditLogs'].includes(n)).map(n=>[n,h.list(n)])));
+ h.rows.set(key,{...h.rows.get(key),payload:{...e.payload,title:'old long title',googleCreatePending:false,googlePatchPending:false}});
+ const old=h.rows.get(key).payload;
+ assert(B.formalDocumentNeedsRepair(h.list('documents')[0],rows(h)));
+ await exec(h,{type:'repairFormalDocument',documentId:'wooc'});
+ assert.deepEqual(h.rows.get(key).payload,{...old,title:expected,googlePatchPending:true});assert.equal(h.rows.get(key).payload.content,content);
+ assert.equal(JSON.stringify(Object.fromEntries(B.COLLECTIONS.filter(n=>!['calendarLinks','auditLogs'].includes(n)).map(n=>[n,h.list(n)]))),protectedRows);
+ const frozen=JSON.stringify([...h.rows]);for(let i=0;i<3;i++){assert(!B.formalDocumentNeedsRepair(h.list('documents')[0],rows(h)));assert((await exec(h,{type:'repairFormalDocument',documentId:'wooc'})).skipped);}
+ assert.equal(JSON.stringify([...h.rows]),frozen);assert.equal(h.list('calendarLinks').length,1);
+});
 for(const docType of ['invoice','onoda'])test(docType+' standalone WOOC creates one pending schedule, replay and Google completion are idempotent',async()=>{
  const h=await harness('staff'),s={...invoice,docType},r=await save(h,s),e=h.list('calendarLinks')[0].payload;
  assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,0);assert.equal(e.status,'請求済');assert.equal(e.date,'2026-10-30');assert.equal(e.end,'2026-10-31');assert.equal(e.officialAmount,72600);assert.equal(e.linkedInvoiceId,'wooc');assert.equal(h.list('documents')[0].payload.saleId,r.saleId);assert(e.googleCreatePending);assert(e.googlePatchPending);assert.equal(e.title,B.formalCalendarTitle(s,72600));assert.equal(r.snapshot.calendarEventId,e.id);

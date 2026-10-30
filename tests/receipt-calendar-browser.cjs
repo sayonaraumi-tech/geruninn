@@ -9,8 +9,8 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   const records=new Map(),listeners=[];let cb;const driver={initialize:async()=>{},observeAuth:f=>(cb=f,()=>{}),claims:async u=>u.claims,timestamp:()=>({seconds:1}),digest:async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join(''),list:async p=>[...records].filter(([k])=>k.startsWith(p+'/')).map(([k,v])=>({id:k.split('/').at(-1),...v})),listen:(p,many,next)=>{const l={p,next};listeners.push(l);setTimeout(async()=>next(await driver.list(p),{fromCache:false}),0);return()=>listeners.splice(listeners.indexOf(l),1);},transaction:async f=>{for(;;){const reads=new Map(),writes=[];const result=await f({get:async p=>{const old=records.get(p)||null;reads.set(p,old);return old;},set:(p,v)=>writes.push([p,v])});if([...reads].some(([p,v])=>(records.get(p)||null)!==v))continue;for(const [p,v]of writes)records.set(p,v);for(const l of listeners)setTimeout(async()=>l.next(await driver.list(l.p),{fromCache:false}),0);return result;}}};
   window.testFormalType=formalType;
   if(mode==='legacy'){
-   const snapshot={documentId:'receipt',docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',invoiceNo:'20261023-1200-01',receiptTotal:12000,paymentMethod:'銀行振込',tadashi:'クロス張替'};
-   if(formalType!=='receipt')Object.assign(snapshot,{docType:formalType,customerName:'株式会社WOOC',invoiceDate:'2026-10-30',items:[{content:'クロス張替',qty:1,price:66000}]});
+   const snapshot={documentId:'receipt',docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',invoiceNo:'20261023-1200-01',receiptTotal:12000,paymentMethod:'銀行振込',tadashi:'クロス張替 / カーペット処理代',items:[{content:'クロス張替'},{content:'カーペット処理代'}]};
+   if(formalType!=='receipt')Object.assign(snapshot,{docType:formalType,customerName:'株式会社WOOC',invoiceDate:'2026-10-30',items:[{content:'クロス張替',qty:1,price:60000},{content:'カーペット処理代',qty:1,price:6000}]});
    records.set('companies/tsukinowa/documents/receipt',{revision:1,payload:{documentId:'receipt',docType:formalType,status:'active',confirmed:true,amount:formalType==='receipt'?12000:72600,...(formalType==='receipt'?{}:{saleId:'sale_receipt'}),customerName:snapshot.customerName,invoiceDate:snapshot.invoiceDate,snapshot}});
    if(formalType!=='receipt')records.set('companies/tsukinowa/sales/sale_receipt',{revision:1,payload:{id:'sale_receipt',documentId:'receipt',documentStatus:'active',customer:snapshot.customerName,amount:72600,salesDate:'2026-10-30'}});
   }
@@ -20,8 +20,8 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  page.on('dialog',d=>d.dismiss());
  await page.evaluate(async({mode,formalType})=>{
   bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;
-  window.receipt={documentId:'receipt',docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',receiptTotal:12000,paymentMethod:'銀行振込',tadashi:'クロス張替'};
-  if(formalType!=='receipt')Object.assign(receipt,{docType:formalType,customerName:'株式会社WOOC',invoiceDate:'2026-10-30',items:[{content:'クロス張替',qty:1,price:66000}]});
+  window.receipt={documentId:'receipt',docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',receiptTotal:12000,paymentMethod:'銀行振込',tadashi:'クロス張替 / カーペット処理代',items:[{content:'クロス張替'},{content:'カーペット処理代'}]};
+  if(formalType!=='receipt')Object.assign(receipt,{docType:formalType,customerName:'株式会社WOOC',invoiceDate:'2026-10-30',items:[{content:'クロス張替',qty:1,price:60000},{content:'カーペット処理代',qty:1,price:6000}]});
   window.savedReceipt=mode==='legacy'?{snapshot:testRecords.get('companies/tsukinowa/documents/receipt').payload.snapshot}:await testService.execute({type:'saveDocument',operationId:'save',expectedRevision:0,snapshot:receipt});
  },{mode,formalType});
  await page.waitForFunction(()=>bizState.calendar.length===1&&bizState.sales.length===1&&bizState.payments.length===(testFormalType==='receipt'?1:0));
@@ -39,7 +39,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  assert.equal(posts.length,0);assert(await page.evaluate(()=>bizState.calendar[0].googleCreatePending));assert.equal(await page.evaluate(()=>bizOutstanding(bizState.sales[0])),formalType==='receipt'?0:72600);assert.equal(await page.evaluate(()=>bizState.payments.length),formalType==='receipt'?1:0);
  await page.evaluate(()=>TsukinowaBusinessUI.patchPending());
  await page.waitForFunction(()=>bizState.calendar[0].googleCreatePending===false&&bizState.calendar[0].googlePatchPending===false);
- assert.equal(posts.length,1);assert.equal(remote.size,1);assert.equal(posts[0].summary,formalType==='receipt'?'（株）益田工房東京｜クロス張替｜¥12,000｜領収済':formalType==='invoice'?'株式会社WOOC｜クロス張替｜¥72,600｜請求済':'株式会社WOOC｜2026-10月分 小野田月次施工｜¥72,600｜請求済');assert.equal(posts[0].start.date,date);assert.equal(posts[0].end.date,formalType==='receipt'?'2026-10-24':'2026-10-31');assert.match(posts[0].description,/月輪システムで開く/);
+ assert.equal(posts.length,1);assert.equal(remote.size,1);assert.equal(posts[0].summary,formalType==='receipt'?'（株）益田工房東京｜クロス張替｜¥12,000｜領収済':'株式会社WOOC｜クロス張替｜¥72,600｜請求済');assert.equal(posts[0].start.date,date);assert.equal(posts[0].end.date,formalType==='receipt'?'2026-10-24':'2026-10-31');assert.match(posts[0].description,/月輪システムで開く/);
  await page.evaluate(async()=>{for(let i=0;i<3;i++)await testService.execute({type:'saveDocument',operationId:'again'+i,expectedRevision:1,snapshot:savedReceipt.snapshot});TsukinowaBusinessUI.patchPending();});
  assert.equal(posts.length,1);assert.equal(await page.evaluate(()=>bizState.sales.length),1);assert.equal(await page.evaluate(()=>bizState.payments.length),formalType==='receipt'?1:0);
  // Rebuild the sync bridge from the persisted cloud/cache, as on a fresh login.
@@ -47,6 +47,19 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(()=>{TsukinowaBusinessUI.auth({phase:'signed-out'},testClient);TsukinowaBusinessUI.auth(testClient.getState(),testClient);});
  await page.waitForFunction(()=>bizState.sales.length===1&&TsukinowaBusinessUI.getSync().isReady());
  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),frozen);assert.equal(posts.length,1);
+ // A historical long title is patched by hydrate without changing identities or accounting.
+ const beforeTitleRepair=await page.evaluate(()=>{
+  const key='companies/tsukinowa/calendarLinks/'+bizState.calendar[0].id,row=testRecords.get(key);
+  window.originalFormalLink=JSON.parse(JSON.stringify(row.payload));
+  testRecords.set(key,{...row,payload:{...row.payload,title:'old long title / カーペット処理代'}});
+  return JSON.stringify([...testRecords].filter(([k])=>!k.includes('/calendarLinks/')&&!k.includes('/auditLogs/')&&!k.includes('/operations/')));
+ });
+ const patchCount=patches.length;
+ await page.evaluate(()=>{TsukinowaBusinessUI.auth({phase:'signed-out'},testClient);TsukinowaBusinessUI.auth(testClient.getState(),testClient);});
+ await page.waitForFunction(()=>bizState.calendar[0]?.title===originalFormalLink.title&&!bizState.calendar[0].googlePatchPending&&TsukinowaBusinessUI.getSync().isReady());
+ assert.equal(posts.length,1);assert.equal(remote.size,1);assert(patches.length>patchCount);assert.equal(patches.at(-1).summary,posts[0].summary);
+ assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords].filter(([k])=>!k.includes('/calendarLinks/')&&!k.includes('/auditLogs/')&&!k.includes('/operations/')))),beforeTitleRepair);
+ assert(await page.evaluate(()=>['id','googleEventId','calendarId','googleCalendarId','officialAmount','date','status','content','saleId'].every(k=>bizState.calendar[0][k]===originalFormalLink[k])));
  // Existing Google event must be patched, preserving the user's description and calendar.
  remote.set('existing',{id:'existing',description:'現場メモ',etag:'"1"'});
  await page.evaluate(async()=>{
