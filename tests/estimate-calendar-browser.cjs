@@ -32,6 +32,6 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(()=>{document.getElementById('monthlyMonth').value='2026-10';renderMonthly();});assert.match(await page.locator('#monthlyDetails').innerText(),/入金経路.*くらしのマーケット/);
  const report=await page.evaluate(()=>({month:TsukinowaAccountingUI.exportRows('monthly'),payments:TsukinowaAccountingUI.exportRows('payments')}));assert(JSON.stringify(report.month).includes('くらしのマーケット'));assert(report.payments[0].includes('入金経路'));assert(JSON.stringify(report.payments).includes('くらしのマーケット'));
  await page.evaluate(()=>{bizSwitchPage('estimates');});if(process.env.PREVIEW_DIR)await page.screenshot({path:path.join(process.env.PREVIEW_DIR,'simplified-navigation-'+width+'.png')});
- assert.equal(await page.evaluate(()=>bizState.projects.length),1);assert.equal(await page.evaluate(()=>bizState.calendar.length),1);assert.equal(remote.size,1);assert.deepEqual(errors,[]);console.log('PASS '+width+'px: removed UI, platform registration/history/monthly/CSV and preserved project/event counts');
+ assert.equal(await page.evaluate(()=>bizState.projects.length),1);await page.waitForFunction(()=>bizState.calendar.length===2&&bizState.calendar.every(e=>!e.googlePatchPending));assert.equal(remote.size,2);assert.deepEqual(errors,[]);console.log('PASS '+width+'px: removed UI, platform registration/history/monthly/CSV and preserved project/event counts');
 await page.close();
  }}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

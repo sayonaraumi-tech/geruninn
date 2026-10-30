@@ -3,7 +3,7 @@
 'use strict';
 const el=id=>document.getElementById(id),uuid=()=>crypto.randomUUID(),copy=x=>JSON.parse(JSON.stringify(x));
 let enabled=false,sync=null,client=null,identity='',rows={},history=[],docId='',docRevision=0,applying=false,lastStatus={},timer=null,pendingInvoice=null,revisionSource=null,formBase={},viewBaseline=null;
-const googleErrors=new Map();let receiptRepairTimer=null;
+const googleErrors=new Map();let formalRepairTimer=null;
 const original={};
 for(const name of ['collectFormState','applyFormState','setDocType','saveConfirmedHistory','loadConfirmedHistory','writeConfirmedHistory','deleteConfirmedHistory','bizPersist','bizAudit','bizAcceptEstimate','bizConvertEstimateRecordToInvoice','convertEstimateToInvoice','bizRegisterEstimatePayment','addPayment','selectSaleForPayment','matchBankSale','bizGoogleMergeEvent','bizGooglePatchNow','bizLoadDocFromEvent','bizSwitchPage','openManualSale','doPrint','onodaStorageKey','saveOnodaDraft','restoreOnodaDraft','importBackup','bizEstimateFromHistory','renderAllSavedDocs','renderConfirmedHistory'])original[name]=root[name];
 function ready(){if(!sync||client?.getState().phase!=='ready'){alert('クラウドアカウントにログインしてください。端末内の原本は保持されています。');return false;}return true;}
@@ -56,15 +56,15 @@ function hydrate(value){
  }finally{applying=false;}
  completePendingInvoice();root.TsukinowaBalanceUI?.refresh();refreshCalendarSale();
  if(client?.getState().role==='admin'){
-  clearTimeout(receiptRepairTimer);const owner=sync;
-  receiptRepairTimer=setTimeout(()=>{
+  clearTimeout(formalRepairTimer);const owner=sync;
+  formalRepairTimer=setTimeout(()=>{
    if(sync!==owner||!sync?.isReady()||client?.getState().role!=='admin')return;
    for(const r of rows.documents||[]){
     const p=r.payload,link=(rows.calendarLinks||[]).find(l=>l.id===(p.calendarEventId||p.snapshot?.calendarEventId))?.payload;
     const duplicate=p.docType==='receipt'&&p.saleId&&root.TsukinowaAccounting.live(p)&&link?.cashSaleId&&link.cashSaleId!==p.saleId;
-    if(!duplicate&&!root.TsukinowaBusiness.receiptAccountingNeedsRepair(r,rows))continue;
+    if(!duplicate&&!root.TsukinowaBusiness.formalDocumentNeedsRepair(r,rows))continue;
     if(sync.getQueue().some(x=>x.command.documentId===r.id))continue;
-    command({type:duplicate?'reconcileReceiptCalendarCash':'repairReceipt',documentId:r.id});
+    command({type:duplicate?'reconcileReceiptCalendarCash':'repairFormalDocument',documentId:r.id});
    }
   },50);
  }
@@ -161,7 +161,7 @@ root.bizLoadDocFromEvent=function(e,type){if(!enabled)return original.bizLoadDoc
 root.bizGooglePatchNow=async function(id){if(!enabled)return original.bizGooglePatchNow(id);if(!sync)return;await original.bizGooglePatchNow(id);const records=await client.listRecords('calendarLinks');const revision=records.find(r=>r.id===id)?.revision;const persisted=records.find(r=>r.id===id)?.payload;const e=bizState.calendar.find(x=>x.id===id);if(e&&!e.googlePatchPending)googleErrors.delete(id);if(e&&!e.googlePatchPending&&persisted&&e.title===persisted.title&&e.workDate===persisted.workDate&&!persisted.googleCreatePending)command({type:'calendarPatched',id,expectedRevision:revision,at:e.googlePatchedAt});};
 root.bizSwitchPage=function(page){if(enabled&&client?.getState().role==='staff'&&!['calendar','estimates','chohyo','savedDocs'].includes(page))page='calendar';return original.bizSwitchPage(page);};
 function patchPending(){if(!sync||!navigator.onLine||lastStatus.state==='error')return;const pending=bizState.calendar.filter(e=>e.googlePatchPending);if(pending.length&&bizGoogleNeedToken()){el('coreSyncStatus').textContent='Google未接続・システム保存済（反映待ち '+pending.length+'件）';return;}for(const e of bizState.calendar.filter(x=>x.googlePatchPending&&x.googleEventId))if(!bizGooglePatchJobs.has(e.id))bizGooglePatchEvent(e);}
-function clearView(){googleErrors.clear();clearTimeout(receiptRepairTimer);readOnly(false);viewBaseline=null;formBase={};root.TsukinowaHistoricalUI?.close();root.TsukinowaBalanceUI?.close();pendingInvoice=null;revisionSource=null;history=[];rows={};root.TsukinowaAccountingUI?.hydrate({});for(const key of ['estimates','projects','sales','payments','calendar','audit','expenses','bank'])bizState[key]=[];applying=true;try{bizRefreshAll();renderConfirmedHistory();docType='invoice';resetNormalFormBlank();if(el('bizJobMemo'))el('bizJobMemo').value='';if(el('receiptSale'))el('receiptSale').value='';docId='';docRevision=0;bizClearDocLink();}finally{applying=false;}}
+function clearView(){googleErrors.clear();clearTimeout(formalRepairTimer);readOnly(false);viewBaseline=null;formBase={};root.TsukinowaHistoricalUI?.close();root.TsukinowaBalanceUI?.close();pendingInvoice=null;revisionSource=null;history=[];rows={};root.TsukinowaAccountingUI?.hydrate({});for(const key of ['estimates','projects','sales','payments','calendar','audit','expenses','bank'])bizState[key]=[];applying=true;try{bizRefreshAll();renderConfirmedHistory();docType='invoice';resetNormalFormBlank();if(el('bizJobMemo'))el('bizJobMemo').value='';if(el('receiptSale'))el('receiptSale').value='';docId='';docRevision=0;bizClearDocLink();}finally{applying=false;}}
 const documentLabels={active:'有効',void:'無効',cancelled:'取消',duplicate:'重複',revised:'訂正済'};
 function manageDocument(index,action){
  if(!enabled||!ready()||client.getState().role!=='admin')return alert('帳票管理は管理者のみ実行できます。');
