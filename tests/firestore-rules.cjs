@@ -478,5 +478,11 @@ test('formal WOOC invoice and historical repair preserve Rules, immutable docume
   await exec(a,{type:'repairFormalDocument',documentId:'wooc'});for(let i=0;i<3;i++)assert((await exec(a,{type:'repairFormalDocument',documentId:'wooc'})).skipped);
   assert.deepEqual(await admin.listRecords('documents'),documentsBefore);assert.deepEqual(await admin.listRecords('sales'),salesBefore);links=await records('calendarLinks');assert.equal(links.length,1);assert.equal(links[0].id,saved.snapshot.calendarEventId);assert(links[0].googleCreatePending);
   const target=links[0].id;await exec(s,{type:'calendarPrepareCreate',id:target,calendarId:'mock'});await exec(s,{type:'calendarCreated',id:target,calendarId:'mock',googleEventId:links[0].googleEventId});assert.equal((await records('calendarLinks'))[0].googleCreatePending,false);
+  await env.withSecurityRulesDisabled(async context=>{const reference=ref(context.firestore(),'calendarLinks',target),row=(await getDoc(reference)).data();row.payload.title='株式会社WOOC｜クロス張替 / 追加作業｜¥72,600｜請求済';await setDoc(reference,row);});
+  const beforeTitleRepair=(await admin.listRecords('calendarLinks'))[0].payload;
+  await exec(a,{type:'repairFormalDocument',documentId:'wooc'});
+  assert.deepEqual((await admin.listRecords('calendarLinks'))[0].payload,{...beforeTitleRepair,title:'株式会社WOOC｜クロス張替｜¥72,600｜請求済',googlePatchPending:true});
+  assert.deepEqual(await admin.listRecords('documents'),documentsBefore);assert.deepEqual(await admin.listRecords('sales'),salesBefore);
+  assert((await exec(a,{type:'repairFormalDocument',documentId:'wooc'})).skipped);
  }finally{admin.dispose();staff.dispose();}
 });

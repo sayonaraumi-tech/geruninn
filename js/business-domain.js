@@ -13,7 +13,16 @@ function rawContent(s){return (s.items||s.snapshot?.items||[]).map(i=>String(i.c
 const formalType=t=>['receipt','invoice','onoda'].includes(t);
 const formalContent=s=>s.docType==='receipt'?s.tadashi||summary(s):summary(s);
 const formalDate=s=>s.docType==='receipt'?s.invoiceDate||s.paymentDate:s.workDate||s.salesDate||s.invoiceDate;
-function formalCalendarTitle(s,amount){return [s.customerName,formalContent(s),'¥'+amount.toLocaleString('ja-JP'),s.docType==='receipt'?'領収済':'請求済'].join('｜');}
+function formalCalendarTitle(s,amount){
+ const short=value=>String(value||'').split(/\r?\n|\s*[／/｜|、,]\s*/).map(t=>t.trim()).find(Boolean)?.slice(0,120)||'';
+ const content=String(s.items?.[0]?.content||'').trim().slice(0,120)||[s.summary,s.bizJobMemo,s.tadashi,s.content,formalContent(s)].map(short).find(Boolean)||'工事';
+ return [s.customerName,content,'¥'+amount.toLocaleString('ja-JP'),s.docType==='receipt'?'領収済':'請求済'].join('｜');
+}
+// Only the document currently owning the schedule's status may refresh its title.
+function formalTitleNeedsRepair(row,link){
+ const p=row.payload,s=p.snapshot||{},receipt=p.docType==='receipt';
+ return A.live(p)&&formalType(p.docType)&&s.customerName?.trim()&&p.amount>0&&link&&A.live(link)&&link.googleStatus!=='cancelled'&&link[receipt?'linkedReceiptId':'linkedInvoiceId']===row.id&&link.status===(receipt?'領収済':'請求済')&&link.title!==formalCalendarTitle(s,Number(link.officialAmount??p.amount));
+}
 function projectCategory(s){const texts=(s.items||s.snapshot?.items||[]).map(i=>String(i.content||'')).filter(Boolean);if(!texts.length)texts.push(rawContent(s)||s.projectCategory||'');const found=new Set();for(const text of texts){let matched=false;for(const [name,re]of CATEGORY_RULES)if(re.test(text.normalize('NFKC'))){found.add(name);matched=true;}}return [...CATEGORY_RULES.map(r=>r[0]),'その他'].filter(n=>found.has(n)).join('・')||'その他';}
 // Filename selection is independent of the multi-category Calendar metadata.
 const FEE_ITEM=/出張費|材料費|雑費|諸経費|交通費|駐車(?:場)?(?:代|料金|費)|処分費|運搬費/;
@@ -233,6 +242,13 @@ function createService(client,{now=()=>new Date()}={}){
   }
   if(repairing){
     const row=await read('documents',cmd.documentId);if(!row||!A.live(row.payload)||!formalType(row.payload.docType))return {skipped:true};
+    const key=row.payload.calendarEventId||row.payload.snapshot?.calendarEventId||calendarSeed.find(r=>r.payload[row.payload.docType==='receipt'?'linkedReceiptId':'linkedInvoiceId']===cmd.documentId)?.id;
+    const existing=key?await tracked('calendarLinks',key):null;
+    if(formalTitleNeedsRepair({id:cmd.documentId,...row},existing?.payload)){
+      const link=existing.payload;
+      await write('calendarLinks',key,{...link,title:formalCalendarTitle(row.payload.snapshot,Number(link.officialAmount??row.payload.amount)),googlePatchPending:true});
+      return {documentId:cmd.documentId,repaired:true};
+    }
     if(row.payload.docType==='receipt')return reconcileReceipt(cmd.documentId,row.payload);
     const p=row.payload,s=core.normalizeDates(p.snapshot||{}),date=formalDate(s),saleId=p.saleId;
     if(!date||!s.customerName?.trim()||!(p.amount>0)||!saleId)return {skipped:true};
@@ -482,10 +498,11 @@ function receiptAccountingNeedsRepair(row,rows){
 }
 function formalDocumentNeedsRepair(row,rows){
  const p=row.payload,s=p.snapshot||{};
+ const current=(rows.calendarLinks||[]).find(r=>r.id===(p.calendarEventId||s.calendarEventId)||r.payload[p.docType==='receipt'?'linkedReceiptId':'linkedInvoiceId']===row.id)?.payload;
+ if(formalTitleNeedsRepair(row,current))return true;
  if(p.docType==='receipt')return receiptAccountingNeedsRepair(row,rows);
  if(!A.live(p)||!formalType(p.docType)||!p.saleId||!s.customerName?.trim()||!(p.amount>0)||!formalDate(s))return false;
- const link=(rows.calendarLinks||[]).find(r=>r.id===(p.calendarEventId||s.calendarEventId)||r.payload.linkedInvoiceId===row.id)?.payload;
- return !link||!link.googleEventId||link.linkedInvoiceId!==row.id;
+ return !current||!current.googleEventId||current.linkedInvoiceId!==row.id;
 }
 return {formalDocumentNeedsRepair,formalCalendarTitle,receiptAccountingNeedsRepair,calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,cleanSnapshot,summary};
 });
