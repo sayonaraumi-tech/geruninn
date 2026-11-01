@@ -12,6 +12,10 @@ jobs:
   regression:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: [local, emulator]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -28,14 +32,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
-      - run: pnpm test:release:local
-      - run: pnpm test:release:emulator
+      - run: pnpm test:release:${{ matrix.suite }}
       - name: Preserve failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: regression-diagnostics
+          name: regression-diagnostics-${{ matrix.suite }}
           path: |
             *-debug.log
-            ../*.png
+            ${{ github.workspace }}/../*.png
           if-no-files-found: ignore
