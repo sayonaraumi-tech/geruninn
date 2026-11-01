@@ -6,6 +6,7 @@ module.exports=async function paymentPaths({run,list,A,assert}){
  const save=async(id,method,amount,card)=>run({type:'saveExpense',expenseId:id,expense:expense(method,amount,card),expectedRevision:0});
  await save('path-cash','現金');await save('path-rep','代表者立替',200);await save('path-ic','代表者立替（交通系IC）',300);
  let d=await data();assert.equal(d.cashLedger.length,1);assert.equal(A.aggregate(d,A.periodFilter({month:'2026-10'})).cashBalance,-600);
+ for(const id of ['path-rep','path-ic'])if(!d.expenses.find(e=>e.id===id))throw Error('Missing '+id+': '+JSON.stringify(d));
  for(const id of ['path-rep','path-ic'])assert.equal(A.expenseStatus(d.expenses.find(e=>e.id===id)),'立替未精算');
  assert.equal(A.expenseStatus({...d.expenses[1],reimbursed:true,settled:true}),'立替未精算');
  const calendar=await run({type:'calendar',event:{id:'path-work',date:'2026-10-02',title:'path-customer｜施工｜110000'}});

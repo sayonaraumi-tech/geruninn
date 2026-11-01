@@ -43,18 +43,14 @@ async function harness(){
 
 
 
-test('service dispatch validates current full backup and only writes bank plus audit/operation',async()=>{
+test('service rejects historical cancel and restore even in demo before any mutation',async()=>{
  const h=await harness();
  await h.client.put('bankTransactions','duplicate',b,{operationId:'seed_b'});
- await h.client.put('bankTransactions','keeper',{...b,bankTxnId:'keeper',bankAccount:'GMO あおぞら'},{operationId:'seed_k'});
- await h.execute({type:'saveBankRule',ruleType:'bankAccountAlias',key:'メイン口座',canonical:'GMO あおぞら'});
- const snapshot=Object.fromEntries(await Promise.all(B.COLLECTIONS.filter(n=>n!=='auditLogs').map(async n=>[n,await h.client.listRecords(n)])));
- const cmd={type:'bankCancelDuplicate',bankTxnId:'duplicate',keeperId:'keeper',expectedRevision:1,keeperRevision:1,reason:'原本確認',sourceEvidence:'bank.csv / balance2000000',sourceVerified:true,backupDigest:await digest(snapshot)};
- const before=JSON.stringify(h.list('bankTransactions').find(r=>r.id==='keeper'));
- await h.execute(cmd);assert.equal(h.list('bankTransactions').find(r=>r.id==='duplicate').payload.status,'cancelled');assert.equal(JSON.stringify(h.list('bankTransactions').find(r=>r.id==='keeper')),before);
- assert.equal(h.list('payments').length,0);assert.equal(h.list('sales').length,0);assert.equal(h.list('cashLedger').length,0);assert(h.list('auditLogs').some(r=>r.action==='bank duplicate cancel'));
- await h.execute({...cmd,type:'bankRestoreDuplicate',expectedRevision:2});assert.deepEqual(h.list('bankTransactions').find(r=>r.id==='duplicate').payload,b);
+ const before=JSON.stringify([...h.rows]);
+ for(const type of ['bankCancelDuplicate','bankRestoreDuplicate'])await assert.rejects(h.execute({type,bankTxnId:'duplicate'}),/参照ロック/);
+ assert.equal(JSON.stringify([...h.rows]),before);
 });
+
 test('production service gate rejects cancellation before accessing records',async()=>{
  const service=B.createService({getState:()=>({role:'admin',projectId:'tsukinowa-business'})});
  await assert.rejects(service.execute({type:'bankCancelDuplicate',operationId:'cancel'}),/参照ロック/);
@@ -68,7 +64,7 @@ test('review UI renders IDs and evidence, blocks weak rows, hides rows from staf
  const root={TsukinowaAccounting:A,TsukinowaBusinessUI:{isEnabled:()=>true,getClient:()=>client,getSync:()=>({getQueue:()=>[]}),enqueue:c=>sent.push(c)}};
  const context={window:root,document:{getElementById:id=>({bankDuplicateReview:panel,bankDuplicateStatus:status,accountingMessage:status}[id]),createElement:()=>new Element(),addEventListener:()=>{}},crypto,bizState:{},bizEsc:String,bizMoney:String,alert:m=>alerts.push(m),confirm:()=>true,prompt:()=>{throw Error('production should not prompt');}};
  vm.runInNewContext(fs.readFileSync(require.resolve('../js/accounting-ui.js'),'utf8'),context);
- root.TsukinowaAccountingUI.hydrate(h.rows);assert.equal(panel.children.length,1);assert.match(panel.children[0].children[0].textContent,/duplicate.*keeper/);assert.equal(panel.children[0].children[1].disabled,false);
+ root.TsukinowaAccountingUI.hydrate(h.rows);assert.equal(panel.children.length,1);assert.match(panel.children[0].children[0].textContent,/duplicate.*keeper/);assert.equal(panel.children[0].children[1].disabled,true);
  await root.accountingDuplicateAction('duplicate','keeper',false);assert.equal(sent.length,0);assert.match(alerts[0],/参照ロック/);
  delete h.rows.bankTransactions[0].payload.balance;root.TsukinowaAccountingUI.hydrate(h.rows);assert.equal(panel.children[0].children[1].disabled,true);
  role='staff';root.TsukinowaAccountingUI.hydrate(h.rows);assert.equal(panel.children.length,0);

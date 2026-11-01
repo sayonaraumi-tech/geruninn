@@ -81,7 +81,7 @@ function createService(client,{now=()=>new Date()}={}){
  if(cmd.type==='deleteMisregistration')cmd={...cmd,operationId:'delete_error_'+cmd.documentId+'_'+cmd.expectedRevision};
  let allocated=null;const observed=[];
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
- if(['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type)&&!String(client.getState().projectId||'').startsWith('demo-'))throw Error('正式庫の取消・復元は安全な参照ロックの検証後に有効化します。現時点は監査・バックアップのみ利用できます。');
+ if(['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type))throw Error('取消・復元は無効です。安全な参照ロックの導入までは監査・バックアップのみ利用できます。');
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
  if(cmd.type==='saveExpense'&&client.getState().role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
  const expenseSeed=(cmd.type==='expenseFromBank'||cmd.type==='saveExpense'&&cmd.skipDuplicate)?(await client.listRecords('expenses')).filter(r=>{try{return A.live(r.payload)&&(cmd.type==='expenseFromBank'||A.expenseKey(r.payload)===A.expenseKey(cmd.expense));}catch(_){return false;}}):[];

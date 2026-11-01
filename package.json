@@ -16,7 +16,9 @@
     "test:estimate-calendar": "node --test tests/estimate-calendar.cjs && node tests/estimate-calendar-browser.cjs",
     "test:expense-bank-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/expense-bank-browser.cjs\"",
     "test:home-ledger-browser": "node tests/home-ledger-browser.cjs",
-    "test:accounting-events-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/accounting-events-browser.cjs\""
+    "test:accounting-events-browser": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node tests/accounting-events-browser.cjs\"",
+    "test:release:local": "node scripts/test-browser-suite.cjs local",
+    "test:release:emulator": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node --test tests/firestore-rules.cjs && node scripts/test-browser-suite.cjs emulator\""
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "5.0.1",

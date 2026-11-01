@@ -31,6 +31,24 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   const assert=Object.assign(value=>{if(!value)throw Error('Assertion failed');},{equal:(a,b)=>{if(a!==b)throw Error('Expected '+b+', got '+a);},rejects:async(p,re)=>{let error;try{await p;}catch(e){error=e;}if(!error||!re.test(error.message))throw Error('Expected rejection '+re+', got '+error);}});
   await eval('('+source+')')({run:pathRun,list:n=>client.listRecords(n),A:TsukinowaAccounting,assert});
  },scenario);
+
+ // Released review UI is read-only on both viewport sizes, with real Rules behind it.
+ await page.evaluate(async()=>{
+  const client=TsukinowaBusinessUI.getClient();
+  const payload={bankTxnId:'review-duplicate',bankAccount:'メイン口座',bankTransactionDate:'2026-10-20',description:'review-only',incoming:123,outgoing:0,amount:123,balance:999,status:'未照合',deletedAt:null};
+  await client.put('bankTransactions','review-duplicate',payload,{operationId:crypto.randomUUID()});
+  await client.put('bankTransactions','review-keeper',{...payload,bankTxnId:'review-keeper',bankAccount:'GMO あおぞら'},{operationId:crypto.randomUUID()});
+  await pathRun({type:'saveBankRule',ruleType:'bankAccountAlias',key:'メイン口座',canonical:'GMO あおぞら'});
+  const before=JSON.stringify(await client.listRecords('bankTransactions'));
+  for(const type of ['bankCancelDuplicate','bankRestoreDuplicate']){
+   let error;try{await pathRun({type,bankTxnId:'review-duplicate'});}catch(e){error=e;}
+   if(!error?.message.includes('参照ロック'))throw Error('Historical mutation was not rejected');
+  }
+  if(JSON.stringify(await client.listRecords('bankTransactions'))!==before)throw Error('Historical mutation changed bank records');
+ });
+ await page.waitForFunction(()=>document.querySelector('#bankDuplicateReview button')!==null);
+ assert.equal(await page.locator('#bankDuplicateReview button').first().isDisabled(),true);
+ assert.match(await page.locator('#bankDuplicateReview').innerText(),/review-duplicate.*review-keeper/);
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.length===13);
  await page.evaluate(()=>{bizSwitchPage('dashboard');homeMonth.value='2026-10';renderDashboard();});
  assert.equal(await page.locator('#kpiSales').innerText(),'¥110,000');assert.equal(await page.locator('#kpiPayments').innerText(),'¥110,000');

@@ -35,7 +35,7 @@ function renderDuplicateReview(){
   const keepers=saved?[banks.find(k=>k.id===saved.keeperId)].filter(Boolean):banks.filter(k=>A.live(k)&&A.classificationKey(k.bankAccount).replace(/ /g,'')==='gmoあおぞら'&&k.bankTransactionDate===b.bankTransactionDate&&k.incoming===b.incoming&&k.outgoing===b.outgoing);
   for(const k of keepers){const review=saved?{reasons:[],refs:[]}:A.bankCancellationReview(b,k,data),row=document.createElement('div');row.style.cssText='padding:12px;border-bottom:1px solid #ccc;overflow-wrap:anywhere';
    const detail=document.createElement('p');detail.textContent=b.bankTransactionDate+' / '+b.description+' / 入金 '+money(b.incoming)+' / 出金 '+money(b.outgoing)+' / 取消対象 ID '+b.id+' (v'+b.revision+') / 保留 ID '+k.id+' (v'+k.revision+') / '+(saved?'重複取消済':review.reasons.join(' / ')||'強い証拠が一致・原本を確認してください。')+' / 参照 '+(review.refs.join(', ')||'検出なし')+' / 証拠 '+(review.evidence||saved?.sourceEvidence||'なし');row.append(detail);
-   const button=document.createElement('button');button.className='biz-btn';button.textContent=saved?'この取消を復元':'原本確認・バックアップ後に取消';button.disabled=!saved&&review.reasons.length>0;button.onclick=()=>root.accountingDuplicateAction(b.id,k.id,!!saved);row.append(button);el('bankDuplicateReview').append(row);
+   const button=document.createElement('button');button.className='biz-btn';button.textContent='取消・復元は無効（監査のみ）';button.disabled=true;row.append(button);el('bankDuplicateReview').append(row);
   }
  }
 }
@@ -50,13 +50,8 @@ root.accountingDuplicateBackup=guard(async()=>{
 });
 root.accountingDuplicateAction=guard(async(bankTxnId,keeperId,restore)=>{
  if(!isAdmin())return;const b=data.bankTransactions.find(r=>r.id===bankTxnId),k=data.bankTransactions.find(r=>r.id===keeperId);if(!b||!k)return;
- if(!String(B().getClient().getState().projectId||'').startsWith('demo-'))throw Error('正式庫では監査・バックアップのみ利用可能です。参照ロックの検証後に取消・復元を有効化します。');
- if(!restore&&!duplicateBackup)throw Error('先に最新バックアップを出力してください。');
- const sourceEvidence=restore?'':prompt('原本CSVのファイル名・取引番号／残高・同一実口座を確認した根拠');if(!restore&&!sourceEvidence?.trim())return;
- const reason=prompt(restore?'復元理由':'この1件を重複取消する理由');if(!reason?.trim())return;
- if(!confirm(bankTxnId+' → 保留 '+keeperId+'\n'+(restore?'この取消前の状態に復元しますか？':'バックアップ保存と原本を確認済みですか？この銀行明細1件を取消します。売上・入金・支出・現金帳は変更しません。')))return;
- send({type:restore?'bankRestoreDuplicate':'bankCancelDuplicate',bankTxnId,keeperId,expectedRevision:b.revision,keeperRevision:k.revision,sourceVerified:true,sourceEvidence,reason,backupDigest:duplicateBackup?.digest||''});duplicateBackup=null;
- el('bankDuplicateStatus').textContent='操作を同期キューに保存しました。同期結果を確認してください。';
+ throw Error('取消・復元は無効です。安全な参照ロックの導入までは監査・バックアップのみ利用できます。');
+
 });
 function bankRows(){
  const groups=new Map(),rows=[];
@@ -147,7 +142,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  el('cashRows').parentElement.append(section('現金残高の調整',`<div class="biz-form-grid">${field('日付','cashAdjustDate','date')}${select('区分','cashAdjustType',[['income','増額'],['expense','減額']])}${field('金額','cashAdjustAmount','number')}${field('理由','cashAdjustReason')}</div><button class="biz-btn" onclick="accountingCashAdjustment()">調整を記録</button>`));
  el('pageBank').append(section('確認済み銀行ルール','<p>口座別名→同じ実口座の固定名、銀行摘要→顧客名（完全一致）を一度確認して保存。利息・手数料は会計口径を確認後に有効化します。給与・外注費・控除・部分入金は自動確定しません。</p><select id="bankRuleType"><option value="bankAccountAlias">口座別名</option><option value="bankPartyAlias">銀行摘要→顧客名</option><option value="bankSpecialPolicy">利息・手数料の会計口径</option></select><input id="bankRuleKey" placeholder="別名 / 銀行の完全な摘要 / 受取利息・支払手数料"><input id="bankRuleValue" placeholder="同じ口座の固定名 / 顧客の完全な名前"><button class="biz-btn" onclick="accountingBankRule()">確認して保存</button><div id="bankRules"></div>'));
  el('pageBank').querySelector('p').textContent='銀行CSVを実収支の証拠として照合します。確認済みルールの唯一一致は自動処理し、例外だけ確認します。利息・手数料は確認済み会計口径で記録します。';
- el('pageBank').append(section('歴史銀行明細の重複確認（管理者・1件ずつ）','<p>現在、正式庫は監査・バックアップのみ。取消・復元はテスト環境で検証中です。同日同額は候補のみ。確認済み口座別名と強い取引証拠、関連なしの場合だけ取消できます。GMO あおぞらの原記録は保持します。取消済みはここから復元できます。</p><button class="biz-btn" onclick="accountingDuplicateBackup()">最新の全業務記録・監査履歴をバックアップ</button><p id="bankDuplicateStatus" role="status"></p><div id="bankDuplicateReview"></div>'));
+ el('pageBank').append(section('歴史銀行明細の重複確認（管理者・1件ずつ）','<p>現在、正式庫は監査・バックアップのみ。取消・復元は無効です。同日同額は候補のみ。確認済み口座別名と強い取引証拠、関連なしでも、このリリースでは取消できません。GMO あおぞらの原記録は保持します。既存の取消済み記録も復元できません。</p><button class="biz-btn" onclick="accountingDuplicateBackup()">最新の全業務記録・監査履歴をバックアップ</button><p id="bankDuplicateStatus" role="status"></p><div id="bankDuplicateReview"></div>'));
  const bankOptions=document.createElement('div');bankOptions.className='biz-field span2';bankOptions.innerHTML=field('口座名（別名は確認済みルールで統一）','bankAccountName','text','value="メイン口座"')+'<p class="biz-muted">UTF-8 / Shift_JIS。日付・摘要・入金・出金の列が必要です。信頼済み名称・唯一の全額一致は取込時に自動照合。その他は要確認。手入力の入金日は銀行証拠ではありません。</p><p id="bankImportStatus" role="status"></p><button class="biz-btn" onclick="accountingExport(\'bank\')">銀行照合結果CSV</button>';el('bankFile').parentElement.before(bankOptions);
  el('pageSales').append(section('未収一覧',field('基準日','receivableAsOf','date')+'<button class="biz-btn" onclick="renderSales()">基準日で表示</button><button class="biz-btn" onclick="accountingExport(\'receivables\')">未収金CSV</button><button class="biz-btn" onclick="accountingExport(\'sales\')">売上・入金CSV</button><div id="receivableRows"></div>'));
  for(const id of ['cashAdjustDate','receivableAsOf'])el(id).value=todayISO();

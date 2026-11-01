@@ -517,3 +517,35 @@ test('isolated concurrent full collections with different IDs commit only once',
 });
 
 test('four payment paths under actual Firestore rules',async()=>{const c=await clientFor('admin');try{const s=createService(c);await require('./payment-path-scenarios.cjs')({run:cmd=>exec(s,cmd),list:n=>c.listRecords(n),A:require('../js/accounting'),assert});}finally{c.dispose();}});
+
+// Exercise the Rules boundary through the low-level client, bypassing service/UI.
+// Both sides of a reference race are safe because historical mutations cannot commit.
+test('historical bank cancellation/restoration fails closed including forged ordinary actions and concurrent references',async()=>{
+ const admin=await clientFor('admin');
+ try {
+ const original={bankTxnId:'history',bankAccount:'メイン口座',bankTransactionDate:'2026-10-01',description:'history',incoming:1000,outgoing:0,amount:1000,status:'未照合',deletedAt:null};
+ await admin.put('bankTransactions','history',original,{operationId:'history-seed'});
+ const seed=(await getDoc(ref(db('admin'),'bankTransactions','history'))).data();
+ for(const patch of [{status:'cancelled'},{duplicateCancellation:{before:original,keeperId:'keeper'}},{deletedAt:'2026-11-02'}]){
+  await assert.rejects(admin.put('bankTransactions','history',{...original,...patch},{operationId:crypto.randomUUID(),expectedRevision:1}));
+ }
+ await assert.rejects(admin.put('bankTransactions','new-cancelled',{...original,status:'cancelled'},{operationId:'new-cancelled'}));
+ // Simulate a reverse reference arriving after a caller's empty scan.
+ assert.equal((await admin.listRecords('expenses')).length,0);
+ const race=await Promise.allSettled([
+  admin.put('bankTransactions','history',{...original,status:'cancelled'},{operationId:'race-cancel',expectedRevision:1}),
+  admin.put('expenses','late-ref',{expenseDate:'2026-10-01',amount:1000,bankTxnId:'history'},{operationId:'late-reference'})
+ ]);
+ assert.equal(race[0].status,'rejected');assert.equal(race[1].status,'fulfilled');
+ assert.deepEqual((await getDoc(ref(db('admin'),'bankTransactions','history'))).data(),seed);
+ await env.withSecurityRulesDisabled(async context=>{
+  await setDoc(ref(context.firestore(),'bankTransactions','old-cancelled'),{...seed,payload:{...original,status:'cancelled',duplicateCancellation:{before:original}}});
+ });
+ await assert.rejects(admin.put('bankTransactions','old-cancelled',original,{operationId:'restore-forged',expectedRevision:1}));
+ // Frozen tombstones cannot be edited while retaining their metadata either.
+ await assert.rejects(admin.put('bankTransactions','old-cancelled',{...original,status:'cancelled',duplicateCancellation:{before:original},memo:'edit'},{operationId:'edit-tombstone',expectedRevision:1}));
+ assert.equal((await getDoc(ref(db('admin'),'operations','race-cancel'))).exists(),false);
+ assert.equal((await getDoc(ref(db('admin'),'auditLogs','race-cancel_0'))).exists(),false);
+ assert.equal((await getDoc(ref(db('admin'),'bankTransactions','old-cancelled'))).data().payload.status,'cancelled');
+ }finally{admin.dispose();}
+});
