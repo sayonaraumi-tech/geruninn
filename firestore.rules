@@ -6,11 +6,26 @@ service cloud.firestore {
   function core(n) { return n in ['calendarLinks','estimates','projects','documents','sales','receivables','payments']; }
   function business(n) { return core(n) || n in ['expenses','suppliers','cashLedger','settings','bankTransactions','supplierTransactions','migrations']; }
   function before(c,n,id) { return exists(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)) ? get(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)).data.payload : null; }
+  // Historical cancellation is deliberately unavailable in this release. Never
+  // infer absence of reverse references from a browser collection scan.
+  // Freeze existing tombstones too: restoring one has the same reference race.
+  function bankHistoryGuard(c,n,id) {
+   let p=request.resource.data.payload;
+   let old=before(c,n,id);
+   return n!='bankTransactions' ||
+    (!(p.get('status','') in ['void','cancelled','duplicate','revised'])
+     && !(p.get('documentStatus','') in ['void','cancelled','duplicate','revised']) && !p.keys().hasAny(['duplicateCancellation'])
+     && p.get('deletedAt',null)==null
+     && (old==null || (!(old.get('status','') in ['void','cancelled','duplicate','revised'])
+      && !(old.get('documentStatus','') in ['void','cancelled','duplicate','revised'])
+      && !old.keys().hasAny(['duplicateCancellation']) && old.get('deletedAt',null)==null)));
+  }
   function valid(c,n,id) {
    let d=request.resource.data;
    let op=getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(d.lastOperationId)).data;
    let a=getAfter(/databases/$(database)/documents/companies/$(c)/auditLogs/$(d.lastAuditId)).data;
    return d.keys().hasOnly(['schemaVersion','companyId','payload','revision','createdBy','updatedBy','updatedAt','createdAt','lastOperationId','lastAuditId'])
+    && bankHistoryGuard(c,n,id)
     && d.schemaVersion==2 && d.companyId==c && d.payload is map && d.revision is int && d.revision>0
     && d.createdAt is timestamp
     && d.updatedBy==request.auth.uid && d.updatedAt==request.time

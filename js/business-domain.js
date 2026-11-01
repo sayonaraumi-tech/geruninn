@@ -81,16 +81,18 @@ function createService(client,{now=()=>new Date()}={}){
  if(cmd.type==='deleteMisregistration')cmd={...cmd,operationId:'delete_error_'+cmd.documentId+'_'+cmd.expectedRevision};
  let allocated=null;const observed=[];
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
+ if(['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type))throw Error('取消・復元は無効です。安全な参照ロックの導入までは監査・バックアップのみ利用できます。');
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
  if(cmd.type==='saveExpense'&&client.getState().role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
  const expenseSeed=(cmd.type==='expenseFromBank'||cmd.type==='saveExpense'&&cmd.skipDuplicate)?(await client.listRecords('expenses')).filter(r=>{try{return A.live(r.payload)&&(cmd.type==='expenseFromBank'||A.expenseKey(r.payload)===A.expenseKey(cmd.expense));}catch(_){return false;}}):[];
+ const bankSeed=['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type)?Object.fromEntries(await Promise.all(COLLECTIONS.filter(n=>n!=='auditLogs').map(async n=>[n,await client.listRecords(n)]))):cmd.type==='importBank'?Object.fromEntries(await Promise.all(['settings','bankTransactions','sales','receivables','payments','documents','expenses'].map(async n=>[n,await client.listRecords(n)]))):null;
  const importSeed=cmd.type==='historicalPdfImport'?{documents:await client.listRecords('documents'),sales:await client.listRecords('sales')}:null;
  const repairing=receiptRepair||cmd.type==='repairFormalDocument';
  if(repairing&&client.getState().role!=='admin')throw Error('正式帳票の補録は管理者のみです。');
  const calendarSeed=(repairing||['calendar','registerCalendarSale'].includes(cmd.type)||cmd.type==='saveDocument'&&formalType(cmd.snapshot?.docType))?await client.listRecords('calendarLinks'):[];
  const saleSeed=(repairing||cmd.type==='registerCalendarSale'||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('sales'):[];
  const deletionSeed=cmd.type==='deleteMisregistration'?Object.fromEntries(await Promise.all(['documents','sales','receivables','payments','projects','estimates','calendarLinks','bankTransactions','cashLedger'].map(async n=>[n,await client.listRecords(n)]))):null;
- const paymentSeed=(repairing||lifecycle||['bankMatch','payment','confirmBank'].includes(cmd.type)||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('payments'):[];
+ const paymentSeed=(repairing||lifecycle||['importBank','bankMatch','payment','confirmBank'].includes(cmd.type)||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('payments'):[];
  const cleanup=typeof module==='object'&&module.exports?require('./test-data-cleanup.js'):globalThis.TsukinowaTestCleanup;
  const cleanupPlan=cmd.type==='cleanTestData'?cleanup.plan(Object.fromEntries(await Promise.all(cleanup.COLLECTIONS.map(async n=>[n,await client.listRecords(n)])))):null;
  try{return await client.transact(cmd.operationId,cmd,async({read,write:rawWrite,remove,who,archiveAudit,reserveDocumentNumber,reserveUnique})=>{
@@ -109,7 +111,7 @@ function createService(client,{now=()=>new Date()}={}){
     }
     return {cleaned:cleanupPlan.map(e=>e.collection+'/'+e.id)};
   }
-  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable,expenseSeed,relatedPayments});
+  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable,expenseSeed,relatedPayments,bankSeed,backupDigest:x=>client.digest(core.canonical(core.normalizeDates(Object.fromEntries(Object.entries(x).map(([n,rs])=>[n,rs.slice().sort((a,b)=>a.id.localeCompare(b.id))])))))});
   const refs={};
   if(cmd.type==='registerCalendarSale'){
     if(who.role!=='admin')throw Error('売上登録は管理者のみです。');
