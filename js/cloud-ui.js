@@ -52,7 +52,8 @@
     el('cloudLoginForm').addEventListener('submit',async event=>{
       event.preventDefault();if(!client)return;
       el('cloudError').textContent='';el('cloudLogin').disabled=true;
-      try{await client.signIn(el('cloudEmail').value,el('cloudPassword').value);}
+      const draft=[...document.querySelectorAll('#pageBank input,#pageBank select,#pageExpenses input,#pageExpenses select')].filter(e=>e.id&&e.type!=='file').map(e=>({id:e.id,value:e.value,checked:e.checked}));
+      try{await client.signIn(el('cloudEmail').value,el('cloudPassword').value);for(const v of draft){const field=el(v.id);if(field){field.value=v.value;field.checked=v.checked;}}}
       catch(_){el('cloudError').textContent='ログインできませんでした。メール、パスワード、通信状態を確認してください。';el('cloudLogin').disabled=false;}
       finally{el('cloudPassword').value='';}
     });

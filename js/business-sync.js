@@ -5,6 +5,10 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  let stopped=false,running=null,error=null,reloading=false;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
  queue=load(queueKey,[]);
+ for(const item of queue.filter(x=>x.command?.type==='expenseFromBank')){
+  const key=prefix+'bank_conflict_backup_'+item.command.operationId;
+  if(!storage.getItem(key))storage.setItem(key,JSON.stringify(queue));
+ }
  const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
  if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
  for(const name of collections)rows[name]=load(prefix+name,[]);
@@ -29,16 +33,28 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
   if(running)return running;if(stopped||!online()||!queue.length){status();return Promise.resolve();}
   running=(async()=>{
    while(queue.length&&!stopped&&online()){
-    const item=queue[0];if(item.blocked){error=item.error;break;}
+    // Keep financial conflicts in the outbox. Only independent commands may pass them.
+    const isolated=x=>x.blocked&&x.command.type==='expenseFromBank'&&/既存の支出候補/.test(x.error||'');
+    const resolved=x=>isolated(x)&&!/参照を確認/.test(x.error||'')&&(rows.bankTransactions||[]).some(b=>b.id===x.command.bankTxnId&&b.payload.status==='照合済'&&b.payload.matchType==='expense');
+    const held=queue.filter(x=>isolated(x)&&!resolved(x));
+    const index=queue.findIndex(x=>(!isolated(x)||resolved(x))&&!held.some(h=>h.command.bankTxnId===x.command.bankTxnId&&x.command.type!=='bankMatch'));
+    if(index<0){error=held[0]?.error;break;}
+    const item=queue[index];if(item.blocked&&!resolved(item)){error=item.error;break;}
+    // Durable, untouched outbox backup before attempting bank expense recovery.
+    if(item.command.type==='expenseFromBank'){
+     const backupKey=prefix+'bank_conflict_backup_'+item.command.operationId;
+     if(!storage.getItem(backupKey))storage.setItem(backupKey,JSON.stringify(queue));
+    }
     try{const result=await service.execute(item.command);if(stopped)return;
       if(item.command.type==='payment')await reload();
       // Persist removal before issuing the next command. Replaying a committed operation is safe after a quota failure.
-      const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;try{onCommitted(item.command,result);}catch(observerError){onFailure(item.command,'保存済み。画面を再読込してください：'+observerError.message);}
+      const next=queue.filter(x=>x!==item);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=queue.find(x=>x.blocked)?.error||null;try{onCommitted(item.command,result);}catch(observerError){onFailure(item.command,'保存済み。画面を再読込してください：'+observerError.message);}
     }catch(e){
       if(stopped)return;
       const transient=['unavailable','deadline-exceeded','cancelled','network-request-failed'].some(x=>String(e.code||'').includes(x))||!online();
       error=(e.code?'['+e.code+'] ':'')+(e.message||'Firestore同期失敗');
       if(!transient){item.blocked=true;item.error=error;try{saveQueue();}catch(_){} onFailure(item.command,error); }
+      if(!transient&&item.command.type==='expenseFromBank'&&/既存の支出候補/.test(error)&&!resolved(item))continue;
       break;
     }
    }
