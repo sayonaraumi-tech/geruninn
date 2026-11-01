@@ -93,10 +93,13 @@ const creditExpense=e=>['法人信用カード','クレジットカード'].incl
 const bankExpense=e=>['銀行振込','口座振替','GMO銀行','法人銀行デビット'].includes(e.paymentMethod);
 function cardExpenses(bank,data){return unique(data.expenses||[]).filter(e=>live(e)&&creditExpense(e)&&!e.bankTxnId&&e.bankAccount&&e.expenseDate<=bank.bankTransactionDate);}
 const cardSettlement=b=>!!b.outgoing&&!/デビット|debit/i.test(String(b.description||'').normalize('NFKC'))&&/カード|ｶｰﾄﾞ|card|visa|master|jcb|amex|アメックス|クレジット/i.test(String(b.description||'').normalize('NFKC'));
+function expenseBankEligible(bank,e){
+ return bankExpense(e)||(/デビット|debit/i.test(String(bank.description||'').normalize('NFKC'))&&e.paymentMethod==='法人カード決済'&&Math.abs(Date.parse(bank.bankTransactionDate)-Date.parse(e.expenseDate))/86400000<=7);
+}
 function expenseMatch(bank,data){
  if(bank.status==='照合済')return {status:'照合済',candidates:[]};
  if(cardSettlement(bank))return {status:'未一致',candidates:[],card:true};
- const candidates=unique(data.expenses||[]).filter(e=>live(e)&&bankExpense(e)&&!e.bankTxnId).flatMap(e=>{const score=bankMatchScore(bank,e.amount,e.expenseDate,e.vendor);if(!score)return [];if(nameMatch(bank.description,e.description)&&score.score<100){score.score=100;score.reasons.push('内容一致');}return [{kind:'expense',id:e.expenseId||e.id,paymentId:'',...score}];});
+ const candidates=unique(data.expenses||[]).filter(e=>live(e)&&expenseBankEligible(bank,e)&&!e.bankTxnId).flatMap(e=>{const score=bankMatchScore(bank,e.amount,e.expenseDate,e.vendor);if(!score)return [];if(nameMatch(bank.description,e.description)&&score.score<100){score.score=100;score.reasons.push('内容一致');}return [{kind:'expense',id:e.expenseId||e.id,paymentId:'',...score}];});
  const certain=candidates.length===1&&candidates[0].score===100;
  return {status:certain?'要確認':candidates.length?'候補':'未一致',candidates};
 }
@@ -181,5 +184,5 @@ function autoBankTarget(bank,data){
 function bankEvidence(p,data){return (data.bankTransactions||[]).some(b=>live(b)&&b.status==='照合済'&&(b.id||b.bankTxnId)===p.bankTxnId&&b.paymentId===(p.id||p.paymentId)&&b.incoming===p.amount);}
 function bankMatch(bank,data){if(!live(bank))return {status:'取消済',candidates:[]};if(['照合済','除外'].includes(bank.status))return {status:bank.status,candidates:[]};if(bank.outgoing)return expenseMatch(bank,data);const candidates=suggestions(bank,data);return {status:candidates.length?'要確認':'未一致',candidates};}
 function csv(rows){const cell=v=>'"'+(typeof v==='number'?String(v):String(v??'').replace(/^[\s]*[=+@-]/,"'$&")).replace(/"/g,'""')+'"';return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');}
-return {bankCancellationReview,creditExpense,cardExpenses,bankAccountKey,bankIdentity,bankDuplicate,bankSpecial,autoBankTarget,bankEvidence,expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
+return {expenseBankEligible,bankCancellationReview,creditExpense,cardExpenses,bankAccountKey,bankIdentity,bankDuplicate,bankSpecial,autoBankTarget,bankEvidence,expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
 });

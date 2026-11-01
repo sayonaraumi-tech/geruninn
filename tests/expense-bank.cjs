@@ -54,3 +54,12 @@ test('sales incoming suggestions preserve existing pending payment matching',()=
 });
 
 test('only explicit debit can match a purchase; credit and unknown legacy cards require separate review',()=>{for(const paymentMethod of ['法人カード決済','クレジットカード','法人信用カード'])assert.equal(A.expenseMatch(bank(),{expenses:[{...expense({paymentMethod}),expenseId:'card'}]}).candidates.length,0);assert.equal(A.expenseMatch(bank(),{expenses:[{...expense({paymentMethod:'法人銀行デビット'}),expenseId:'debit'}]}).status,'要確認');});
+test('2026-10-24 Bic Camera debit reuses the legacy corporate expense and safely completes old queued registration',async()=>{
+ const h=await harness(),e=expense({expenseDate:'2026-10-24',paymentMethod:'法人カード決済',vendor:'ビックカメラ',category:'消耗品費'}),b=bank({bankTransactionDate:'2026-10-24',description:'Visaデビット ビックカメラ池袋西口店'});
+ await h.execute({type:'saveExpense',expenseId:'bic-existing',expense:e,expectedRevision:0});await h.execute({type:'importBank',bank:b});
+ const queued={type:'expenseFromBank',bankTxnId:b.bankTxnId,expense:{...e,paymentMethod:'法人銀行デビット'}};
+ await assert.rejects(h.execute(queued),/既存/);assert.equal(h.list('expenses').length,1);
+ await h.execute({type:'bankMatch',bankTxnId:b.bankTxnId,targetType:'expense',targetId:'bic-existing',expectedRevision:1});
+ assert.equal((await h.execute(queued)).unchanged,true);assert.equal((await h.execute(queued)).unchanged,true);assert.equal(h.list('expenses').length,1);assert.equal(h.list('cashLedger').length,0);
+ assert.equal(h.list('expenses')[0].payload.expenseDate,'2026-10-24');assert.equal(h.list('expenses')[0].payload.paymentMethod,'法人カード決済');
+});

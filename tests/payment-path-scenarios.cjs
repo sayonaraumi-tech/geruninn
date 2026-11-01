@@ -28,8 +28,12 @@ module.exports=async function paymentPaths({run,list,A,assert}){
  for(const id of ['path-cash','path-rep','path-ic'])await assert.rejects(run({type:'bankMatch',bankTxnId:'path-out',targetType:'expense',targetId:id}),/一致/);
  await save('path-debit','法人銀行デビット',6060);await save('path-credit-a','法人信用カード',1000,'VISA-1234');await save('path-credit-b','法人信用カード',2000,'VISA-1234');await save('path-other-card','法人信用カード',3000,'JCB-5678');await save('path-legacy','法人カード決済',6060);
  await run({type:'importBank',bank:bank('path-debit-bank',6060,'Visaデビット path-store')});
- d=await data(d=>d.bankTransactions.some(b=>b.id==='path-debit-bank')&&d.expenses.length===8);assert.equal(A.expenseMatch(d.bankTransactions.find(b=>b.id==='path-debit-bank'),d).candidates.length,1);
+ d=await data(d=>d.bankTransactions.some(b=>b.id==='path-debit-bank')&&d.expenses.length===8);assert.equal(A.expenseMatch(d.bankTransactions.find(b=>b.id==='path-debit-bank'),d).candidates.length,2);
  await run({type:'bankMatch',bankTxnId:'path-debit-bank',targetType:'expense',targetId:'path-debit'});
+ await run({type:'importBank',bank:bank('path-legacy-bank',6060,'Visaデビット ビックカメラ池袋西口店')});
+ await run({type:'bankMatch',bankTxnId:'path-legacy-bank',targetType:'expense',targetId:'path-legacy',expectedRevision:1});
+ const oldQueued={type:'expenseFromBank',bankTxnId:'path-legacy-bank',expense:{...expense('法人銀行デビット',6060),expenseDate:'2026-10-03'}};
+ assert.equal((await run(oldQueued)).unchanged,true);assert.equal((await run(oldQueued)).unchanged,true);
  await run({type:'importBank',bank:bank('path-credit-generic',1000)});
  await assert.rejects(run({type:'bankMatch',bankTxnId:'path-credit-generic',targetType:'expense',targetId:'path-credit-a'}),/一致/);
  await assert.rejects(run({type:'expenseFromBank',bankTxnId:'path-credit-generic',expense:{...expense('銀行振込',1000),expenseDate:'2026-10-03'}}),/既存/);

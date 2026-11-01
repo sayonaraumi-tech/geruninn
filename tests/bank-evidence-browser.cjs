@@ -35,6 +35,25 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.locator('#bizNav [data-page="dashboard"]').click();await page.evaluate(()=>{document.getElementById('homeMonth').value='2026-10';renderDashboard();});assert.equal(await page.locator('#kpiSales').innerText(),'¥0');assert.equal(await page.locator('#kpiPayments').innerText(),'¥1,594,900');assert.equal(await page.locator('#homeLedger tbody tr').count(),1);assert.match(await page.locator('#homeLedger').innerText(),/2026-09-30.*2026-10-31/s);
  await page.evaluate(()=>bizSwitchPage('expenses'));await page.locator('#expCategory').selectOption('材料費');await page.locator('#expVendor').fill('任意取引先');await page.locator('#expVendor').dispatchEvent('change');assert.equal(await page.locator('#expCategory').inputValue(),'材料費');
  for(const category of ['材料費','消耗品費','給与','外注費','車両費','交通費','支払手数料'])assert.equal(await page.locator('#expCategory option[value="'+category+'"]').count(),1);
+ await page.evaluate(async()=>{
+  const run=cmd=>testService.execute({...cmd,operationId:crypto.randomUUID()});
+  await run({type:'saveExpense',expenseId:'bic-6060',expense:{expenseDate:'2026-10-24',category:'消耗品費',paymentMethod:'法人カード決済',amount:6060,vendor:'BIC CAMERA',description:'備品'},expectedRevision:0});
+  await run({type:'importBank',bank:{bankTxnId:'bic-bank',bankTransactionDate:'2026-10-24',incoming:0,outgoing:6060,amount:6060,description:'Visaデビット ビックカメラ池袋西口店',bankAccount:'GMOあおぞら'}});
+  await run({type:'importBank',bank:{bankTxnId:'new-bank',bankTransactionDate:'2026-10-24',incoming:0,outgoing:4321,amount:4321,description:'未登録店舗',bankAccount:'GMOあおぞら'}});
+ });
+ await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.some(b=>b.id==='new-bank'));
+ await page.evaluate(()=>bizSwitchPage('bank'));
+ const bic=page.locator('#bankRows tr').filter({hasText:'池袋西口店'});assert.match(await bic.innerText(),/BIC CAMERA/);assert.equal(await bic.getByRole('button',{name:'この銀行明細から支出登録'}).count(),0);
+ await bic.locator('select').selectOption({index:1});await bic.getByRole('button',{name:'照合確定'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='bic-bank').status==='照合済');
+ const before=await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length);
+ await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
+ assert(await page.locator('#pageBank').isVisible());assert(await page.locator('#bankExpenseDialog').isVisible());
+ await page.locator('#bankExpenseForm [name=vendor]').fill('株式会社新店舗');await page.locator('#bankExpenseForm [name=category]').selectOption('消耗品費');
+ await page.locator('#bankExpenseClose').click();assert(await page.locator('#pageBank').isVisible());assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length),before);
+ await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
+ await page.locator('#bankExpenseForm [name=vendor]').fill('株式会社新店舗');await page.locator('#bankExpenseForm [name=category]').selectOption('消耗品費');
+ await page.getByRole('button',{name:'支出登録・照合確認'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='new-bank').status==='照合済');
+ assert(await page.locator('#pageBank').isVisible());assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length),before+1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  assert.deepEqual(errors,[]);console.log('PASS '+width+'px: CSV UI auto receipt, alias reimport, historical display grouping, compact bank rows, HOME periods, full categories and manual selection preserved');await page.close();
  }}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});
 
