@@ -8,8 +8,8 @@ test('Tsukai 112376: one linked business row; pending record is visible without 
 });
 test('installments obey month/year/custom cutoffs and export shares the exact row fields',()=>{
  const d={sales:[sale()],payments:[pay('one',50000,'2026-10-20'),pay('two',62376,'2026-11-10')]};
- let r=A.ledgerRows(d,period('2026-10'))[0];assert.equal(r.paid,50000);assert.equal(r.incoming,50000);assert.equal(r.status,'一部入金');assert(!r.paymentDates.includes('2026-11'));
- r=A.ledgerRows(d,period('2026-11'))[0];assert.equal(r.sales,0);assert.equal(r.paid,112376);assert.equal(r.incoming,62376);assert.equal(r.status,'入金済');
+ let r=A.ledgerRows(d,period('2026-10'))[0];assert.equal(r.paid,50000);assert.equal(r.incoming,50000);assert.equal(r.status,'一部入金 / 銀行未照合');assert(!r.paymentDates.includes('2026-11'));
+ r=A.ledgerRows(d,period('2026-11'))[0];assert.equal(r.sales,0);assert.equal(r.paid,112376);assert.equal(r.incoming,62376);assert.equal(r.status,'入金済 / 銀行未照合');
  for(const p of [A.periodFilter({year:2026}),A.periodFilter({start:'2026-10-20',end:'2026-11-10'})]){const rows=A.ledgerRows(d,p);assert.equal(rows.length,1);assert.equal(rows[0].incoming,112376);assert.equal(rows[0].sales,0);assert.deepEqual(A.settlementExport(d,p).at(-1),A.ledgerCells(rows[0]));}
 });
 test('genuine distinct duplicate sale and unlinked payments are retained, no name/amount dedup',()=>{

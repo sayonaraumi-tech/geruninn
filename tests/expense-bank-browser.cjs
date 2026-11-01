@@ -34,7 +34,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>bizSwitchPage('bank'));
  const bankCsv='日付,摘要,入金,出金,取引ID\n2026-10-04,電話会社,,1000,high\n2026-10-04,不明摘要,,3000,candidate\n2026-10-04,未登録,,4000,unmatched\n2026-10-04,VISA カード利用代金,,6060,card';
  await desktop.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(bankCsv)});await desktop.evaluate(()=>importBankCsv());await idle();
- assert.equal((await snapshot()).expenses.length,6);assert.match(await desktop.locator('#bankRows').innerText(),/自動一致/);assert.match(await desktop.locator('#bankRows').innerText(),/候補/);assert.match(await desktop.locator('#bankRows').innerText(),/未一致/);
+ assert.equal((await snapshot()).expenses.length,6);assert.match(await desktop.locator('#bankRows').innerText(),/要確認/);assert.match(await desktop.locator('#bankRows').innerText(),/候補/);assert.match(await desktop.locator('#bankRows').innerText(),/未一致/);
  const high=desktop.locator('#bankRows tr').filter({hasText:'電話会社'});await high.locator('select').selectOption({index:1});await high.getByRole('button',{name:'照合確定'}).click();await idle();assert.match(await high.innerText(),/照合済/);assert.equal((await snapshot()).expenses.length,6);
  const candidate=desktop.locator('#bankRows tr').filter({hasText:'不明摘要'});const candidateId=(await snapshot()).bank.find(b=>b.externalId==='candidate').id;assert.equal((await snapshot()).bank.find(b=>b.id===candidateId).status,'未照合');
  await candidate.locator('select').selectOption({index:1});

@@ -32,7 +32,7 @@ test('manual and CSV share saveExpense, repeated/concurrent imports skip and onl
 });
 test('bank import is evidence only; match/replay/unmatch updates existing expense, never creates fee',async()=>{
  const h=await harness(),e=expense();await h.execute({type:'saveExpense',expenseId:'expense-one',expense:e,expectedRevision:0});await h.execute({type:'importBank',bank:bank()});
- const data=()=>({expenses:h.list('expenses').map(r=>r.payload)});assert.equal(A.expenseMatch(bank(),data()).status,'自動一致');assert.equal(h.list('expenses').length,1);
+ const data=()=>({expenses:h.list('expenses').map(r=>r.payload)});assert.equal(A.expenseMatch(bank(),data()).status,'要確認');assert.equal(h.list('expenses').length,1);
  const cmd={type:'bankMatch',bankTxnId:'bank-one',targetType:'expense',targetId:'expense-one',expectedRevision:1};await h.execute(cmd);await h.execute(cmd);assert.equal(h.list('expenses').length,1);assert.equal(h.list('expenses')[0].payload.bankTxnId,'bank-one');assert.equal(h.list('cashLedger').length,0);
  await h.execute({type:'bankUnmatch',bankTxnId:'bank-one',reason:'再確認',expectedRevision:2});assert(!h.list('expenses')[0].payload.bankTxnId);assert.equal(h.list('expenses').length,1);
 });
@@ -53,4 +53,4 @@ test('sales incoming suggestions preserve existing pending payment matching',()=
  assert(A.suggestions(bank({incoming:6060,outgoing:0}),data).some(s=>s.kind==='sale'&&s.paymentId==='pending'));
 });
 
-test('single corporate card purchase can match, monthly settlement cannot',()=>{for(const paymentMethod of ['法人カード決済','クレジットカード'])assert.equal(A.expenseMatch(bank(),{expenses:[{...expense({paymentMethod}),expenseId:'card'}]}).status,'自動一致');});
+test('single corporate card purchase can match, monthly settlement cannot',()=>{for(const paymentMethod of ['法人カード決済','クレジットカード'])assert.equal(A.expenseMatch(bank(),{expenses:[{...expense({paymentMethod}),expenseId:'card'}]}).status,'要確認');});

@@ -23,6 +23,22 @@ async function clientFor(role){
 async function until(fn){const start=Date.now();while(!fn()){if(Date.now()-start>12000)throw Error('snapshot timeout');await new Promise(r=>setTimeout(r,30));}}
 const snapshot=(id,type='invoice')=>({documentId:id,docType:type,customerName:'共有テスト',invoiceDate:'2026-09-20',salesDate:'2026-09-10',items:[{content:'施工',qty:1,price:90909.09}],travelFee:0,paymentMethod:'現金'});
 const exec=(service,cmd)=>service.execute({operationId:crypto.randomUUID(),...cmd});
+test('bank evidence workflow: alias dedup, auto receipt reuse and special accounting under real rules',async()=>{
+ const admin=await clientFor('admin'),s=createService(admin);try{
+ await exec(s,{type:'saveDocument',snapshot:{...snapshot('evidence'),paymentMethod:'銀行振込'},expectedRevision:0});
+ await exec(s,{type:'payment',paymentId:'manual',saleId:'sale_evidence',amount:100000,paymentDate:'2026-09-21',method:'銀行振込',manualConfirmed:true});
+ const formal=JSON.stringify(await admin.listRecords('documents'));
+ await exec(s,{type:'saveBankRule',ruleType:'bankAccountAlias',key:'メイン口座',canonical:'GMOあおぞら'});
+ await exec(s,{type:'saveBankRule',ruleType:'bankPartyAlias',key:'振込 共有テスト',customer:'共有テスト'});
+ const b={bankTxnId:'original',bankAccount:'GMOあおぞら',bankTransactionDate:'2026-10-01',description:'振込 共有テスト',incoming:100000,outgoing:0,amount:100000,balance:200000,occurrence:1};
+ await exec(s,{type:'importBank',bank:b});await exec(s,{type:'importBank',bank:{...b,bankTxnId:'alias',bankAccount:'メイン口座'}});
+ let banks=await admin.listRecords('bankTransactions'),payments=await admin.listRecords('payments');assert.equal(banks.length,1);assert.equal(banks[0].payload.status,'照合済');assert.equal(payments.length,1);assert.equal(payments[0].payload.paymentDate,'2026-09-21');assert.equal(payments[0].payload.bankTransactionDate,'2026-10-01');assert.equal(JSON.stringify(await admin.listRecords('documents')),formal);
+ for(const category of ['受取利息','支払手数料'])await exec(s,{type:'saveBankRule',ruleType:'bankSpecialPolicy',key:category});
+ for(const [description,incoming,outgoing,balance]of [['受取利息',50,0,200050],['振込手数料',0,100,199950]])await exec(s,{type:'importBank',bank:{...b,bankTxnId:description,description,incoming,outgoing,amount:incoming||outgoing,balance}});
+ assert.equal((await admin.listRecords('expenses')).length,1);assert.equal((await admin.listRecords('sales')).length,1);assert.equal((await admin.listRecords('payments')).length,1);
+ const staff=await clientFor('staff');try{await assert.rejects(exec(createService(staff),{type:'saveBankRule',ruleType:'bankPartyAlias',key:'x',customer:'x'}),/管理者/);}finally{staff.dispose();}
+ }finally{admin.dispose();}
+});
 test('calendar manual sales are admin-only, cash mirrors atomically and bank stays unpaid',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
  for(const method of ['現金','銀行振込']){
