@@ -21,7 +21,7 @@ This is a code/fixture diagnosis, not a claim to have inspected or repaired prod
 
 ## Classification learning
 
-- The user explicitly checks the learning box when saving a reviewed expense. Expense and rule writes use the existing audited transaction; import/render never learns silently.
+- Saving a manually reviewed expense can save its vendor/category rule in the same transaction. The visible learning checkbox defaults on for a new vendor and turns on when the category is manually changed; it can be unchecked. Reusing an existing rule, including a disabled/deleted rule, does not silently re-enable learning. Editing an expense starts with learning off. Empty/one-character vendors are not learned. Expense and rule writes use the existing audited transaction; import/render never learns silently.
 - Rules live in company-scoped admin-only `settings` records, one stable ID per normalized vendor. Existing settings permissions and audit/version conflict checks apply. No Firestore rules change is required.
 - Safe key: NFKC width normalization, lower case, trim and collapse whitespace. Keep legal forms, punctuation, digits and word boundaries. Match the whole key; no fuzzy/substring classification. Multiple conflicting rules require review.
 - Manual vendor changes and explicit bank-to-expense entry prefill from active rules. Expense CSV supplied categories win; blank categories use active rules. Unruled blank categories are marked `要確認` and need explicit acknowledgement before importing as `その他`. Invalid supplied categories still block import.

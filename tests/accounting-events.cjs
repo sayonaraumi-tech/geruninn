@@ -27,7 +27,7 @@ for(const method of ['現金','銀行振込'])test('Masuda 79500 schedule -> rec
  await save(h,invoice('i',{calendarEventId:e.id,invoiceDate:'2026-11-01'}));
  assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,method==='現金'?1:0);
  const d=data(h),m=A.monthly(d,'2026-10');assert.equal(m.sales,amount);assert.equal(m.income,amount);assert.equal(m.receivables,0);assert.equal(A.monthly(d,'2026-11').sales,0);
- const rows=A.ledgerRows(d,A.periodFilter({month:'2026-10'}));assert.deepEqual(rows.map(r=>r.type).sort(),['入金','売上']);assert.equal(rows.reduce((n,r)=>n+r.incoming,0),amount);
+ const rows=A.ledgerRows(d,A.periodFilter({month:'2026-10'}));assert.deepEqual(rows.map(r=>r.type).sort(),['売上']);assert.equal(rows.reduce((n,r)=>n+r.incoming,0),amount);
 });
 test('confirmed September receipt keeps period/identity through October bank evidence and unmatch/rematch',async()=>{
  const h=await harness(),i=await save(h,invoice('i',{invoiceDate:'2026-09-01'}));

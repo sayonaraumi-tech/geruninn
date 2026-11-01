@@ -45,14 +45,14 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  // Invalid preview disables commit and cannot enqueue a partial batch.
  await desktop.locator('#expenseFile').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('日付,科目,支払方法,金額,取引先,内容・備考\n2026-02-30,その他,現金,1,A,B')});await desktop.evaluate(()=>accountingPreviewExpenses());assert(await desktop.locator('#expenseImportCommit').isDisabled());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/エラー 1件/);
  // Explicit learning uses the same authenticated expense transaction and syncs settings.
- await desktop.evaluate(()=>{expDate.value='2026-10-10';expCategory.value='通信費';expMethod.value='銀行振込';expAmount.value=123;expVendor.value='ＡＢＣ 店';expMemo.value='学習確認';expenseLearnCategory.checked=true;return addExpense();});await idle();
+ await desktop.evaluate(()=>{expDate.value='2026-10-10';expCategory.value='通信費';expMethod.value='銀行振込';expAmount.value=123;expVendor.value='ＡＢＣ 店';expMemo.value='学習確認';expenseLearnCategory.checked=false;expCategory.dispatchEvent(new Event('change'));if(!expenseLearnCategory.checked)throw Error('manual category confirmation must enable learning');return addExpense();});await idle();
  await desktop.waitForFunction(()=>document.getElementById('expenseCategoryRules').textContent.includes('ＡＢＣ 店'));
  await desktop.locator('#expVendor').fill('abc   店');await desktop.locator('#expVendor').dispatchEvent('change');assert.equal(await desktop.locator('#expCategory').inputValue(),'通信費');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/学習ルール/);
  const history=JSON.stringify((await snapshot()).expenses);
  let rule=desktop.locator('#expenseCategoryRules tr').filter({hasText:'ＡＢＣ 店'});await rule.getByRole('button',{name:'有効・停止'}).click();await idle();assert.match(await rule.innerText(),/停止/);
- await desktop.locator('#expVendor').dispatchEvent('change');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/要確認/);
+ await desktop.locator('#expVendor').dispatchEvent('change');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/要確認/);assert.equal(await desktop.locator('#expenseLearnCategory').isChecked(),false);
  desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.type()==='prompt'?d.accept('材料費'):d.type()==='confirm'?d.accept():d.dismiss());
- await rule.getByRole('button',{name:'変更',exact:true}).click();await idle();assert.match(await rule.innerText(),/材料費/);await rule.getByRole('button',{name:'削除',exact:true}).click();await idle();assert.equal(await desktop.locator('#expenseCategoryRules').getByRole('button',{name:'変更',exact:true}).count(),0);assert.equal(JSON.stringify((await snapshot()).expenses),history);
+ await rule.getByRole('button',{name:'変更',exact:true}).click();await idle();assert.match(await rule.innerText(),/材料費/);await rule.getByRole('button',{name:'削除',exact:true}).click();await idle();assert.equal(await rule.count(),0);assert.equal(JSON.stringify((await snapshot()).expenses),history);
  // Render the reported production shape; preview/dropdown must never write anything.
  const beforePreview=await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length);
  await desktop.evaluate(()=>{
