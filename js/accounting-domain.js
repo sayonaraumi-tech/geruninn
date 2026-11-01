@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./accounting.js'):root.TsukinowaAccounting);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaAccountingDomain=api;})(globalThis,function(A){
 'use strict';
-const TYPES=['saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','bankUnmatch','bankExclude','backfillCash','migrateAccounting','accountingMigrationComplete'];
+const TYPES=['saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','expenseFromBank','bankUnmatch','bankExclude','backfillCash','migrateAccounting','accountingMigrationComplete'];
 async function mirrorCash(name,id,p,read,write){
  let eligible=false,type='expense',category='',description='',date='',linkedPaymentId='',linkedExpenseId='',linkedSupplierTransactionId='';
  if(name==='payments'){eligible=p.confirmation==='cash-received';type='income';category='現金入金';description=p.memo||'現場入金';date=p.paymentDate;linkedPaymentId=id;}
@@ -11,7 +11,8 @@ async function mirrorCash(name,id,p,read,write){
  if(eligible&&!p.deletedAt&&p.amount>0)await write('cashLedger',cashTxnId,{cashTxnId,date,type,category,description:description||'',amount:p.amount,linkedPaymentId,linkedExpenseId,linkedSupplierTransactionId,deletedAt:null},'cash transaction');
  else if(old&&!old.payload.deletedAt)await write('cashLedger',cashTxnId,{...old.payload,deletedAt:new Date().toISOString()},'cash transaction');
 }
-async function handle(cmd,{read,write,who,stable,expenseSeed=[]}){
+async function handle(cmd,context){
+ const {read,write,who,stable,expenseSeed=[],relatedPayments}=context;
  if(who.role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
  const now=()=>new Date().toISOString(),required=(s,label)=>{if(typeof s!=='string'||!s.trim())throw Error(label+'を入力してください。');return s.trim();};
  if(cmd.type==='saveExpense'){
@@ -46,13 +47,24 @@ async function handle(cmd,{read,write,who,stable,expenseSeed=[]}){
   await write('bankTransactions',b.bankTxnId,{...b,status:'未照合',deletedAt:null},'bank csv import',0);return {bankTxnId:b.bankTxnId};
  }
  if(cmd.type==='bankExclude'){const b=await read('bankTransactions',cmd.bankTxnId);if(!b||b.payload.status==='照合済')throw Error('照合を解除してから除外してください。');await write('bankTransactions',cmd.bankTxnId,{...b.payload,status:cmd.excluded?'除外':'未照合',excludeReason:required(cmd.reason,'理由')},'adjustment',cmd.expectedRevision);return {bankTxnId:cmd.bankTxnId};}
+ if(cmd.type==='expenseFromBank'){
+  const row=await read('bankTransactions',cmd.bankTxnId);if(!row||!A.live(row.payload)||['照合済','除外'].includes(row.payload.status)||!row.payload.outgoing||A.cardSettlement(row.payload))throw Error('未一致の銀行出金を選択してください。');
+  const b=row.payload,e=A.expenseInput(cmd.expense);if(e.amount!==b.outgoing||e.expenseDate!==b.bankTransactionDate||!A.bankExpense(e)||!e.vendor||!e.description)throw Error('金額・日付・科目・取引先・内容・銀行支払方法を確認してください。');
+  const existing=[];for(const seed of expenseSeed){const row=await read('expenses',seed.id);if(row)existing.push({...row.payload,id:seed.id});}if(A.expenseMatch(b,{expenses:existing}).candidates.length||existing.some(x=>{try{return A.live(x)&&A.expenseKey(x)===A.expenseKey(e);}catch(_){return false;}}))throw Error('既存の支出候補があります。銀行照合から確認してください。');
+  const expenseId=await stable('expense_bank',cmd.bankTxnId);if(await read('expenses',expenseId))throw Error('この銀行明細の支出は登録済みです。');
+  await handle({type:'saveExpense',expenseId,expense:{...e,bankAccount:b.bankAccount},expectedRevision:0},context);
+  return handle({type:'bankMatch',bankTxnId:cmd.bankTxnId,targetType:'expense',targetId:expenseId,expectedRevision:cmd.expectedRevision},context);
+ }
  if(cmd.type==='bankMatch'){
   const row=await read('bankTransactions',cmd.bankTxnId);if(!row)throw Error('銀行取引がありません。');const b=row.payload;if(b.status==='照合済'){if(b.matchId===cmd.targetId&&b.matchType===cmd.targetType)return {unchanged:true};throw Error('別の記録と照合済みです。先に解除してください。');}if(b.status==='除外')throw Error('除外を解除してください。');
   let paymentId='',pendingBefore=null;
   if(cmd.targetType==='sale'){
-   if(!b.incoming)throw Error('入金取引を選択してください。');const sale=await read(String(cmd.targetId).startsWith('receivable_')?'receivables':'sales',cmd.targetId);if(!sale||!A.live(sale.payload))throw Error('請求書がありません。');paymentId=cmd.paymentId||'pay_'+b.bankTxnId;const p=await read('payments',paymentId);
-   if(cmd.paymentId){if(!p||p.payload.saleId!==cmd.targetId||p.payload.amount!==b.incoming||p.payload.confirmation!=='pending-bank'||p.payload.deletedAt)throw Error('仮入金の金額・対象・状態が一致しません。');pendingBefore=p.payload;}
-   else if(p&&!p.payload.deletedAt)throw Error('この銀行取引の入金は登録済みです。');
+   if(!b.incoming)throw Error('入金取引を選択してください。');const sale=await read(String(cmd.targetId).startsWith('receivable_')?'receivables':'sales',cmd.targetId);if(!sale||!A.live(sale.payload))throw Error('請求書がありません。');const existing=await relatedPayments(cmd.targetId),paid=existing.filter(A.confirmed).reduce((n,p)=>n+Number(p.amount),0),eligible=existing.filter(p=>!p.bankTxnId&&!p.bankId&&p.amount===b.incoming&&['pending-bank','bank-confirmed'].includes(p.confirmation));
+   if(!cmd.paymentId&&eligible.length>1)throw Error('既存入金が複数あります。照合する入金を選択してください。');
+   paymentId=cmd.paymentId||(eligible.length===1?(eligible[0].id||eligible[0].paymentId):'pay_'+b.bankTxnId);const storedPayment=await read('payments',paymentId),p=storedPayment&&!storedPayment.payload.deletedAt?storedPayment:null;
+   if(!p&&b.incoming>sale.payload.amount-paid)throw Error('確認済み入金または未収金額を確認してください。');
+   if(p){if(p.payload.saleId!==cmd.targetId||p.payload.amount!==b.incoming||!['pending-bank','bank-confirmed'].includes(p.payload.confirmation)||p.payload.bankTxnId||p.payload.bankId||p.payload.deletedAt)throw Error('仮入金の金額・対象・状態が一致しません。');pendingBefore=p.payload;}
+   if(p?.payload.confirmation!=='bank-confirmed'&&b.incoming>sale.payload.amount-paid)throw Error('未収金額を超える入金です。');
    await write('payments',paymentId,{...(p?.payload||{}),id:paymentId,paymentId,saleId:cmd.targetId,amount:b.incoming,paymentDate:b.bankTransactionDate,date:b.bankTransactionDate,bankTransactionDate:b.bankTransactionDate,method:p&&A.paymentChannel(p.payload).channel==='プラットフォーム経由'?p.payload.method:'銀行振込',bankAccount:b.bankAccount,bankTxnId:b.bankTxnId,confirmation:'bank-confirmed',memo:b.description,deletedAt:null},'payment confirm');
   }else if(cmd.targetType==='expense'||cmd.targetType==='supplier'){
    if(!b.outgoing)throw Error('出金取引を選択してください。');const collection=cmd.targetType==='expense'?'expenses':'supplierTransactions',target=await read(collection,cmd.targetId);if(!target||target.payload.deletedAt||target.payload.amount!==b.outgoing||(cmd.targetType==='expense'&&(!A.bankExpense(target.payload)||A.cardSettlement(b)))||target.payload.paymentMethod==='現金'||target.payload.bankTxnId||cmd.targetType==='expense'&&target.payload.paymentMethod==='月締'||cmd.targetType==='supplier'&&!['payment','prepayment'].includes(target.payload.type))throw Error('支出・支払の金額/状態が一致しません。');

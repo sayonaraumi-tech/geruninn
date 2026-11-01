@@ -486,3 +486,5 @@ test('formal WOOC invoice and historical repair preserve Rules, immutable docume
   assert((await exec(a,{type:'repairFormalDocument',documentId:'wooc'})).skipped);
  }finally{admin.dispose();staff.dispose();}
 });
+
+test('new bank receipts rematch and confirmed receipts reuse existing collection under unchanged rules',async()=>{const admin=await clientFor('admin'),a=createService(admin);await exec(a,{type:'saveDocument',snapshot:snapshot('rematch-bank'),expectedRevision:0});const bank={bankTxnId:'rematch-bank',bankTransactionDate:'2026-10-05',bankAccount:'試験',description:'試験入金',incoming:50000,outgoing:0,amount:50000};await exec(a,{type:'importBank',bank});const match={type:'bankMatch',bankTxnId:bank.bankTxnId,targetType:'sale',targetId:'sale_rematch-bank'};await exec(a,{...match,expectedRevision:1});await exec(a,{type:'bankUnmatch',bankTxnId:bank.bankTxnId,expectedRevision:2,reason:'再確認'});await exec(a,{...match,expectedRevision:3});assert.equal((await records('payments')).filter(A.confirmed).length,1);assert.equal((await records('sales')).length,1);admin.dispose();});
