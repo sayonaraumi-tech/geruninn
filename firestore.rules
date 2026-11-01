@@ -16,7 +16,8 @@ service cloud.firestore {
     (!(p.get('status','') in ['void','cancelled','duplicate','revised'])
      && !(p.get('documentStatus','') in ['void','cancelled','duplicate','revised']) && !p.keys().hasAny(['duplicateCancellation'])
      && p.get('deletedAt',null)==null
-     && (old==null || (old.get('status','')!='cancelled'
+     && (old==null || (!(old.get('status','') in ['void','cancelled','duplicate','revised'])
+      && !(old.get('documentStatus','') in ['void','cancelled','duplicate','revised'])
       && !old.keys().hasAny(['duplicateCancellation']) && old.get('deletedAt',null)==null)));
   }
   function valid(c,n,id) {

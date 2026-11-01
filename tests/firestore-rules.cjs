@@ -541,6 +541,11 @@ test('historical bank cancellation/restoration fails closed including forged ord
  await env.withSecurityRulesDisabled(async context=>{
   await setDoc(ref(context.firestore(),'bankTransactions','old-cancelled'),{...seed,payload:{...original,status:'cancelled',duplicateCancellation:{before:original}}});
  });
+ for(const inactive of ['void','cancelled','duplicate','revised'])for(const field of ['status','documentStatus']){
+  const id='old-'+field+'-'+inactive;
+  await env.withSecurityRulesDisabled(async context=>setDoc(ref(context.firestore(),'bankTransactions',id),{...seed,payload:{...original,[field]:inactive}}));
+  await assert.rejects(admin.put('bankTransactions',id,original,{operationId:crypto.randomUUID(),expectedRevision:1}));
+ }
  await assert.rejects(admin.put('bankTransactions','old-cancelled',original,{operationId:'restore-forged',expectedRevision:1}));
  // Frozen tombstones cannot be edited while retaining their metadata either.
  await assert.rejects(admin.put('bankTransactions','old-cancelled',{...original,status:'cancelled',duplicateCancellation:{before:original},memo:'edit'},{operationId:'edit-tombstone',expectedRevision:1}));
