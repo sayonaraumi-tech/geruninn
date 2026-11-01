@@ -82,6 +82,8 @@ function createService(client,{now=()=>new Date()}={}){
  let allocated=null;const observed=[];
  const lifecycle=cmd.type==='documentStatus'||(cmd.type==='saveDocument'&&cmd.revisedFromDocumentId);
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
+ if(cmd.type==='saveExpense'&&client.getState().role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
+ const expenseSeed=cmd.type==='saveExpense'&&cmd.skipDuplicate?(await client.listRecords('expenses')).filter(r=>{try{return A.live(r.payload)&&A.expenseKey(r.payload)===A.expenseKey(cmd.expense);}catch(_){return false;}}):[];
  const importSeed=cmd.type==='historicalPdfImport'?{documents:await client.listRecords('documents'),sales:await client.listRecords('sales')}:null;
  const repairing=receiptRepair||cmd.type==='repairFormalDocument';
  if(repairing&&client.getState().role!=='admin')throw Error('正式帳票の補録は管理者のみです。');
@@ -107,7 +109,7 @@ function createService(client,{now=()=>new Date()}={}){
     }
     return {cleaned:cleanupPlan.map(e=>e.collection+'/'+e.id)};
   }
-  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable});
+  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable,expenseSeed});
   const refs={};
   if(cmd.type==='registerCalendarSale'){
     if(who.role!=='admin')throw Error('売上登録は管理者のみです。');

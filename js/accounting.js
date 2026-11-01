@@ -1,7 +1,8 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaAccounting=api;})(globalThis,function(){
 'use strict';
 const COLLECTIONS=['expenses','cashLedger','suppliers','supplierTransactions','bankTransactions'];
-const CATEGORIES=['材料費','給与','家賃','交通費','車両費','通信費','消耗品費','外注費','その他'];
+const METHODS=['現金','代表者立替（交通系IC）','法人カード決済','銀行振込','口座振替','その他'];
+const CATEGORIES=['材料費','材料仕入','旅費交通費','地代家賃','租税公課','給与','家賃','交通費','車両費','通信費','消耗品費','外注費','その他'];
 const live=r=>!r.deletedAt&&!['void','cancelled','duplicate','revised'].some(status=>[r.documentStatus,r.status].includes(status)),amount=r=>Number(r.amount)||0,sum=rs=>rs.reduce((n,r)=>n+amount(r),0);
 const confirmed=p=>live(p)&&['cash-received','bank-confirmed'].includes(p.confirmation);
 // Read legacy methods without rewriting historical records. Confirmation remains authoritative.
@@ -43,11 +44,36 @@ async function parseBank(text,account,digest){if(!account.trim())throw Error('�
  for(const [i,r] of table.slice(headerIndex+1).entries()){if(r.length!==headers.length)throw Error(`CSV ${i+headerIndex+2}行の列数が一致しません。`);try{const bankTransactionDate=date(r[ix.date]),incoming=r[ix.incoming].trim()?money(r[ix.incoming],true):0,outgoing=r[ix.outgoing].trim()?money(r[ix.outgoing],true):0;if(incoming<0||outgoing<0||(incoming>0)===(outgoing>0))throw Error('入金/出金の一方に正の金額が必要です。');const description=r[ix.description].trim(),externalId=ix.id>=0?r[ix.id].trim():'',balance=ix.balance>=0&&r[ix.balance].trim()?money(r[ix.balance],true):'',signature=JSON.stringify([normalize(account),bankTransactionDate,normalize(description),incoming,outgoing,balance]),occurrence=(counts.get(signature)||0)+1;counts.set(signature,occurrence);const key=externalId?JSON.stringify([normalize(account),'external',externalId]):signature+'#'+occurrence,hash=await digest(key);result.push({bankTxnId:'bank_'+hash.slice(0,48),bankAccount:account.trim(),bankTransactionDate,description,incoming,outgoing,amount:incoming||outgoing,externalId,hash,occurrence,status:'未照合',deletedAt:null});}catch(e){throw Error(`CSV ${i+headerIndex+2}行: ${e.message}`);}}
  if(!result.length)throw Error('取引明細がありません。');return result;
 }
+function expenseInput(e){
+ const paymentMethod=String(e.paymentMethod||'').trim();if(![...METHODS,'GMO銀行','クレジットカード','月締'].includes(paymentMethod))throw Error('支払方法を確認してください。');
+ if(!CATEGORIES.includes(e.category))throw Error('科目を確認してください。');
+ return {...e,expenseDate:date(e.expenseDate),amount:money(e.amount),paymentMethod,vendor:String(e.vendor||'').trim(),description:String(e.description||'').trim()};
+}
+function expenseKey(e){const p=expenseInput({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description??e.memo});return JSON.stringify([p.expenseDate,p.category,p.amount,p.vendor,p.paymentMethod,p.description]);}
+function expensePreview(text,existing=[]){
+ const rows=parseCSV(text.replace(/^\uFEFF/,'')),headers=rows.shift()||[],required=['日付','科目','支払方法','金額','取引先','内容・備考'];
+ if(required.some(h=>!headers.includes(h)))throw Error('CSV列: '+required.join(', '));
+ const seen=new Set();for(const e of existing.filter(live)){try{seen.add(expenseKey(e));}catch(_){/* Unsupported legacy rows remain readable. */}}
+ const records=[],errors=[];let duplicates=0,total=0;
+ rows.forEach((r,i)=>{try{if(r.length!==headers.length)throw Error('列数が一致しません。');const v=Object.fromEntries(headers.map((h,j)=>[h,r[j]])),expense=expenseInput({expenseDate:v['日付'],category:v['科目'],paymentMethod:v['支払方法'],amount:v['金額'],vendor:v['取引先'],description:v['内容・備考']}),key=expenseKey(expense),duplicate=seen.has(key);seen.add(key);if(duplicate)duplicates++;else total+=expense.amount;records.push({expense,key,duplicate,line:i+2});}catch(e){errors.push((i+2)+'行: '+e.message);}});
+ if(!rows.length)errors.push('支出明細がありません。');return {records,errors,duplicates,total,count:rows.length};
+}
+const bankExpense=e=>['銀行振込','口座振替','GMO銀行'].includes(e.paymentMethod);
+const cardSettlement=b=>!!b.outgoing&&/カード|ｶｰﾄﾞ|card|visa|master|jcb|amex|アメックス|クレジット/i.test(String(b.description||'').normalize('NFKC'));
+function expenseMatch(bank,data){
+ if(bank.status==='照合済')return {status:'照合済',candidates:[]};
+ if(cardSettlement(bank))return {status:'未一致',candidates:[],card:true};
+ const candidates=(data.expenses||[]).filter(e=>live(e)&&bankExpense(e)&&!e.bankTxnId&&e.amount===bank.outgoing&&Math.abs(Date.parse(bank.bankTransactionDate)-Date.parse(e.expenseDate))/86400000<=7).map(e=>{
+ const a=normalize(e.vendor),b=normalize(bank.description),name=a.length>=2&&b.length>=2&&(a.includes(b)||b.includes(a));
+ return {kind:'expense',id:e.expenseId||e.id,paymentId:'',score:name?100:70,reasons:['金額一致','日付7日以内',...(name?['名称一致']:[])]};});
+ const unique=candidates.length===1&&candidates[0].score===100;
+ return {status:unique?'自動一致':candidates.length?'候補':'未一致',candidates};
+}
 function suggestions(bank,data){if(['照合済','除外'].includes(bank.status))return [];const results=[];const add=(kind,id,targetAmount,targetDate,name,paymentId='')=>{let score=0;const reasons=[];if(targetAmount===bank.amount){score+=50;reasons.push('金額一致');}const days=Math.abs(Date.parse(bank.bankTransactionDate)-Date.parse(targetDate))/86400000;if(days<=7){score+=20;reasons.push('日付7日以内');}const a=normalize(name),b=normalize(bank.description);if(a.length>=2&&(b.includes(a)||a.includes(b)&&b.length>=2)){score+=30;reasons.push('名称一致');}if(score>=30)results.push({kind,id,paymentId,score,reasons});};
  if(bank.incoming){for(const s of receivables(data.sales||[],data.payments||[],'9999-12-31'))if(s.outstanding>0)add('sale',s.id,s.outstanding,s.invoiceDate,s.customer);for(const p of data.payments||[])if(live(p)&&p.confirmation==='pending-bank'){const s=(data.sales||[]).find(s=>s.id===p.saleId);if(s&&live(s))add('sale',s.id,p.amount,p.paymentDate,s.customer,p.id);}}
- else{for(const e of data.expenses||[])if(live(e)&&e.paymentMethod!=='現金'&&e.paymentMethod!=='月締'&&!e.bankTxnId)add('expense',e.expenseId,e.amount,e.expenseDate,e.vendor);for(const t of data.supplierTransactions||[])if(live(t)&&['prepayment','payment'].includes(t.type)&&t.paymentMethod!=='現金'&&!t.bankTxnId)add('supplier',t.transactionId,t.amount,t.date,(data.suppliers||[]).find(s=>s.supplierId===t.supplierId)?.supplierName);}
+ else{return expenseMatch(bank,data).candidates;}
  return results.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));
 }
 function csv(rows){const cell=v=>'"'+(typeof v==='number'?String(v):String(v??'').replace(/^[\s]*[=+@-]/,"'$&")).replace(/"/g,'""')+'"';return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');}
-return {COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
+return {METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
 });
