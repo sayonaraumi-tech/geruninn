@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./accounting.js'):root.TsukinowaAccounting);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaAccountingDomain=api;})(globalThis,function(A){
 'use strict';
-const TYPES=['saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','expenseFromBank','bankUnmatch','bankExclude','backfillCash','migrateAccounting','accountingMigrationComplete'];
+const TYPES=['saveExpenseCategoryRule','saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','expenseFromBank','bankUnmatch','bankExclude','backfillCash','migrateAccounting','accountingMigrationComplete'];
 async function mirrorCash(name,id,p,read,write){
  let eligible=false,type='expense',category='',description='',date='',linkedPaymentId='',linkedExpenseId='',linkedSupplierTransactionId='';
  if(name==='payments'){eligible=p.confirmation==='cash-received';type='income';category='現金入金';description=p.memo||'現場入金';date=p.paymentDate;linkedPaymentId=id;}
@@ -15,8 +15,16 @@ async function handle(cmd,context){
  const {read,write,who,stable,expenseSeed=[],relatedPayments}=context;
  if(who.role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
  const now=()=>new Date().toISOString(),required=(s,label)=>{if(typeof s!=='string'||!s.trim())throw Error(label+'を入力してください。');return s.trim();};
+ if(cmd.type==='saveExpenseCategoryRule'){
+  const key=A.classificationKey(required(cmd.vendor,'取引先'));if(key.length<2||key.length>160)throw Error('取引先名を確認してください。');
+  if(!A.CATEGORIES.includes(cmd.category))throw Error('科目を確認してください。');
+  const id=await stable('expense_rule',key),old=await read('settings',id);
+  if(old&&old.payload.type!=='expenseCategoryRule')throw Error('設定が一致しません。');
+  await write('settings',id,{type:'expenseCategoryRule',vendor:cmd.vendor.trim(),key,category:cmd.category,enabled:cmd.enabled!==false,deletedAt:cmd.deleted?now():null},'adjustment',cmd.expectedRevision??0);return {ruleId:id};
+ }
  if(cmd.type==='saveExpense'){
   const e=A.expenseInput(cmd.expense);
+  if(cmd.learnCategory){const id=await stable('expense_rule',A.classificationKey(e.vendor)),r=await read('settings',id);await handle({type:'saveExpenseCategoryRule',vendor:e.vendor,category:e.category,expectedRevision:r?.revision||0},context);}
   if(cmd.skipDuplicate){for(const seed of expenseSeed){const row=await read('expenses',seed.id);if(row&&A.live(row.payload)&&A.expenseKey(row.payload)===A.expenseKey(e))return {expenseId:seed.id,unchanged:true};}}
   const id=cmd.skipDuplicate?await stable('expense_csv',A.expenseKey(e)):cmd.expenseId,old=await read('expenses',id);if(cmd.skipDuplicate&&old)return {expenseId:id,unchanged:true};if(old?.payload.supplierTransactionId)throw Error('仕入先台帳から月次請求を訂正してください。');if(old?.payload.bankTxnId)throw Error('照合済み支出は先に銀行照合を解除してください。');if(old?.payload.deletedAt)throw Error('取消済み支出です。新規登録してください。');
   await write('expenses',id,{expenseId:id,expenseDate:A.date(e.expenseDate),category:A.CATEGORIES.includes(e.category)?e.category:'その他',vendor:e.vendor||'',description:e.description||'',amount:A.money(e.amount),paymentMethod:required(e.paymentMethod,'支払方法'),bankAccount:e.paymentMethod==='現金'?'cash':e.bankAccount||'',receiptAttachmentRef:e.receiptAttachmentRef||'',deletedAt:null},old?'expense update':'expense create',cmd.expectedRevision);return {expenseId:id};
@@ -52,7 +60,7 @@ async function handle(cmd,context){
   const b=row.payload,e=A.expenseInput(cmd.expense);if(e.amount!==b.outgoing||e.expenseDate!==b.bankTransactionDate||!A.bankExpense(e)||!e.vendor||!e.description)throw Error('金額・日付・科目・取引先・内容・銀行支払方法を確認してください。');
   const existing=[];for(const seed of expenseSeed){const row=await read('expenses',seed.id);if(row)existing.push({...row.payload,id:seed.id});}if(A.expenseMatch(b,{expenses:existing}).candidates.length||existing.some(x=>{try{return A.live(x)&&A.expenseKey(x)===A.expenseKey(e);}catch(_){return false;}}))throw Error('既存の支出候補があります。銀行照合から確認してください。');
   const expenseId=await stable('expense_bank',cmd.bankTxnId);if(await read('expenses',expenseId))throw Error('この銀行明細の支出は登録済みです。');
-  await handle({type:'saveExpense',expenseId,expense:{...e,bankAccount:b.bankAccount},expectedRevision:0},context);
+  await handle({type:'saveExpense',expenseId,expense:{...e,bankAccount:b.bankAccount},learnCategory:cmd.learnCategory,expectedRevision:0},context);
   return handle({type:'bankMatch',bankTxnId:cmd.bankTxnId,targetType:'expense',targetId:expenseId,expectedRevision:cmd.expectedRevision},context);
  }
  if(cmd.type==='bankMatch'){
