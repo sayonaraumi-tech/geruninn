@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaAccounting=api;})(globalThis,function(){
 'use strict';
-const COLLECTIONS=['expenses','cashLedger','suppliers','supplierTransactions','bankTransactions'];
+const COLLECTIONS=['expenses','cashLedger','suppliers','supplierTransactions','bankTransactions','settings'];
 const METHODS=['現金','代表者立替（交通系IC）','法人カード決済','銀行振込','口座振替','その他'];
 const CATEGORIES=['材料費','材料仕入','旅費交通費','地代家賃','租税公課','給与','家賃','交通費','車両費','通信費','消耗品費','外注費','その他'];
 const live=r=>!r.deletedAt&&!['void','cancelled','duplicate','revised'].some(status=>[r.documentStatus,r.status].includes(status)),amount=r=>Number(r.amount)||0,sum=rs=>rs.reduce((n,r)=>n+amount(r),0);
@@ -35,17 +35,35 @@ function receivables(sales,payments,asOf=new Date().toLocaleDateString('sv-SE',{
 }
 function supplierBalance(s,txs,asOf='9999-12-31'){return (s.openingDate<=asOf?Number(s.openingBalance)||0:0)+txs.filter(t=>t.supplierId===s.supplierId&&t.date<=asOf).reduce((n,t)=>n+delta(t),0);}
 function periodFilter({month,year,start,end}={}){if(year!==undefined){year=Number(year);if(!Number.isInteger(year)||year<2000||year>9998)throw Error('年度が不正です。');start=year+'-10-01';end=(year+1)+'-09-30';}else if(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('対象月を指定してください。');start=month+'-01';end=new Date(Date.UTC(+month.slice(0,4),+month.slice(5),0)).toISOString().slice(0,10);}start=date(start);end=date(end);if(start>end)throw Error('期間の開始・終了を確認してください。');return {start,end,includes:value=>typeof value==='string'&&value>=start&&value<=end};}
-function aggregate(data,p){const all=ledger(data.sales||[],data.payments||[]),within=(rs,k)=>unique(rs.filter(r=>live(r)&&p.includes(r[k]))),ps=within(all.payments.map(r=>({...r,paymentDate:r.paymentDate||r.date})),'paymentDate'),expenses=within(data.expenses||[],'expenseDate'),cash=cashRows(data.cashLedger||[]),supplierTx=within(data.supplierTransactions||[],'date'),categories=Object.fromEntries(CATEGORIES.map(c=>[c,0]));for(const e of expenses)categories[e.category]=(categories[e.category]||0)+amount(e);
- const bankIncome=sum(ps.filter(p=>p.confirmation==='bank-confirmed')),cashIncome=sum(ps.filter(p=>p.confirmation==='cash-received')),expenseTotal=sum(expenses),rs=receivables(data.sales||[],data.payments||[],p.end),unpaid=rs.filter(s=>s.outstanding!==0),unmatched=within(data.bankTransactions||[],'bankTransactionDate').filter(b=>!['照合済','除外'].includes(b.status)),abnormal=expenses.filter(e=>!e.category||!Number.isSafeInteger(Number(e.amount))||e.amount<=0);
- return {sales:sum(within(all.sales.filter(s=>!s.receivableOnly),'salesDate')),bankIncome,cashIncome,income:bankIncome+cashIncome,incomeChannels:paymentChannels(ps),receivables:rs.reduce((n,s)=>n+s.outstanding,0),expenseTotal,categories,cashReceipts:sum(within(cash,'date').filter(x=>x.type==='income')),cashExpenses:sum(within(cash,'date').filter(x=>x.type==='expense')),cashBalance:cash.filter(x=>x.date<=p.end).at(-1)?.runningBalance||0,supplierPrepayment:sum(supplierTx.filter(t=>t.type==='prepayment')),supplierInvoice:sum(supplierTx.filter(t=>t.type==='monthlyInvoice')),supplierPayment:sum(supplierTx.filter(t=>t.type==='payment')),suppliers:(data.suppliers||[]).filter(live).map(s=>({...s,currentBalance:supplierBalance(s,data.supplierTransactions||[],p.end)})),cashFlowDifference:bankIncome+cashIncome-expenseTotal,attention:unpaid.length+unmatched.length+abnormal.length,reminders:[...unpaid.map(s=>'未入金 / '+(s.customer||'')+' / '+s.outstanding),...unmatched.map(b=>'銀行未照合 / '+b.description),...abnormal.map(e=>'支出要確認 / '+(e.vendor||''))].slice(0,5)};}
+function aggregate(data,p){const all=ledger(data.sales||[],data.payments||[]),within=(rs,k)=>unique(rs.filter(r=>live(r)&&p.includes(r[k]))),ps=within(unique((data.payments||[]).filter(confirmed)).map(r=>({...r,paymentDate:r.paymentDate||r.date})),'paymentDate'),expenses=within(data.expenses||[],'expenseDate'),cash=cashRows(data.cashLedger||[]),supplierTx=within(data.supplierTransactions||[],'date'),categories=Object.fromEntries(CATEGORIES.map(c=>[c,0]));for(const e of expenses)categories[e.category]=(categories[e.category]||0)+amount(e);
+ const bankIncome=sum(ps.filter(p=>p.confirmation==='bank-confirmed')),cashIncome=sum(ps.filter(p=>p.confirmation==='cash-received')),expenseTotal=sum(expenses),rs=receivables(data.sales||[],data.payments||[],p.end),unpaid=rs.filter(s=>s.outstanding!==0),unmatched=within(data.bankTransactions||[],'bankTransactionDate').filter(b=>!['照合済','除外'].includes(b.status)),abnormal=expenses.filter(e=>!e.category||!Number.isSafeInteger(Number(e.amount))||e.amount<=0),reviewRows=ledgerRows(data,p).filter(r=>/要確認|入金確認待ち/.test(r.status)),attentionIds=new Set([...unpaid.map(s=>'sale:'+s.id),...reviewRows.map(r=>r.id)]);
+ return {sales:sum(within(all.sales.filter(s=>!s.receivableOnly),'salesDate')),bankIncome,cashIncome,income:bankIncome+cashIncome,incomeChannels:paymentChannels(ps),receivables:rs.reduce((n,s)=>n+s.outstanding,0),expenseTotal,categories,cashReceipts:sum(within(cash,'date').filter(x=>x.type==='income')),cashExpenses:sum(within(cash,'date').filter(x=>x.type==='expense')),cashBalance:cash.filter(x=>x.date<=p.end).at(-1)?.runningBalance||0,supplierPrepayment:sum(supplierTx.filter(t=>t.type==='prepayment')),supplierInvoice:sum(supplierTx.filter(t=>t.type==='monthlyInvoice')),supplierPayment:sum(supplierTx.filter(t=>t.type==='payment')),suppliers:(data.suppliers||[]).filter(live).map(s=>({...s,currentBalance:supplierBalance(s,data.supplierTransactions||[],p.end)})),cashFlowDifference:bankIncome+cashIncome-expenseTotal,attention:attentionIds.size+unmatched.length+abnormal.length,reminders:[...unpaid.map(s=>'未入金 / '+(s.customer||'')+' / '+s.outstanding),...reviewRows.filter(r=>!unpaid.some(s=>'sale:'+s.id===r.id)).map(r=>r.status+' / '+(r.customer||'')),...unmatched.map(b=>'銀行未照合 / '+b.description),...abnormal.map(e=>'支出要確認 / '+(e.vendor||''))].slice(0,5)};}
 function monthly(data,month){return {month,...aggregate(data,periodFilter({month}))};}
-function ledgerRows(data,p){const rows=[],all=ledger(data.sales||[],data.payments||[],p.end),saleMap=new Map(all.sales.map(s=>[s.id,s])),banks=data.bankTransactions||[],status=(kind,id,linked)=>{const b=banks.find(b=>live(b)&&(b.bankTxnId===linked||b.id===linked||b.matchType===kind&&b.matchId===id));if(b)return bankMatch(b,data).status;const matches=banks.filter(b=>live(b)).map(b=>bankMatch(b,data)).filter(m=>m.candidates.some(c=>c.kind===kind&&c.id===id));return matches.some(m=>m.status==='自動一致')?'自動一致':matches.length?'候補':'未照合';};
- for(const s of all.sales)if(!s.receivableOnly)rows.push({id:'sale:'+s.id,date:s.salesDate,type:'売上',customer:s.customer,description:s.content,method:s.paymentMethod||'',incoming:0,outgoing:0,status:s.status});
- for(const v of unique((data.payments||[]).filter(live))){const s=saleMap.get(v.saleId);if(!s)continue;rows.push({id:'payment:'+(v.id||v.paymentId),date:v.paymentDate||v.date,type:'入金',customer:s.customer,description:v.memo||s.content,method:v.method,incoming:confirmed(v)?amount(v):0,outgoing:0,status:v.bankTxnId?'照合済 / 入金確認済':confirmed(v)?'入金済':'未入金'});}
- for(const e of unique((data.expenses||[]).filter(live)))rows.push({id:'expense:'+(e.id||e.expenseId),date:e.expenseDate,type:'支出',customer:e.vendor,description:e.description||e.category,method:e.paymentMethod,incoming:0,outgoing:amount(e),status:e.bankTxnId?'照合済 / 支払確認済':bankExpense(e)?status('expense',e.id||e.expenseId):'未照合'});
- for(const c of (data.cashLedger||[]).filter(live))if(!c.linkedPaymentId&&!c.linkedExpenseId&&!c.linkedSupplierTransactionId)rows.push({id:'cash:'+c.cashTxnId,date:c.date,type:'現金調整',customer:'',description:c.description,method:'現金',incoming:c.type==='income'?amount(c):0,outgoing:c.type==='expense'?amount(c):0,status:'確認済'});
- return rows.filter(r=>p.includes(r.date)).sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));}
-function settlementExport(data,p){const m=aggregate(data,p);return [['対象期間',p.start,p.end],['集計','金額'],...Object.entries({売上:m.sales,入金:m.income,支出:m.expenseTotal,未収金:m.receivables,収支差額:m.cashFlowDifference,...m.categories}).map(([k,v])=>[k,v]),...m.incomeChannels.map(c=>['入金経路 / '+c.channel+(c.platformName?' / '+c.platformName:''),c.amount]),[],['日付','区分','取引先','内容','入金・支払方法','入金','出金','状態'],...ledgerRows(data,p).map(r=>[r.date,r.type,r.customer,r.description,r.method,r.incoming,r.outgoing,r.status])];}
+// Payment and bank evidence are separate from the business row and payment status.
+function expenseStatus(e){
+ if(e.paymentMethod==='現金')return '支払済';
+ // There is no audited reimbursement record model yet; a memo/flag is not proof.
+ if(/代表者立替/.test(e.paymentMethod||''))return '立替未精算';
+ if(e.bankTxnId)return '支払済 / 照合済';
+ return bankExpense(e)?'支払済 / 銀行未照合':e.paymentMethod==='月締'?'支払待ち':'支払済';
+}
+const LEDGER_HEADERS=['売上日・支出日','区分','取引先','内容','入金・支払方法','売上（期間内）','入金済額（期間末）','入金（期間内）','出金','状態','入金日'];
+function ledgerCells(r){return [r.date,r.type,r.customer,r.description,r.method,r.sales,r.paid,r.incoming,r.outgoing,r.status,r.paymentDates];}
+function ledgerRows(data,p){
+ const rows=[],all=ledger(data.sales||[],data.payments||[],p.end),payments=unique((data.payments||[]).filter(v=>live(v)&&(v.paymentDate||v.date)<=p.end)),saleMap=new Map(all.sales.map(s=>[s.id,s]));
+ for(const s of all.sales){
+  const ps=payments.filter(v=>v.saleId===s.id),collected=ps.filter(confirmed),inPeriod=ps.filter(v=>p.includes(v.paymentDate||v.date));
+  if(!p.includes(s.salesDate)&&!inPeriod.length)continue;
+  const pending=ps.some(v=>!confirmed(v)),possibleDuplicate=all.sales.some(v=>v.id!==s.id&&v.salesDate===s.salesDate&&v.customer===s.customer&&amount(v)===amount(s));
+  rows.push({id:'sale:'+s.id,date:s.salesDate,type:s.receivableOnly?'繰越未収':p.includes(s.salesDate)?'売上':'過月売上の入金',customer:s.customer,description:s.content,method:[...new Set(ps.map(v=>v.method).filter(Boolean))].join(' / ')||s.paymentMethod||'',sales:!s.receivableOnly&&p.includes(s.salesDate)?amount(s):0,paid:s.paid,incoming:sum(inPeriod.filter(confirmed)),outgoing:0,status:s.status+(pending?' / 入金確認待ち':'')+(possibleDuplicate?' / 重複候補・要確認':''),paymentDates:collected.map(v=>(v.paymentDate||v.date)+' / '+amount(v)+'円').join('、')});
+ }
+ // Unlinked/premature payments remain visible for review; never invent a sale.
+ for(const v of payments)if(!saleMap.has(v.saleId)&&p.includes(v.paymentDate||v.date))rows.push({id:'payment:'+(v.id||v.paymentId),date:v.paymentDate||v.date,type:'未関連入金',customer:v.customer||'',description:v.memo||'',method:v.method,sales:0,paid:confirmed(v)?amount(v):0,incoming:confirmed(v)?amount(v):0,outgoing:0,status:'要確認 / 売上リンクなし',paymentDates:v.paymentDate||v.date});
+ for(const e of unique((data.expenses||[]).filter(e=>live(e)&&p.includes(e.expenseDate))))rows.push({id:'expense:'+(e.id||e.expenseId),date:e.expenseDate,type:'支出',customer:e.vendor,description:e.description||e.category,method:e.paymentMethod,sales:0,paid:0,incoming:0,outgoing:amount(e),status:expenseStatus(e),paymentDates:''});
+ for(const c of (data.cashLedger||[]).filter(c=>live(c)&&p.includes(c.date)))if(!c.linkedPaymentId&&!c.linkedExpenseId&&!c.linkedSupplierTransactionId)rows.push({id:'cash:'+c.cashTxnId,date:c.date,type:'現金調整',customer:'',description:c.description,method:'現金',sales:0,paid:0,incoming:c.type==='income'?amount(c):0,outgoing:c.type==='expense'?amount(c):0,status:'確認済',paymentDates:''});
+ return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+}
+function settlementExport(data,p){const m=aggregate(data,p);return [['対象期間',p.start,p.end],['集計','金額'],...Object.entries({売上:m.sales,入金:m.income,支出:m.expenseTotal,未収金:m.receivables,収支差額:m.cashFlowDifference,...m.categories}).map(([k,v])=>[k,v]),...m.incomeChannels.map(c=>['入金経路 / '+c.channel+(c.platformName?' / '+c.platformName:''),c.amount]),[],LEDGER_HEADERS,...ledgerRows(data,p).map(ledgerCells)];}
 function parseCSV(text){const out=[];let row=[],field='',quote=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==='"'){if(quote&&text[i+1]==='"'){field+='"';i++;}else if(quote||!field)quote=!quote;else throw Error('CSVの引用符が不正です。');}else if(c===','&&!quote){row.push(field);field='';}else if((c==='\n'||c==='\r')&&!quote){if(c==='\r'&&text[i+1]==='\n')i++;row.push(field);if(row.some(x=>x.trim()))out.push(row);row=[];field='';}else field+=c;}if(quote)throw Error('CSVの引用符が閉じていません。');row.push(field);if(row.some(x=>x.trim()))out.push(row);return out;}
 const normalize=s=>String(s||'').normalize('NFKC').replace(/\s/g,'').toLowerCase();
 async function parseBank(text,account,digest){if(!account.trim())throw Error('銀行口座名を入力してください。同じ口座は同じ名前を使用します。');const table=parseCSV(text.replace(/^\uFEFF/,''));const headerIndex=table.findIndex(r=>r.some(c=>/^(取引日|取引年月日|日付|年月日|お取引日|date)$/i.test(normalize(c))));if(headerIndex<0)throw Error('日付ヘッダーを認識できません。');const headers=table[headerIndex].map(normalize),find=names=>headers.findIndex(h=>names.includes(h));const ix={date:find(['日付','取引日','取引年月日','年月日','お取引日','date']),description:find(['摘要','内容','取引内容','お取引内容','お取引内容(摘要)','相手','description']),incoming:find(['入金金額','入金','入金額','お預り金額','お預り金額(円)','お預り','お預かり金額','入金額(円)','お預入れ金額','deposit']),outgoing:find(['出金金額','出金','出金額','お支払金額','お支払金額(円)','お支払','出金額(円)','お引出し金額','withdrawal']),memo:find(['メモ','memo']),id:find(['取引id','取引番号','明細番号','transactionid']),balance:find(['残高','残高(円)','お取引後残高','balance'])};if(ix.incoming<0||ix.outgoing<0||ix.description<0)throw Error('摘要・入金・出金ヘッダーが必要です。対応列名を確認してください。');const counts=new Map(),result=[];
@@ -58,12 +76,12 @@ function expenseInput(e){
  return {...e,expenseDate:date(e.expenseDate),amount:money(e.amount),paymentMethod,vendor:String(e.vendor||'').trim(),description:String(e.description||'').trim()};
 }
 function expenseKey(e){const p=expenseInput({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description??e.memo});return JSON.stringify([p.expenseDate,p.category,p.amount,p.vendor,p.paymentMethod,p.description]);}
-function expensePreview(text,existing=[]){
+function expensePreview(text,existing=[],rules=[]){
  const rows=parseCSV(text.replace(/^\uFEFF/,'')),headers=rows.shift()||[],required=['日付','科目','支払方法','金額','取引先','内容・備考'];
  if(required.some(h=>!headers.includes(h)))throw Error('CSV列: '+required.join(', '));
  const seen=new Set();for(const e of existing.filter(live)){try{seen.add(expenseKey(e));}catch(_){/* Unsupported legacy rows remain readable. */}}
  const records=[],errors=[];let duplicates=0,total=0;
- rows.forEach((r,i)=>{try{if(r.length!==headers.length)throw Error('列数が一致しません。');const v=Object.fromEntries(headers.map((h,j)=>[h,r[j]])),expense=expenseInput({expenseDate:v['日付'],category:v['科目'],paymentMethod:v['支払方法'],amount:v['金額'],vendor:v['取引先'],description:v['内容・備考']}),key=expenseKey(expense),duplicate=seen.has(key);seen.add(key);if(duplicate)duplicates++;else total+=expense.amount;records.push({expense,key,duplicate,line:i+2});}catch(e){errors.push((i+2)+'行: '+e.message);}});
+ rows.forEach((r,i)=>{try{if(r.length!==headers.length)throw Error('列数が一致しません。');const v=Object.fromEntries(headers.map((h,j)=>[h,r[j]])),classification=classifyExpense(v['取引先'],v['科目'],rules),expense=expenseInput({expenseDate:v['日付'],category:classification.category||'その他',paymentMethod:v['支払方法'],amount:v['金額'],vendor:v['取引先'],description:v['内容・備考']}),key=expenseKey(expense),duplicate=seen.has(key);seen.add(key);if(duplicate)duplicates++;else total+=expense.amount;records.push({expense,key,duplicate,classification,line:i+2});}catch(e){errors.push((i+2)+'行: '+e.message);}});
  if(!rows.length)errors.push('支出明細がありません。');return {records,errors,duplicates,total,count:rows.length};
 }
 const bankExpense=e=>['銀行振込','口座振替','GMO銀行','法人カード決済','クレジットカード'].includes(e.paymentMethod);
@@ -75,12 +93,44 @@ function expenseMatch(bank,data){
  const certain=candidates.length===1&&candidates[0].score===100;
  return {status:certain?'自動一致':candidates.length?'候補':'未一致',candidates};
 }
-function nameMatch(a,b){const clean=v=>normalize(v).replace(/株式会社|有限会社|合同会社|[()（）・.,、]|カ\)|ユ\)/g,'');a=clean(a);b=clean(b);return a.length>=2&&b.length>=2&&(a.includes(b)||b.includes(a));}
+// Names used for fuzzy recommendations only; learning uses stricter exact keys.
+function partyName(v){return normalize(v).replace(/株式会社|有限会社|合同会社|[（(](?:カ|ド|ユ)[）)]?|(?:カ|ド|ユ)[）)]/g,'').replace(/[\s()（）・.,、]/g,'').replace(/[ァ-ヶ]/g,c=>String.fromCharCode(c.charCodeAt(0)-0x60));}
+function nameMatch(a,b){a=partyName(a);b=partyName(b);return a.length>=2&&b.length>=2&&(a.includes(b)||b.includes(a));}
 function bankMatchScore(bank,targetAmount,targetDate,name){const days=Math.abs(Date.parse(bank.bankTransactionDate)-Date.parse(targetDate))/86400000;if(targetAmount!==(bank.incoming||bank.outgoing)||!(days<=7))return null;const named=nameMatch(bank.description,name);return {score:named?100:70,reasons:['金額一致','日付7日以内',...(named?['名称一致']:[])]};}
-function suggestions(bank,data){if(['照合済','除外'].includes(bank.status))return [];if(!bank.incoming)return expenseMatch(bank,data).candidates;const out=[];
- for(const s of receivables(data.sales||[],data.payments||[],'9999-12-31')){if(s.outstanding<=0)continue;const pending=(data.payments||[]).filter(p=>live(p)&&p.saleId===s.id&&p.confirmation==='pending-bank'&&p.amount===bank.incoming);const score=bankMatchScore(bank,s.outstanding,s.invoiceDate||s.salesDate,s.customer)||(pending.length===1&&pending[0].amount<=s.outstanding?bankMatchScore(bank,pending[0].amount,pending[0].paymentDate||pending[0].date,s.customer):null);if(score)out.push({kind:'sale',id:s.id,paymentId:pending.length===1?(pending[0].id||pending[0].paymentId):'',...score});}
- return out.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id));}
+function incomingScore(bank,value,dates,name){
+ if(Number(value)!==bank.incoming)return null;
+ const near=dates.some(d=>Math.abs(Date.parse(bank.bankTransactionDate)-Date.parse(d))/86400000<=7);
+ const within=dates.some(d=>{const days=(Date.parse(bank.bankTransactionDate)-Date.parse(d))/86400000;return days>=-7&&days<=120;});
+ if(!near&&!within)return null;
+ const named=nameMatch(bank.description,name);
+ return {score:near?(named?100:70):(named?90:50),reasons:['金額一致',near?'日付・支払期限7日以内':'請求・期限から120日以内',...(named?['名称一致']:['名称要確認'])]};
+}
+function suggestions(bank,data){
+ if(['照合済','除外'].includes(bank.status))return [];if(!bank.incoming)return expenseMatch(bank,data).candidates;
+ const out=[],sales=unique([...(data.sales||[]),...(data.receivables||[])]).filter(live),payments=unique(data.payments||[]).filter(live),docs=(data.documents||[]).filter(d=>live(d)&&d.confirmed===true&&['invoice','onoda','receipt'].includes(d.docType));
+ for(const s of sales){
+  if(['calendar-cash','receipt-cash'].includes(s.sourceType)||/代表者立替/.test(s.paymentMethod||''))continue;
+  const linked=docs.filter(d=>[d.saleId,d.receivableId,d.snapshot?.saleId].includes(s.id)||d.id===s.documentId);
+  const dates=[s.dueDate,s.invoiceDate,s.salesDate,s.saleDate,...linked.flatMap(d=>[d.dueDate,d.invoiceDate,d.snapshot?.dueDate,d.snapshot?.invoiceDate])].filter(Boolean);
+  const paid=payments.filter(p=>p.saleId===s.id&&confirmed(p)).reduce((n,p)=>n+Number(p.amount),0),outstanding=Number(s.amount)-paid;
+  const eligible=payments.filter(p=>p.saleId===s.id&&!p.bankTxnId&&!p.bankId&&p.amount===bank.incoming&&['pending-bank','bank-confirmed'].includes(p.confirmation)&&paymentChannel(p).channel!=='現金');
+  const base={kind:'sale',id:s.id,customer:s.customer,invoiceNo:s.invoiceNo||linked.find(d=>d.docType!=='receipt')?.snapshot?.invoiceNo||linked[0]?.invoiceNo||'',outstanding};
+  for(const p of eligible){if(p.confirmation!=='bank-confirmed'&&p.amount>outstanding)continue;const score=incomingScore(bank,p.amount,[p.paymentDate||p.date,...dates],s.customer);if(score)out.push({...base,paymentId:p.id||p.paymentId,...score});}
+  if(!eligible.length&&outstanding>0){const score=incomingScore(bank,outstanding,dates,s.customer);if(score)out.push({...base,paymentId:'',...score});}
+ }
+ // A document without a live anchor is visible for diagnosis, never creates a sale.
+ for(const d of docs.filter(d=>d.docType!=='receipt'&&!sales.some(s=>[d.saleId,d.receivableId,d.snapshot?.saleId].includes(s.id)||s.documentId===d.id))){const score=incomingScore(bank,d.amount||d.invoiceAmount||d.snapshot?.invoiceAmount,[d.dueDate,d.invoiceDate,d.snapshot?.dueDate,d.snapshot?.invoiceDate],d.customerName||d.snapshot?.customerName);if(score)out.push({kind:'document',id:d.id,paymentId:'',invoiceNo:d.invoiceNo||d.snapshot?.invoiceNo||'',customer:d.customerName||d.snapshot?.customerName,blocked:true,...score,reasons:[...score.reasons,'売上・未収リンク要確認']});}
+ return out.sort((a,b)=>b.score-a.score||a.id.localeCompare(b.id)||a.paymentId.localeCompare(b.paymentId));
+}
+// Preserve punctuation, legal forms and digits: no substring learning or transliteration.
+function classificationKey(v){return String(v||'').normalize('NFKC').trim().replace(/\s+/g,' ').toLowerCase();}
+function classifyExpense(vendor,category,rules=[]){
+ if(category)return {category,source:'CSV',review:!CATEGORIES.includes(category)};
+ const key=classificationKey(vendor),matches=rules.filter(r=>r.type==='expenseCategoryRule'&&!r.deletedAt&&r.enabled!==false&&r.key===key&&CATEGORIES.includes(r.category));
+ if(key.length>=2&&matches.length===1)return {category:matches[0].category,source:'学習ルール',review:false};
+ return {category:'',source:'要確認',review:true};
+}
 function bankMatch(bank,data){if(['照合済','除外'].includes(bank.status))return {status:bank.status,candidates:[]};if(bank.outgoing)return expenseMatch(bank,data);const candidates=suggestions(bank,data);return {status:candidates.length===1&&candidates[0].score===100?'自動一致':candidates.length?'候補':'未一致',candidates};}
 function csv(rows){const cell=v=>'"'+(typeof v==='number'?String(v):String(v??'').replace(/^[\s]*[=+@-]/,"'$&")).replace(/"/g,'""')+'"';return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');}
-return {periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
+return {expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
 });

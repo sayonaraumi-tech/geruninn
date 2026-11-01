@@ -22,7 +22,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  async function device(role,width){const ctx=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'}),p=await ctx.newPage();p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.type()==='prompt'?d.accept('2026-10-01'):d.type()==='confirm'?d.accept():d.dismiss());await p.route('https://**/*',r=>r.fulfill({body:''}));await p.goto(base);await p.waitForFunction(()=>document.getElementById('cloudStatus').textContent==='未ログイン');await p.locator('#bizCloudAccountButton').click();await p.locator('#cloudEmail').fill(role+'@example.com');await p.locator('#cloudPassword').fill('password');await p.locator('#cloudLogin').click();await p.waitForFunction(()=>document.getElementById('coreSyncStatus').textContent==='クラウド同期済');await p.getByRole('button',{name:'閉じる',exact:true}).click();return p;}
 
  const desktop=await device('admin',1280);
- const idle=()=>desktop.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0&&document.getElementById('coreSyncStatus').textContent==='クラウド同期済');
+ const idle=async()=>{try{await desktop.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0&&document.getElementById('coreSyncStatus').textContent==='クラウド同期済');}catch(e){console.error(await desktop.evaluate(()=>({queue:TsukinowaBusinessUI.getSync().getQueue(),status:document.getElementById('coreSyncStatus').textContent,message:document.getElementById('accountingMessage').textContent})));throw e;}};
  const snapshot=()=>desktop.evaluate(()=>({expenses:TsukinowaAccountingUI.getData().expenses,cash:TsukinowaAccountingUI.getData().cashLedger,bank:TsukinowaAccountingUI.getData().bankTransactions}));
  await desktop.evaluate(()=>{bizSwitchPage('expenses');expDate.value='2026-10-02';expCategory.value='旅費交通費';expMethod.value='現金';expAmount.value=100;expVendor.value='手工';expMemo.value='現金';return addExpense();});await idle();
  assert.equal((await snapshot()).cash.length,1);
@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.locator('#expenseFile').setInputFiles({name:'expenses.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/6件.*12,260.*重複候補 1件.*エラー 0件/);
  await desktop.locator('#expenseImportCommit').click();await idle();assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
  await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/重複候補 6件/);assert(await desktop.locator('#expenseImportCommit').isDisabled());
- assert.equal(await desktop.locator('#pageExpenses > .biz-section').count(),4);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
+ assert.equal(await desktop.locator('#pageExpenses > .biz-section').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
  await desktop.evaluate(()=>bizSwitchPage('bank'));
  const bankCsv='日付,摘要,入金,出金,取引ID\n2026-10-04,電話会社,,1000,high\n2026-10-04,不明摘要,,3000,candidate\n2026-10-04,未登録,,4000,unmatched\n2026-10-04,VISA カード利用代金,,6060,card';
  await desktop.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(bankCsv)});await desktop.evaluate(()=>importBankCsv());await idle();
@@ -44,6 +44,22 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  const unmatched=desktop.locator('#bankRows tr').filter({hasText:'未登録'});await unmatched.getByRole('button',{name:'この銀行明細から支出登録'}).click();assert(await desktop.locator('#pageExpenses').isVisible());assert.equal((await snapshot()).expenses.length,6);assert.equal(await desktop.locator('#expAmount').inputValue(),'4000');await desktop.locator('#expVendor').fill('試験店舗');await desktop.getByRole('button',{name:'支出登録',exact:true}).click();await idle();assert.equal((await snapshot()).bank.find(b=>b.description==='未登録').status,'照合済');assert.equal((await snapshot()).expenses.length,7);assert.equal((await snapshot()).cash.length,1);
  // Invalid preview disables commit and cannot enqueue a partial batch.
  await desktop.locator('#expenseFile').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('日付,科目,支払方法,金額,取引先,内容・備考\n2026-02-30,その他,現金,1,A,B')});await desktop.evaluate(()=>accountingPreviewExpenses());assert(await desktop.locator('#expenseImportCommit').isDisabled());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/エラー 1件/);
+ // Explicit learning uses the same authenticated expense transaction and syncs settings.
+ await desktop.evaluate(()=>{expDate.value='2026-10-10';expCategory.value='通信費';expMethod.value='銀行振込';expAmount.value=123;expVendor.value='ＡＢＣ 店';expMemo.value='学習確認';expenseLearnCategory.checked=false;expCategory.dispatchEvent(new Event('change'));if(!expenseLearnCategory.checked)throw Error('manual category confirmation must enable learning');return addExpense();});await idle();
+ await desktop.waitForFunction(()=>document.getElementById('expenseCategoryRules').textContent.includes('ＡＢＣ 店'));
+ await desktop.locator('#expVendor').fill('abc   店');await desktop.locator('#expVendor').dispatchEvent('change');assert.equal(await desktop.locator('#expCategory').inputValue(),'通信費');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/学習ルール/);
+ const history=JSON.stringify((await snapshot()).expenses);
+ let rule=desktop.locator('#expenseCategoryRules tr').filter({hasText:'ＡＢＣ 店'});await rule.getByRole('button',{name:'有効・停止'}).click();await idle();assert.match(await rule.innerText(),/停止/);
+ await desktop.locator('#expVendor').dispatchEvent('change');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/要確認/);assert.equal(await desktop.locator('#expenseLearnCategory').isChecked(),false);
+ desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.type()==='prompt'?d.accept('材料費'):d.type()==='confirm'?d.accept():d.dismiss());
+ await rule.getByRole('button',{name:'変更',exact:true}).click();await idle();assert.match(await rule.innerText(),/材料費/);await rule.getByRole('button',{name:'削除',exact:true}).click();await idle();assert.equal(await rule.count(),0);assert.equal(JSON.stringify((await snapshot()).expenses),history);
+ // Render the reported production shape; preview/dropdown must never write anything.
+ const beforePreview=await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length);
+ await desktop.evaluate(()=>{
+  const row=(id,payload)=>({id,payload,revision:1}),s={id:'dynast-sale',salesDate:'2026-09-30',invoiceDate:'2026-09-30',amount:1594900,customer:'dynast合同会社',documentId:'dynast-doc'};
+  TsukinowaAccountingUI.hydrate({sales:[row(s.id,s)],documents:[row('dynast-doc',{docType:'invoice',confirmed:true,saleId:s.id,amount:s.amount,snapshot:{invoiceNo:'20260930-001',invoiceDate:'2026-09-30',dueDate:'2026-10-30'}})],bankTransactions:[row('dynast-bank',{bankTxnId:'dynast-bank',bankTransactionDate:'2026-10-31',description:'ダイナスト（ド',incoming:1594900,outgoing:0,amount:1594900,status:'未照合',bankAccount:'試験'})]});bizSwitchPage('bank');renderBank();
+ });
+ const dynast=desktop.locator('#bankTarget_dynast-bank');assert.match(await dynast.innerText(),/20260930-001/);assert.match(await dynast.innerText(),/dynast合同会社/);assert.equal(await dynast.inputValue(),'');assert.equal(await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),beforePreview);
  assert.deepEqual(errors,[]);console.log('PASS expense/bank UI + real unchanged Firestore rules: manual/CSV, duplicate skip, cash isolation, high confidence, candidate confirm/cancel, unmatched explicit entry, card settlement blocked and simplified page');
  }finally{await browser.close();server.close();await env.cleanup();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

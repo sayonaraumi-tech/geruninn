@@ -18,6 +18,17 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   window.testRecords=records;window.testClient=client;window.testService=TsukinowaBusiness.createService(client);bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;bizGoogleGrantedScopes=TSUKINOWA_GOOGLE_SCOPE;bizGoogleCalendarId='shared';bizGoogleCalendarsLoaded=true;
  },{mode,formalType});
  page.on('dialog',d=>d.dismiss());
+ if(mode==='legacy'){
+  await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().isReady());
+  const frozen=await page.evaluate(()=>JSON.stringify([...testRecords]));
+  await page.waitForTimeout(200);
+  await page.evaluate(()=>{TsukinowaBusinessUI.auth({phase:'signed-out'},testClient);TsukinowaBusinessUI.auth(testClient.getState(),testClient);});
+  await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().isReady());await page.waitForTimeout(200);
+  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),frozen);assert.equal(posts.length,0);assert.equal(patches.length,0);
+  assert.equal(await page.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),0);
+  assert.deepEqual(errors,[]);console.log('PASS legacy '+formalType+' '+width+'px: login/reload never repairs historical accounting');await page.close();continue;
+ }
+
  await page.evaluate(async({mode,formalType})=>{
   bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;
   window.receipt={documentId:'receipt',docType:'receipt',customerName:'（株）益田工房東京',invoiceDate:'2026-10-23',receiptTotal:12000,paymentMethod:'銀行振込',tadashi:'クロス張替 / カーペット処理代',items:[{content:'クロス張替'},{content:'カーペット処理代'}]};
@@ -47,19 +58,13 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(()=>{TsukinowaBusinessUI.auth({phase:'signed-out'},testClient);TsukinowaBusinessUI.auth(testClient.getState(),testClient);});
  await page.waitForFunction(()=>bizState.sales.length===1&&TsukinowaBusinessUI.getSync().isReady());
  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),frozen);assert.equal(posts.length,1);
- // A historical long title is patched by hydrate without changing identities or accounting.
- const beforeTitleRepair=await page.evaluate(()=>{
-  const key='companies/tsukinowa/calendarLinks/'+bizState.calendar[0].id,row=testRecords.get(key);
-  window.originalFormalLink=JSON.parse(JSON.stringify(row.payload));
-  testRecords.set(key,{...row,payload:{...row.payload,title:'old long title / カーペット処理代'}});
-  return JSON.stringify([...testRecords].filter(([k])=>!k.includes('/calendarLinks/')&&!k.includes('/auditLogs/')&&!k.includes('/operations/')));
- });
+
+ // Historical title drift must remain read-only on login, like accounting drift.
+ const frozenTitle=await page.evaluate(()=>{const key='companies/tsukinowa/calendarLinks/'+bizState.calendar[0].id,row=testRecords.get(key);testRecords.set(key,{...row,payload:{...row.payload,title:'old long title / カーペット処理代'}});return JSON.stringify([...testRecords]);});
  const patchCount=patches.length;
  await page.evaluate(()=>{TsukinowaBusinessUI.auth({phase:'signed-out'},testClient);TsukinowaBusinessUI.auth(testClient.getState(),testClient);});
- await page.waitForFunction(()=>bizState.calendar[0]?.title===originalFormalLink.title&&!bizState.calendar[0].googlePatchPending&&TsukinowaBusinessUI.getSync().isReady());
- assert.equal(posts.length,1);assert.equal(remote.size,1);assert(patches.length>patchCount);assert.equal(patches.at(-1).summary,posts[0].summary);
- assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords].filter(([k])=>!k.includes('/calendarLinks/')&&!k.includes('/auditLogs/')&&!k.includes('/operations/')))),beforeTitleRepair);
- assert(await page.evaluate(()=>['id','googleEventId','calendarId','googleCalendarId','officialAmount','date','status','content','saleId'].every(k=>bizState.calendar[0][k]===originalFormalLink[k])));
+ await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().isReady());await page.waitForTimeout(200);
+ assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),frozenTitle);assert.equal(patches.length,patchCount);
  // Existing Google event must be patched, preserving the user's description and calendar.
  remote.set('existing',{id:'existing',description:'現場メモ',etag:'"1"'});
  await page.evaluate(async()=>{

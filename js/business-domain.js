@@ -90,7 +90,7 @@ function createService(client,{now=()=>new Date()}={}){
  const calendarSeed=(repairing||['calendar','registerCalendarSale'].includes(cmd.type)||cmd.type==='saveDocument'&&formalType(cmd.snapshot?.docType))?await client.listRecords('calendarLinks'):[];
  const saleSeed=(repairing||cmd.type==='registerCalendarSale'||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('sales'):[];
  const deletionSeed=cmd.type==='deleteMisregistration'?Object.fromEntries(await Promise.all(['documents','sales','receivables','payments','projects','estimates','calendarLinks','bankTransactions','cashLedger'].map(async n=>[n,await client.listRecords(n)]))):null;
- const paymentSeed=(repairing||lifecycle||cmd.type==='bankMatch'||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('payments'):[];
+ const paymentSeed=(repairing||lifecycle||['bankMatch','payment','confirmBank'].includes(cmd.type)||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('payments'):[];
  const cleanup=typeof module==='object'&&module.exports?require('./test-data-cleanup.js'):globalThis.TsukinowaTestCleanup;
  const cleanupPlan=cmd.type==='cleanTestData'?cleanup.plan(Object.fromEntries(await Promise.all(cleanup.COLLECTIONS.map(async n=>[n,await client.listRecords(n)])))):null;
  try{return await client.transact(cmd.operationId,cmd,async({read,write:rawWrite,remove,who,archiveAudit,reserveDocumentNumber,reserveUnique})=>{
@@ -235,7 +235,7 @@ function createService(client,{now=()=>new Date()}={}){
     }
     if(payments.length>1)conflict();
     const payment=payments[0],paymentId=payment?.id||parent?.payload.paymentId||'pay_'+id;
-    if(invoiceReceipt){const others=await relatedPayments(saleId,paymentId);if(others.filter(A.confirmed).reduce((n,v)=>n+v.amount,0)+amount>a.amount)conflict();}
+    if(invoiceReceipt){const others=await relatedPayments(saleId,paymentId);if(others.filter(v=>A.confirmed(v)&&(v.id||v.paymentId)!==paymentId).reduce((n,v)=>n+v.amount,0)+amount>a.amount)conflict();}
     if(parent&&payment&&A.confirmed(payment.payload)&&(payment.payload.amount!==amount||payment.payload.paymentDate!==paymentDate||payment.payload.method!==method))conflict();
     const {nextLink,calendarEventId,googleEventId,calendarId}=await reconcileFormalDocumentCalendar(id,p,s,saleId,invoiceReceipt?a.amount:amount,date,found,{preserveDate:invoiceReceipt,saving});
     if(saving)Object.assign(s,{calendarEventId});
@@ -405,6 +405,8 @@ function createService(client,{now=()=>new Date()}={}){
       await write('documents',parent.payload.documentId,{...parent.payload,status:'revised',reason:cmd.reason,revisedToDocumentId:id},'status change',cmd.expectedParentRevision);
     }
     if(formal){const reconciled=await reconcileFormalDocumentCalendar(id,document,s,saleId,amount,date,found,{saving:true});Object.assign(document,{calendarEventId:reconciled.calendarEventId,googleEventId:reconciled.googleEventId,calendarId:reconciled.calendarId});s.calendarEventId=document.calendarEventId;await write('calendarLinks',document.calendarEventId,reconciled.nextLink);}
+    // Later invoice evidence must retain the existing business event's revenue date.
+    if(!parent&&sale&&(sale.payload.salesDate||sale.payload.saleDate))document.salesDate=sale.payload.salesDate||sale.payload.saleDate;
     const revision=await write('documents',id,document,undefined,cmd.expectedRevision);
     if(s.docType==='estimate'){
       refs.estimateId=estimateId;
@@ -456,6 +458,8 @@ function createService(client,{now=()=>new Date()}={}){
     }
     const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':cmd.manualConfirmed?'bank-confirmed':'pending-bank',memo:cmd.memo||'',...(cmd.method==='プラットフォーム経由'&&String(cmd.platformName||'').trim()?{platformName:String(cmd.platformName).trim()}:{}),documentId:''};
     if(old){if(core.canonical(old.payload)!==core.canonical(payload))throw Error('入金IDが既存の入金と競合しています。');return {paymentId:cmd.paymentId,unchanged:true};}
+    const reserved=(await relatedPayments(cmd.saleId)).filter(p=>A.confirmed(p)||p.confirmation==='pending-bank').reduce((n,p)=>n+Number(p.amount||0),0);
+    if(amount>sale.payload.amount-reserved)throw Error('未収金額を超える入金です。既存入金を確認してください。');
     await write('payments',cmd.paymentId,payload,'payment',0);return {paymentId:cmd.paymentId};
   }
   if(cmd.type==='confirmBank'){
@@ -464,6 +468,10 @@ function createService(client,{now=()=>new Date()}={}){
     const id=await stable('bankpay',cmd.bankId),old=await read('payments',id);
     if(old)return {paymentId:id,unchanged:true};
     if(!(cmd.amount>0)||!cmd.paymentDate)throw Error('銀行の入金日・金額を確認してください。');
+    const existing=await relatedPayments(cmd.saleId),paid=existing.filter(A.confirmed).reduce((n,p)=>n+Number(p.amount||0),0);
+    const confirmed=existing.filter(p=>p.confirmation==='bank-confirmed'&&!p.bankId&&!p.bankTxnId&&p.amount===cmd.amount);
+    if(!cmd.pendingPaymentId&&confirmed.length){throw Error('確認済み入金があります。銀行照合から既存入金を選択してください。');}
+    if(cmd.amount>sale.payload.amount-paid)throw Error('未収金額を超える入金です。');
     if(cmd.pendingPaymentId){const pending=await read('payments',cmd.pendingPaymentId);if(!pending||pending.payload.saleId!==cmd.saleId||pending.payload.amount!==cmd.amount||pending.payload.confirmation!=='pending-bank')throw Error('仮入金と銀行明細が一致しません。');await write('payments',cmd.pendingPaymentId,{...pending.payload,confirmation:'bank-confirmed',bankId:cmd.bankId,paymentDate:cmd.paymentDate,date:cmd.paymentDate},'payment');
       // A zero-value bank marker prevents importing the same bank row again.
       await write('payments',id,{id,paymentId:id,saleId:cmd.saleId,amount:0,confirmation:'bank-marker',bankId:cmd.bankId,confirmedPaymentId:cmd.pendingPaymentId,paymentDate:cmd.paymentDate,date:cmd.paymentDate},'payment',0);
