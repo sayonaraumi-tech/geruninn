@@ -268,7 +268,8 @@ test('outstanding balance: staff partial/final payments, idempotency, immutable 
  const final=O.view(original,saleBefore,await records('payments'));assert.deepEqual([final.paidAmount,final.outstandingAmount,final.paymentStatus],[779379,0,'入金済']);
  assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).filter(p=>p.confirmation!=='bank-marker').length,2);assert.equal((await records('cashLedger')).length,1);
  assert.deepEqual((await getDoc(ref(db('admin'),'documents','dynast'))).data(),original);
- await exec(s,{type:'payment',paymentId:'existing-online-method',saleId:'sale_dynast',amount:1,paymentDate:'2026-10-03',method:'オンライン決済'});
+ // A settled invoice cannot accept a second collection under a new payment ID.
+ await assert.rejects(exec(s,{type:'payment',paymentId:'existing-online-method',saleId:'sale_dynast',amount:1,paymentDate:'2026-10-03',method:'オンライン決済'}),/未収金額/);
  const after=(await getDoc(ref(db('admin'),'sales','sale_dynast'))).data().payload;for(const k of Object.keys(saleBefore))if(!['paymentIds','paymentVersion'].includes(k))assert.deepEqual(after[k],saleBefore[k]);
 });
 
@@ -488,3 +489,13 @@ test('formal WOOC invoice and historical repair preserve Rules, immutable docume
 });
 
 test('new bank receipts rematch and confirmed receipts reuse existing collection under unchanged rules',async()=>{const admin=await clientFor('admin'),a=createService(admin);await exec(a,{type:'saveDocument',snapshot:snapshot('rematch-bank'),expectedRevision:0});const bank={bankTxnId:'rematch-bank',bankTransactionDate:'2026-10-05',bankAccount:'試験',description:'試験入金',incoming:50000,outgoing:0,amount:50000};await exec(a,{type:'importBank',bank});const match={type:'bankMatch',bankTxnId:bank.bankTxnId,targetType:'sale',targetId:'sale_rematch-bank'};await exec(a,{...match,expectedRevision:1});await exec(a,{type:'bankUnmatch',bankTxnId:bank.bankTxnId,expectedRevision:2,reason:'再確認'});await exec(a,{...match,expectedRevision:3});assert.equal((await records('payments')).filter(A.confirmed).length,1);assert.equal((await records('sales')).length,1);admin.dispose();});
+
+
+test('isolated concurrent full collections with different IDs commit only once',async()=>{
+ const c=await clientFor('admin'),s=createService(c);
+ try{
+  await exec(s,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('collection-race'),items:[{content:'施工',qty:1,price:79500/1.1}]}});
+  const rs=await Promise.allSettled(['one','two'].map(id=>exec(s,{type:'payment',paymentId:id,manualConfirmed:true,saleId:'sale_collection-race',amount:79500,paymentDate:'2026-10-23',method:'銀行振込'})));
+  assert.equal(rs.filter(r=>r.status==='fulfilled').length,1);assert.equal((await c.listRecords('payments')).length,1);
+ }finally{c.dispose();}
+});
