@@ -44,7 +44,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.some(b=>b.id==='new-bank'));
  await page.evaluate(()=>bizSwitchPage('bank'));
  const bic=page.locator('#bankRows tr').filter({hasText:'池袋西口店'});assert.match(await bic.innerText(),/BIC CAMERA/);assert.equal(await bic.getByRole('button',{name:'この銀行明細から支出登録'}).count(),0);
- await bic.locator('select').selectOption({index:1});await bic.getByRole('button',{name:'照合確定'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='bic-bank').status==='照合済');
+ await bic.locator('select').selectOption({index:1});await bic.getByRole('button',{name:'照合確定'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='bic-bank').status==='照合済').catch(async e=>{console.error(await page.evaluate(()=>({queue:TsukinowaBusinessUI.getSync().getQueue(),status:document.getElementById('coreSyncStatus').textContent,banks:TsukinowaAccountingUI.getData().bankTransactions,expenses:TsukinowaAccountingUI.getData().expenses})));throw e;});
  const before=await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length);
  await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
  assert(await page.locator('#pageBank').isVisible());assert(await page.locator('#bankExpenseDialog').isVisible());
