@@ -526,7 +526,7 @@ test('historical bank cancellation/restoration fails closed including forged ord
  const original={bankTxnId:'history',bankAccount:'メイン口座',bankTransactionDate:'2026-10-01',description:'history',incoming:1000,outgoing:0,amount:1000,status:'未照合',deletedAt:null};
  await admin.put('bankTransactions','history',original,{operationId:'history-seed'});
  const seed=(await getDoc(ref(db('admin'),'bankTransactions','history'))).data();
- for(const patch of [{status:'cancelled'},{duplicateCancellation:{before:original,keeperId:'keeper'}},{deletedAt:'2026-11-02'}]){
+ for(const patch of [...['void','cancelled','duplicate','revised'].flatMap(status=>[{status},{documentStatus:status}]),{duplicateCancellation:{before:original,keeperId:'keeper'}},{deletedAt:'2026-11-02'}]){
   await assert.rejects(admin.put('bankTransactions','history',{...original,...patch},{operationId:crypto.randomUUID(),expectedRevision:1}));
  }
  await assert.rejects(admin.put('bankTransactions','new-cancelled',{...original,status:'cancelled'},{operationId:'new-cancelled'}));

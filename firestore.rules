@@ -13,7 +13,8 @@ service cloud.firestore {
    let p=request.resource.data.payload;
    let old=before(c,n,id);
    return n!='bankTransactions' ||
-    (p.get('status','')!='cancelled' && !p.keys().hasAny(['duplicateCancellation'])
+    (!(p.get('status','') in ['void','cancelled','duplicate','revised'])
+     && !(p.get('documentStatus','') in ['void','cancelled','duplicate','revised']) && !p.keys().hasAny(['duplicateCancellation'])
      && p.get('deletedAt',null)==null
      && (old==null || (old.get('status','')!='cancelled'
       && !old.keys().hasAny(['duplicateCancellation']) && old.get('deletedAt',null)==null)));
