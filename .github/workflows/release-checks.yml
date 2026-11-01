@@ -33,12 +33,14 @@ jobs:
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
       - run: pnpm test:release:${{ matrix.suite }}
+      - name: Collect failure diagnostics
+        if: failure()
+        run: |
+          node -e "const fs=require('fs'),p=require('path');fs.mkdirSync('test-diagnostics',{recursive:true});for(const dir of ['.','..'])for(const f of fs.readdirSync(dir))if(f.endsWith('-debug.log')||f.endsWith('.png'))fs.copyFileSync(p.join(dir,f),p.join('test-diagnostics',f));"
       - name: Preserve failure diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: regression-diagnostics-${{ matrix.suite }}
-          path: |
-            *-debug.log
-            ${{ github.workspace }}/../*.png
+          path: test-diagnostics
           if-no-files-found: ignore
