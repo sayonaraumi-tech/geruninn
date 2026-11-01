@@ -18,5 +18,5 @@ test('genuine distinct duplicate sale and unlinked payments are retained, no nam
 });
 test('cash/advance/card payment status is independent of bank matching; flags are not settlement proof',()=>{
  const expenses=['現金','代表者立替（交通系IC）','法人カード決済','銀行振込'].map((paymentMethod,i)=>({id:String(i),expenseDate:'2026-10-20',category:'通信費',amount:100,paymentMethod,settled:true,reimbursed:true,bankTxnId:i===1?'not-proof':''}));
- const d={expenses},rows=A.ledgerRows(d,period('2026-10'));assert.equal(rows[0].status,'支払済');assert.equal(rows[1].status,'立替未精算');assert.equal(rows[2].status,'支払済 / 銀行未照合');assert.equal(A.monthly(d,'2026-10').attention,0);assert.equal(A.monthly(d,'2026-10').cashExpenses,0);
+ const d={expenses},rows=A.ledgerRows(d,period('2026-10'));assert.equal(rows[0].status,'支払済');assert.equal(rows[1].status,'立替未精算');assert.equal(rows[2].status,'要確認 / カード種別未設定');assert.equal(A.monthly(d,'2026-10').attention,1);assert.equal(A.monthly(d,'2026-10').cashExpenses,0);
 });

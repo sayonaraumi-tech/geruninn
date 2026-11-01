@@ -117,7 +117,7 @@ test('cash collection and expense are atomic, idempotent and auditable; soft del
  const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));for(const action of ['cash transaction','expense create','expense update','expense delete'])assert(audits.docs.some(d=>d.data().action===action));admin.dispose();staff.dispose();
 });
 test('bank CSV twice, bank 50,000 + cash 20,000 leaves 30,000; pending payment is confirmed once and can be reversed',async()=>{
- const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);await exec(a,{type:'saveDocument',snapshot:snapshot('bank-invoice'),expectedRevision:0});
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);await exec(a,{type:'saveDocument',snapshot:{...snapshot('bank-invoice'),paymentMethod:'銀行振込'},expectedRevision:0});
  const csv='日付,摘要,入金,出金,取引ID\r\n2026/10/05,"共有テスト, 振込","50,000",,txn-one\r\n',parsed=await A.parseBank(csv,'GMO',admin.digest);for(let n=0;n<2;n++)for(const bank of parsed)await exec(a,{type:'importBank',bank});assert.equal((await records('bankTransactions')).length,1);
  await exec(a,{type:'payment',paymentId:'pending50',saleId:'sale_bank-invoice',amount:50000,paymentDate:'2026-10-04',method:'銀行振込'});
  const b=parsed[0];assert(A.suggestions(b,{sales:await records('sales'),payments:await records('payments')}).some(x=>x.paymentId==='pending50'));
@@ -169,7 +169,7 @@ test('formal revisions transfer a stable sale, preserve paid amounts and immutab
 test('duplicates/voids excluded from monthly, receivables, bank matching; reasons, targets and payments guarded',async()=>{
  const admin=await clientFor('admin'),a=createService(admin);
  try{
- for(const id of ['first','duplicate','void','cancel'])await exec(a,{type:'saveDocument',snapshot:{...snapshot(id),items:[{content:'施工 '+id,qty:1,price:90909.09}]},expectedRevision:0});
+ for(const id of ['first','duplicate','void','cancel'])await exec(a,{type:'saveDocument',snapshot:{...snapshot(id),paymentMethod:'銀行振込',items:[{content:'施工 '+id,qty:1,price:90909.09}]},expectedRevision:0});
  await assert.rejects(exec(a,{type:'documentStatus',documentId:'void',status:'void',reason:'',expectedRevision:1}),/理由/);
  await assert.rejects(exec(a,{type:'documentStatus',documentId:'duplicate',status:'duplicate',reason:'重複',duplicateOfDocumentId:'duplicate',expectedRevision:1}),/有効/);
  for(const [id,status] of [['duplicate','duplicate'],['void','void'],['cancel','cancelled']])await exec(a,{type:'documentStatus',documentId:id,status,reason:'誤発行',duplicateOfDocumentId:'first',expectedRevision:1});
@@ -504,7 +504,7 @@ test('formal WOOC invoice and historical repair preserve Rules, immutable docume
  }finally{admin.dispose();staff.dispose();}
 });
 
-test('new bank receipts rematch and confirmed receipts reuse existing collection under unchanged rules',async()=>{const admin=await clientFor('admin'),a=createService(admin);await exec(a,{type:'saveDocument',snapshot:snapshot('rematch-bank'),expectedRevision:0});const bank={bankTxnId:'rematch-bank',bankTransactionDate:'2026-10-05',bankAccount:'試験',description:'試験入金',incoming:50000,outgoing:0,amount:50000};await exec(a,{type:'importBank',bank});const match={type:'bankMatch',bankTxnId:bank.bankTxnId,targetType:'sale',targetId:'sale_rematch-bank'};await exec(a,{...match,expectedRevision:1});await exec(a,{type:'bankUnmatch',bankTxnId:bank.bankTxnId,expectedRevision:2,reason:'再確認'});await exec(a,{...match,expectedRevision:3});assert.equal((await records('payments')).filter(A.confirmed).length,1);assert.equal((await records('sales')).length,1);admin.dispose();});
+test('new bank receipts rematch and confirmed receipts reuse existing collection under unchanged rules',async()=>{const admin=await clientFor('admin'),a=createService(admin);await exec(a,{type:'saveDocument',snapshot:{...snapshot('rematch-bank'),paymentMethod:'銀行振込'},expectedRevision:0});const bank={bankTxnId:'rematch-bank',bankTransactionDate:'2026-10-05',bankAccount:'試験',description:'試験入金',incoming:50000,outgoing:0,amount:50000};await exec(a,{type:'importBank',bank});const match={type:'bankMatch',bankTxnId:bank.bankTxnId,targetType:'sale',targetId:'sale_rematch-bank'};await exec(a,{...match,expectedRevision:1});await exec(a,{type:'bankUnmatch',bankTxnId:bank.bankTxnId,expectedRevision:2,reason:'再確認'});await exec(a,{...match,expectedRevision:3});assert.equal((await records('payments')).filter(A.confirmed).length,1);assert.equal((await records('sales')).length,1);admin.dispose();});
 
 
 test('isolated concurrent full collections with different IDs commit only once',async()=>{
@@ -515,3 +515,5 @@ test('isolated concurrent full collections with different IDs commit only once',
   assert.equal(rs.filter(r=>r.status==='fulfilled').length,1);assert.equal((await c.listRecords('payments')).length,1);
  }finally{c.dispose();}
 });
+
+test('four payment paths under actual Firestore rules',async()=>{const c=await clientFor('admin');try{const s=createService(c);await require('./payment-path-scenarios.cjs')({run:cmd=>exec(s,cmd),list:n=>c.listRecords(n),A:require('../js/accounting'),assert});}finally{c.dispose();}});
