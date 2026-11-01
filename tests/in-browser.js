@@ -43,7 +43,7 @@ window.addEventListener('load',async()=>{
   bizClearDocLink();openSavedDoc(0);check(!!bizCurrentCalendarId,'saved document restores event link');setDocType('receipt');check(!bizCurrentCalendarId,'new blank document clears stale link');
   testReadonly=true;await bizGooglePatchEvent(bizState.calendar.find(e=>e.googleEventId==='event1'));check(bizState.calendar.find(e=>e.googleEventId==='event1').googlePatchPending,'read-only failure retains pending write');
   testReadonly=false;await bizGoogleSyncMonth();check(!bizState.calendar.find(e=>e.googleEventId==='event1').googlePatchPending,'resync retries pending write');
-  for(const page of ['dashboard','calendar','estimates','projects','chohyo','savedDocs','monthly'])bizSwitchPage(page);
+  for(const page of ['dashboard','calendar','estimates','projects','chohyo','savedDocs','dashboard'])bizSwitchPage(page);
   check(testErrors.length===0,'all page navigation without runtime errors');
   results.push('ALL CHECKS PASSED');
  }catch(e){results.push('FAIL '+e.stack);}

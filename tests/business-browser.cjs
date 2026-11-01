@@ -66,14 +66,14 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  assert.equal(await desktop.evaluate(()=>TsukinowaAccountingUI.getData().bankTransactions.length),1);
  await desktop.evaluate(()=>{const b=TsukinowaAccountingUI.getData().bankTransactions[0];accountingConfirmBank(b.id,{targetType:'sale',targetId:bizState.sales[0].id,paymentId:''});});
  await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions[0].status==='照合済');assert.equal(await desktop.evaluate(()=>bizOutstanding(bizState.sales[0])),24000);
- await desktop.evaluate(()=>{document.getElementById('monthlyMonth').value='2026-10';bizSwitchPage('monthly');});assert.equal(await desktop.locator('#mPayments').textContent(),'¥5,000');assert.equal(await desktop.locator('#mExpenses').textContent(),'¥1,448,620');
+ await desktop.evaluate(()=>{document.getElementById('homeMonth').value='2026-10';bizSwitchPage('dashboard');});assert.equal(await desktop.locator('#kpiPayments').textContent(),'¥5,000');assert.equal(await desktop.locator('#kpiExpenses').textContent(),'¥1,448,620');
  for(const kind of ['monthly','expenses','sales','receivables','suppliers','bank']){const pending=desktop.waitForEvent('download');await desktop.evaluate(k=>accountingExport(k),kind);const download=await pending,bytes=fs.readFileSync(await download.path());assert.equal(bytes.subarray(0,3).toString('hex'),'efbbbf');}
  const backupDownload=desktop.waitForEvent('download');await desktop.evaluate(()=>exportBackup());const accountingBackup=JSON.parse(fs.readFileSync(await (await backupDownload).path(),'utf8'));assert(accountingBackup.records.suppliers.length===1);assert(accountingBackup.records.cashLedger.length>0);
  await phone.evaluate(()=>bizSwitchPage('bank'));assert(!(await phone.locator('#pageBank').isVisible()));await phone.evaluate(()=>bizSwitchPage('suppliers'));assert.equal(await phone.locator('#pageSuppliers').count(),0);
  for(const p of [phone,desktop]){assert.equal(await p.locator('#pageProjects,#pageSuppliers,#supplierNav,#supplierName,#supplierReconciliationStatus,#bizNav [data-page="projects"],#bizNav [data-page="suppliers"]').count(),0);assert.equal(await p.getByText('仕入先照合（準備中）',{exact:true}).count(),0);}
- await desktop.evaluate(()=>{document.getElementById('yearEndYear').value='2026';yearEndTab('1');});assert.match(await desktop.locator('#annualRows').innerText(),/1,448,620/);
+ await desktop.evaluate(()=>{document.getElementById('homeYear').value='2026';homeTab('year');});assert.match(await desktop.locator('#kpiExpenses').innerText(),/1,448,620/);
  assert.deepEqual(await supplierSnapshot(),supplierHistory);
- await desktop.evaluate(()=>yearEndTab('0'));
+ await desktop.evaluate(()=>homeTab('month'));
  await desktop.screenshot({path:path.join(root,'../accounting-monthly.png')});
  console.log('PASS accounting UI: expense + cash, retained supplier history 561380 balance, duplicate CSV, bank match, monthly date totals, staff navigation guards and 6 UTF-8 BOM exports');
 

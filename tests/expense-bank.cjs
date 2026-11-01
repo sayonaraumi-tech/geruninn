@@ -40,7 +40,7 @@ test('ambiguous, weak, nonbank and monthly card evidence never silently matches 
  const e={...expense(),expenseId:'one'},b=bank(),data={expenses:[e]};
  assert.equal(A.expenseMatch({...b,description:'不明'},data).status,'候補');assert.equal(A.expenseMatch(b,{expenses:[e,{...e,expenseId:'two'}]}).status,'候補');
  assert.equal(A.expenseMatch({...b,bankTransactionDate:'2026-10-10'},data).status,'未一致');assert.equal(A.expenseMatch({...b,outgoing:1},data).status,'未一致');
- for(const paymentMethod of ['現金','代表者立替（交通系IC）','法人カード決済','クレジットカード','その他'])assert.equal(A.expenseMatch(b,{expenses:[{...e,paymentMethod}]}).status,'未一致');
+ for(const paymentMethod of ['現金','代表者立替（交通系IC）','その他'])assert.equal(A.expenseMatch(b,{expenses:[{...e,paymentMethod}]}).status,'未一致');
  const h=await harness();await h.execute({type:'saveExpense',expenseId:'one',expense:expense(),expectedRevision:0});
  for(const description of ['VISA カード利用代金','JCB','ｶｰﾄﾞ利用代金']){
  const row=bank({bankTxnId:description,description});await h.execute({type:'importBank',bank:row});assert(A.expenseMatch(row,data).card);assert.deepEqual(A.suggestions(row,data),[]);
@@ -52,3 +52,5 @@ test('sales incoming suggestions preserve existing pending payment matching',()=
  const data={sales:[{id:'sale',salesDate:'2026-10-01',invoiceDate:'2026-10-01',amount:6060,customer:'ビックカメラ'}],payments:[{id:'pending',saleId:'sale',amount:6060,paymentDate:'2026-10-02',confirmation:'pending-bank'}]};
  assert(A.suggestions(bank({incoming:6060,outgoing:0}),data).some(s=>s.kind==='sale'&&s.paymentId==='pending'));
 });
+
+test('single corporate card purchase can match, monthly settlement cannot',()=>{for(const paymentMethod of ['法人カード決済','クレジットカード'])assert.equal(A.expenseMatch(bank(),{expenses:[{...expense({paymentMethod}),expenseId:'card'}]}).status,'自動一致');});

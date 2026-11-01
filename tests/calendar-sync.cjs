@@ -117,7 +117,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.reload();await page.waitForTimeout(200);
   assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-10');
   assert(await page.evaluate(()=>bizState.calendar.some(e=>e.id==='kept')));
-  for(const name of ['dashboard','calendar','estimates','projects','chohyo','savedDocs','monthly'])await page.evaluate(n=>bizSwitchPage(n),name);
+  for(const name of ['dashboard','calendar','estimates','projects','chohyo','savedDocs','dashboard'])await page.evaluate(n=>bizSwitchPage(n),name);
   assert.deepEqual(errors,[]);
   console.log('PASS',mobile?'mobile':'desktop','startup preservation, OAuth, paginated shared calendars/events, filters, dedup, save/writeback, ETag retry, official-data protection, saved-doc links, retry and navigation');
   await context.close();

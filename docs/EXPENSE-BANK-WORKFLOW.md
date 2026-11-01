@@ -2,7 +2,7 @@
 
 ## Scope and removed paths
 
-Based on main `8c30f2e`.
+Based on latest main `683350ba224327203f97f33d6d232d5c3fef1f98`.
 
 - Removed the inline `matchBankExpense`, its outgoing amount-only first-candidate selection and its old confirmation button from `index.html`.
 - Disabled local-only expense creation and bank importing in the active UI. New records use the existing authenticated accounting service and durable queue.
@@ -12,7 +12,7 @@ Based on main `8c30f2e`.
 - Moved cash adjustment inside the cash ledger and bank account options inside bank CSV importing.
 - Verified that the existing bank import domain only saves bank evidence; it does not create expenses. Matching continues to update an existing expense, never create a second expense.
 
-Sales/incoming suggestion scoring, pending-payment confirmation, payment channels and bank unmatching are retained. Legacy supplier/migration domain commands remain for queued commands and historical data compatibility; they have no new UI entry point.
+Incoming scoring now requires exact amount and a seven-day date window (including explicit pending installments). Existing pending/confirmed collections are reused; receipt totals are checked transactionally. Payment channels and bank unmatching are retained. Legacy supplier/migration domain commands remain for queued commands and historical data compatibility; they have no new UI entry point.
 
 ## Current workflow
 
@@ -20,13 +20,13 @@ Sales/incoming suggestion scoring, pending-payment confirmation, payment channel
 2. Review row count, eligible total, errors and each duplicate candidate. Errors block importing; exact duplicates in existing live records, the pending queue and the file are skipped.
 3. Both entry paths use `saveExpense`, the same validation and the same cash mirror. Only `現金` debits cash. Date/category/amount/vendor/method/description form the stable key. Newly entered exact duplicates share a server-derived ID, including concurrent/repeated CSV imports. Existing IDs and historical records are not rewritten.
 4. Import bank CSV. This creates payment evidence only.
-5. Outgoing candidates require exact amount, a date within seven days, an unmatched live expense, and bank transfer/direct debit (including legacy GMO bank). Corporate cards, representative advances, cash and other methods are excluded.
+5. Outgoing candidates require exact amount, a date within seven days, an unmatched live expense, and a bank-related method, including bank transfer, direct debit and individual corporate-card purchases. Representative advances, cash and other methods are excluded.
 6. A single candidate with matching vendor text is `自動一致`; weaker/ambiguous candidates are `候補`; no candidate is `未一致`. These are computed display states. Both candidate types still require explicit confirmation. Confirming writes the existing bank link and `照合済`; the expense ledger displays `支払確認済`. No expense is added.
-7. For unmatched non-card evidence, `この銀行明細から支出登録` asks for confirmation and opens the usual entry form. The user must save the expense and then confirm its bank match separately.
+7. For unmatched non-card evidence, `この銀行明細から支出登録` asks for confirmation and opens the usual entry form. The user reviews category, vendor, description and method, then explicitly confirms saving. The `expenseFromBank` command calls the existing `saveExpense` and `bankMatch` handlers in one transaction. Existing expense candidates block duplicate creation.
 
 ## Card settlement limitation
 
-Monthly card debits remain `未一致` with `カード決済まとめ候補` and an explanation that they cover multiple expenses. Version one deliberately has no one-to-many association UI. No automatic expense creation or one-to-one card matching is available, including through the expense-match domain command. Individual corporate card expenses stay in the expense ledger and do not debit cash.
+Monthly card debits remain `未一致` with `カード決済まとめ候補` and an explanation that they cover multiple expenses. Version one deliberately has no one-to-many association UI. No automatic expense creation or one-to-one matching of monthly settlements is available, including through the expense-match domain command. Individual purchases can match existing card expenses. Individual corporate card expenses stay in the expense ledger and do not debit cash.
 
 ## Compatibility and validation
 
@@ -39,3 +39,9 @@ No Firestore rules, production data, Google Calendar records or historical schem
 - `pnpm test:expense-bank-browser`: real UI and unchanged emulator rules for preview/duplicates, cash/noncash, high confidence, candidate confirm/cancel, unmatched explicit creation and monthly card protection.
 
 The referenced original 20-row attachment is not present in this checkout. Tests use the requested six-column format and payment methods; they do not claim to import that production file or validate its stated total.
+
+## GMO bank source verification
+
+GMO headers `日付,摘要,入金金額,出金金額,残高,メモ` and the older `入金/出金` aliases are supported. Raw descriptions are preserved; optional balance/memo are saved and exported. UTF-8/Shift_JIS decoding remains supported. Stable IDs retain the existing account/date/description/amount/balance/occurrence strategy and external bank IDs when available.
+
+The user-supplied original bank CSV was verified locally: Shift_JIS, 31 rows, SHA-256 `a49e1f94fb46d530368671f2c60c6ac9d5a7aee262651f3a705589e64ec55440`. Run `node scripts/verify-gmo-csv.cjs <original-file>` to repeat every-row amount/description/balance/memo and stable-ID assertions. The real bank data is not committed. The earlier missing 20-row attachment mentioned above was a separate expense sample.
