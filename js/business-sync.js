@@ -35,7 +35,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
    while(queue.length&&!stopped&&online()){
     // Keep financial conflicts in the outbox. Only independent commands may pass them.
     const isolated=x=>x.blocked&&x.command.type==='expenseFromBank'&&/既存の支出候補/.test(x.error||'');
-    const resolved=x=>isolated(x)&&(rows.bankTransactions||[]).some(b=>b.id===x.command.bankTxnId&&b.payload.status==='照合済'&&b.payload.matchType==='expense');
+    const resolved=x=>isolated(x)&&!/参照を確認/.test(x.error||'')&&(rows.bankTransactions||[]).some(b=>b.id===x.command.bankTxnId&&b.payload.status==='照合済'&&b.payload.matchType==='expense');
     const held=queue.filter(x=>isolated(x)&&!resolved(x));
     const index=queue.findIndex(x=>(!isolated(x)||resolved(x))&&!held.some(h=>h.command.bankTxnId===x.command.bankTxnId&&x.command.type!=='bankMatch'));
     if(index<0){error=held[0]?.error;break;}

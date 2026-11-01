@@ -60,3 +60,10 @@ test('stored conflict survives restart, explicit match passes it, and verified l
  sync.enqueue({type:'bankMatch',operationId:'match',bankTxnId:'bic',targetType:'expense',targetId:'existing'});online=true;await sync.flush();
  assert.deepEqual(attempts,['match','old']);assert.equal(sync.getQueue().length,0);sync.stop();
 });
+test('inconsistent reciprocal references remain isolated even when bank snapshot says matched',async()=>{
+ const values=new Map(),listeners=new Map(),attempts=[];let online=false;
+ const client={getState:()=>({role:'admin',projectId:'demo',companyId:'test',user:{uid:'test'}}),listRecords:async()=>[],listen:(name,_,next)=>{listeners.set(name,next);next(name==='bankTransactions'?[{id:'bic',payload:{status:'照合済',matchType:'expense'}}]:[],{fromCache:false});return()=>{};},transact:async id=>{attempts.push(id);if(id==='bad')throw Error('既存の支出候補があります。参照を確認してください。');return {id};}};
+ const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},sync=createSync({client,storage,online:()=>online});sync.start();
+ sync.enqueue({type:'expenseFromBank',operationId:'bad',bankTxnId:'bic',expense:{amount:6060}});sync.enqueue({type:'test',operationId:'good'});online=true;await sync.flush();
+ assert.deepEqual(attempts,['bad','good']);assert.equal(sync.getQueue().length,1);assert(sync.getQueue()[0].blocked);sync.stop();
+});
