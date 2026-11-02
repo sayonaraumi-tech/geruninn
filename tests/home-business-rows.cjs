@@ -20,3 +20,16 @@ test('cash/advance/card payment status is independent of bank matching; flags ar
  const expenses=['現金','代表者立替（交通系IC）','法人カード決済','銀行振込'].map((paymentMethod,i)=>({id:String(i),expenseDate:'2026-10-20',category:'通信費',amount:100,paymentMethod,settled:true,reimbursed:true,bankTxnId:i===1?'not-proof':''}));
  const d={expenses},rows=A.ledgerRows(d,period('2026-10'));assert.equal(rows[0].status,'支払済');assert.equal(rows[1].status,'立替未精算');assert.equal(rows[2].status,'要確認 / カード種別未設定');assert.equal(A.monthly(d,'2026-10').attention,1);assert.equal(A.monthly(d,'2026-10').cashExpenses,0);
 });
+
+test('HOME paid status does not assert bank evidence or retain stale pending warning',()=>{
+ const d={sales:[sale('tsukai',{salesDate:'2026-10-07'})],payments:[pay('one',112376,'2026-10-08'),pay('pending',112376,'2026-10-08',{confirmation:'pending-bank'})]};
+ const before=JSON.stringify(d),p=period('2026-10'),r=A.ledgerRows(d,p)[0];
+ assert.equal(r.homeStatus,'入金済');assert.equal(A.receivables(d.sales,d.payments,p.end)[0].outstanding,0);
+ assert.equal(A.bankEvidence(d.payments[0],d),false);assert.match(r.status,/銀行未照合/);
+ assert.equal(A.ledgerCells(r).length,11);assert.equal(JSON.stringify(d),before);
+ for(const method of ['現金','銀行振込']){
+  const partial={sales:[sale()],payments:[pay('one',50000,'2026-10-20',{method,confirmation:method==='現金'?'cash-received':'bank-confirmed'}),pay('two',62376,'2026-11-10')]};
+  assert.equal(A.ledgerRows(partial,p)[0].homeStatus,'一部入金');
+  assert.equal(A.ledgerRows(partial,period('2026-11'))[0].homeStatus,'入金済');
+ }
+});
