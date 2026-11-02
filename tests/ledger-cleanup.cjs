@@ -5,6 +5,6 @@ test('one live sale and distinct confirmed payments; state tombstones/pending/or
  const payments=[payment,payment,{...payment,id:'second'},...['void','duplicate','revised','cancelled'].map(status=>({...payment,id:status,documentStatus:'active',status})),{...payment,id:'pending',confirmation:'pending-bank'},{...payment,id:'cancel',deletedAt:'2026-10-03'},{...payment,id:'orphan',saleId:'void'}];
  assert.equal(A.ledger(sales,payments).payments.length,2);
  const rows=A.receivables(sales,payments,'2026-10-08');assert.equal(rows.length,1);assert.deepEqual([rows[0].paid,rows[0].outstanding,rows[0].lastPaymentDate,rows[0].status],[400,600,'2026-10-02','一部入金']);
- assert.equal(A.salesRows(sales,payments,'2026-10')[0].paid,400);assert.equal(A.salesRows(sales,payments,'2026-09').length,0);
+ assert.equal(A.salesRegister({sales,payments},A.periodFilter({month:'2026-10'}),'2026-10-08')[0].paid,400);assert.equal(A.salesRegister({sales,payments},A.periodFilter({month:'2026-09'}),'2026-10-08').length,0);
  assert.equal(A.receivables(sales,payments,'2026-10-01')[0].paid,0);
 });

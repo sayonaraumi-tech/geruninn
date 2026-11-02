@@ -39,14 +39,14 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  const sale=await page.evaluate(()=>bizState.sales.find(s=>s.docType==='invoice'));
  const beforePayment=await page.evaluate(()=>({docs:JSON.stringify([...testRecords].filter(([p])=>(/\/documents\//.test(p)||/\/operations\/documentNumber_/.test(p)))),pdf:pdfSaves}));
  const metrics=await page.evaluate(()=>['kpiPayments','kpiReceivable'].map(id=>Number(document.getElementById(id).textContent.replace(/[^0-9.-]/g,''))));
- await page.locator(`button[onclick="selectSaleForPayment('${sale.id}')"]`).click();
+ await page.locator(`#salesRows tr[data-sale-id="${sale.id}"] [data-sale-payment]`).click();
  assert.equal(await page.locator('#paymentSale').inputValue(),sale.id);assert.equal(await page.locator('#pageSales').isVisible(),true);
  await page.locator('#paymentType').selectOption('銀行振込');await page.locator('#paymentAmount').fill('500');await page.locator('#paymentDate').fill('2026-10-08');await page.locator('#paymentMemo').fill('確認済');
  if(process.env.PREVIEW_DIR)await page.screenshot({path:path.join(process.env.PREVIEW_DIR,`payment-form-${width}.png`),fullPage:true});
  await page.evaluate(()=>Promise.all([addPayment(),addPayment()]));await page.waitForFunction(id=>bizState.payments.some(p=>p.saleId===id),sale.id);
  assert.equal(await page.evaluate(id=>bizState.payments.filter(p=>p.saleId===id).length,sale.id),1);assert.equal(await page.evaluate(id=>bizState.payments.find(p=>p.saleId===id).confirmation,sale.id),'bank-confirmed');
  assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),600);
- assert.deepEqual(await page.evaluate(()=>['kpiPayments','kpiReceivable'].map(id=>Number(document.getElementById(id).textContent.replace(/[^0-9.-]/g,'')))),[metrics[0]+500,metrics[1]-500]);assert.match(await page.locator('#salesRows').innerText(),/500/);assert.match(await page.locator('#receivableRows').innerText(),/600/);const savedCard=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);assert.match(await savedCard.innerText(),/累計入金額 500/);
+ assert.deepEqual(await page.evaluate(()=>['kpiPayments','kpiReceivable'].map(id=>Number(document.getElementById(id).textContent.replace(/[^0-9.-]/g,'')))),[metrics[0]+500,metrics[1]-500]);assert.match(await page.locator('#salesRows').innerText(),/500/);assert.match(await page.locator('#salesRows').innerText(),/600/);const savedCard=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);assert.match(await savedCard.innerText(),/累計入金額 500/);
  // A later explicit real deposit with identical details must be a new payment.
  await page.locator('#paymentAmount').fill('500');await page.locator('#paymentMemo').fill('確認済');await page.evaluate(()=>addPayment());
  assert.equal(await page.evaluate(id=>bizState.payments.filter(p=>p.saleId===id).length,sale.id),2);
