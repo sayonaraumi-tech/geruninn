@@ -29,11 +29,11 @@ test('unreviewed and excessive deductions perform zero writes',async()=>{
  const h=await setup(),transaction={supplierId:'dongpeng',invoiceNo:'DP',invoiceMonth:'2026-10',date:'2026-10-31',amount:100,deductionAmount:101,description:'材料',reviewed:true};
  await assert.rejects(h.execute({type:'settleSupplierInvoice',transaction}),/控除額/);await assert.rejects(h.execute({type:'settleSupplierInvoice',transaction:{...transaction,reviewed:false}}),/確認/);assert.equal(h.list('expenses').length,0);assert.equal(h.list('supplierTransactions').length,0);
 });
-test('interest requires reviewed policy, cashback note cannot post income, advance cannot become expense',async()=>{
+test('interest and debit cashback confirm explicitly without duplicate sales, advance cannot become expense',async()=>{
  const h=await setup();await assert.rejects(h.execute({type:'bankMatch',bankTxnId:'dongpeng',targetType:'expense',targetId:'any',expectedRevision:1}),/前渡金/);await assert.rejects(h.execute({type:'expenseFromBank',bankTxnId:'dongpeng',expense:{expenseDate:'2026-10-13',category:'材料費',paymentMethod:'銀行振込',amount:1000000,vendor:'東鵬',description:'壁紙'},expectedRevision:1}),/前渡金/);
  await h.execute({type:'importBank',bank:{bankTxnId:'interest',bankTransactionDate:'2026-10-01',incoming:2679,outgoing:0,amount:2679,description:'普通預金利息',bankAccount:'GMO あおぞら'}});
- const c={type:'reviewBankIncome',bankTxnId:'interest',note:'承認済み口径を原本照合',interest:true,expectedRevision:1};await assert.rejects(h.execute(c),/会計口径/);await h.execute({type:'saveBankRule',ruleType:'bankSpecialPolicy',key:'受取利息'});await h.execute(c);
+ const c={type:'reviewBankIncome',bankTxnId:'interest',note:'承認済み口径を原本照合',interest:true,expectedRevision:1};await h.execute(c);
  assert.equal(h.list('bankTransactions').find(r=>r.id==='interest').payload.matchType,'bankIncome');
  await h.execute({type:'importBank',bank:{bankTxnId:'cashback',bankTransactionDate:'2026-10-21',incoming:3071,outgoing:0,amount:3071,description:'Visaデビットキャッシュバック',bankAccount:'GMO あおぞら'}});
- await h.execute({type:'reviewBankIncome',bankTxnId:'cashback',note:'値引・返金・特典の原本確認待ち',interest:false,expectedRevision:1});const cash=h.list('bankTransactions').find(r=>r.id==='cashback').payload;assert.equal(cash.status,'未照合');assert.equal(cash.matchType,undefined);assert.equal(h.list('expenses').length,0);
+ await h.execute({type:'reviewBankIncome',bankTxnId:'cashback',note:'値引・返金・特典の原本確認待ち',interest:false,expectedRevision:1});const cash=h.list('bankTransactions').find(r=>r.id==='cashback').payload;assert.equal(cash.status,'未照合');assert.equal(cash.matchType,undefined);assert.equal(h.list('expenses').length,0);await h.execute({type:'reviewBankIncome',bankTxnId:'cashback',note:'GMO Visaデビット利用還元',cashback:true,expectedRevision:2});assert.equal(h.list('bankTransactions').find(r=>r.id==='cashback').payload.category,'雑収入');assert.equal(h.list('sales').length,0);
 });

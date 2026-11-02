@@ -564,3 +564,9 @@ test('reviewed supplier prepayment and invoice use unchanged real rules, duplica
  await assert.rejects(exec(createService(staff),cmd),/管理者/);
  }finally{admin.dispose();staff.dispose();}
 });
+test('existing interest and Visa debit cashback explicitly confirmed without policy prerequisite',async()=>{
+ const admin=await clientFor('admin'),s=createService(admin);try{
+ for(const [id,description,incoming]of [['interest','普通預金利息',2679],['cashback','Visaデビットキャッシュバック',3071]]){await exec(s,{type:'importBank',bank:{bankTxnId:id,bankTransactionDate:'2026-10-21',description,incoming,outgoing:0,amount:incoming,bankAccount:'GMO あおぞら'}});await exec(s,{type:'reviewBankIncome',bankTxnId:id,interest:id==='interest',cashback:id==='cashback',note:'銀行明細を確認',expectedRevision:1});}
+ assert.equal((await admin.listRecords('sales')).length,0);assert.equal((await admin.listRecords('payments')).length,0);assert.equal((await admin.listRecords('expenses')).length,0);assert.equal((await admin.listRecords('bankTransactions')).filter(b=>b.payload.status==='照合済').length,2);
+ }finally{admin.dispose();}
+});

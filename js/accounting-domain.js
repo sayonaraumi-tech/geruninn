@@ -43,7 +43,11 @@ async function handle(cmd,context){
  if(cmd.type==='cashAdjustment'){const old=await read('cashLedger',cmd.cashTxnId);if(old)return {unchanged:true};if(!['income','expense'].includes(cmd.direction))throw Error('収支区分が不正です。');await write('cashLedger',cmd.cashTxnId,{cashTxnId:cmd.cashTxnId,date:A.date(cmd.date),type:cmd.direction,category:'残高調整',description:required(cmd.description,'調整理由'),amount:A.money(cmd.amount),linkedPaymentId:'',linkedExpenseId:'',linkedSupplierTransactionId:'',deletedAt:null},'adjustment',0);return {cashTxnId:cmd.cashTxnId};}
  if(cmd.type==='reviewBankIncome'){
   const row=await read('bankTransactions',cmd.bankTxnId);if(!row||!A.live(row.payload)||!row.payload.incoming||['照合済','除外'].includes(row.payload.status))throw Error('未照合の銀行入金を選択してください。');const b=row.payload,note=required(cmd.note,'原本確認内容');
-  if(cmd.interest){if(A.bankSpecial(b)!=='受取利息')throw Error('受取利息の明細ではありません。');const policy=await read('settings',await stable('bank_rule','bankSpecialPolicy|受取利息'));if(!policy||!A.live(policy.payload)||policy.payload.enabled===false)throw Error('確認済みの受取利息の会計口径を先に登録してください。');await write('bankTransactions',cmd.bankTxnId,{...b,status:'照合済',matchType:'bankIncome',matchId:cmd.bankTxnId,category:'受取利息',taxTreatment:policy.payload.taxTreatment,reviewNote:note,confirmedBy:who.uid},'bank match confirm',cmd.expectedRevision);}
+  if(cmd.interest||cmd.cashback){
+   if(cmd.interest&&A.bankSpecial(b)!=='受取利息')throw Error('受取利息の明細ではありません。');
+   if(cmd.cashback&&(!/デビット.*キャッシュバック/i.test(String(b.description).normalize('NFKC'))||cmd.interest))throw Error('デビットのキャッシュバック明細を確認してください。');
+   await write('bankTransactions',cmd.bankTxnId,{...b,status:'照合済',matchType:'bankIncome',matchId:cmd.bankTxnId,category:cmd.interest?'受取利息':'雑収入',taxTreatment:'要確認',reviewNote:note,confirmedBy:who.uid},'bank match confirm',cmd.expectedRevision);
+  }
   else await write('bankTransactions',cmd.bankTxnId,{...b,reviewNote:note,reviewedBy:who.uid},'adjustment',cmd.expectedRevision);
   return {bankTxnId:cmd.bankTxnId};
  }
