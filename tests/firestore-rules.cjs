@@ -23,6 +23,26 @@ async function clientFor(role){
 async function until(fn){const start=Date.now();while(!fn()){if(Date.now()-start>12000)throw Error('snapshot timeout');await new Promise(r=>setTimeout(r,30));}}
 const snapshot=(id,type='invoice')=>({documentId:id,docType:type,customerName:'共有テスト',invoiceDate:'2026-09-20',salesDate:'2026-09-10',items:[{content:'施工',qty:1,price:90909.09}],travelFee:0,paymentMethod:'現金'});
 const exec=(service,cmd)=>service.execute({operationId:crypto.randomUUID(),...cmd});
+
+test('concurrent supplier confirmations under real rules create one advance and one invoice deduction',async()=>{
+ const one=await clientFor('admin'),two=await clientFor('admin'),a=createService(one),b=createService(two);
+ try{
+  await exec(a,{type:'saveSupplier',supplierId:'parallel',supplier:{supplierName:'東鵬',openingBalance:0,openingDate:'2026-10-01'},expectedRevision:0});
+  await exec(a,{type:'importBank',bank:{bankTxnId:'parallel-bank',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 壁紙前渡',bankAccount:'GMO あおぞら'}});
+  const advance={type:'supplierFromBank',bankTxnId:'parallel-bank',supplierId:'parallel',description:'原本確認',expectedRevision:1};
+  const advances=await Promise.allSettled([exec(a,advance),exec(b,advance)]);assert(advances.some(r=>r.status==='fulfilled'),JSON.stringify(advances));
+  const invoice={type:'settleSupplierInvoice',transaction:{supplierId:'parallel',invoiceNo:'PARALLEL',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,deductionAmount:100000,description:'材料',reviewed:true}};
+  const results=await Promise.allSettled([exec(a,invoice),exec(b,invoice)]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+  const denied=results.find(r=>r.status==='rejected').reason;assert(denied.code==='permission-denied'||/重複/.test(denied.message));
+  const beforeRetry=JSON.stringify(await one.listRecords('suppliers'));await assert.rejects(exec(b,invoice),/重複/);assert.equal(JSON.stringify(await one.listRecords('suppliers')),beforeRetry);
+  assert.equal((await one.listRecords('suppliers'))[0].payload.currentBalance,900000);
+  assert.equal((await one.listRecords('expenses')).length,1);
+  assert.equal((await one.listRecords('bankTransactions')).length,1);
+  assert.equal((await one.listRecords('supplierTransactions')).length,2);
+  for(const name of ['sales','payments','cashLedger','documents'])assert.equal((await one.listRecords(name)).length,0);
+ }finally{one.dispose();two.dispose();}
+});
 test('bank evidence workflow: alias dedup, auto receipt reuse and special accounting under real rules',async()=>{
  const admin=await clientFor('admin'),s=createService(admin);try{
  await exec(s,{type:'saveDocument',snapshot:{...snapshot('evidence'),paymentMethod:'銀行振込'},expectedRevision:0});
@@ -552,5 +572,21 @@ test('historical bank cancellation/restoration fails closed including forged ord
  assert.equal((await getDoc(ref(db('admin'),'operations','race-cancel'))).exists(),false);
  assert.equal((await getDoc(ref(db('admin'),'auditLogs','race-cancel_0'))).exists(),false);
  assert.equal((await getDoc(ref(db('admin'),'bankTransactions','old-cancelled'))).data().payload.status,'cancelled');
+ }finally{admin.dispose();}
+});
+test('reviewed supplier prepayment and invoice use unchanged real rules, duplicate deduction and staff denied',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin);try{
+ await exec(a,{type:'saveSupplier',supplierId:'dongpeng',supplier:{supplierName:'東鵬',openingBalance:0,openingDate:'2026-10-01'},expectedRevision:0});
+ await exec(a,{type:'importBank',bank:{bankTxnId:'dp',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 壁紙前渡金',bankAccount:'GMO あおぞら'}});
+ const cmd={type:'supplierFromBank',bankTxnId:'dp',supplierId:'dongpeng',description:'壁紙前渡金',expectedRevision:1};await exec(a,cmd);await exec(a,cmd);assert.equal((await admin.listRecords('expenses')).length,0);
+ const transaction={supplierId:'dongpeng',invoiceNo:'DP10',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,deductionAmount:100000,description:'壁紙',reviewed:true,sourceHash:'b'.repeat(64)};
+ await exec(a,{type:'settleSupplierInvoice',transaction});await assert.rejects(exec(a,{type:'settleSupplierInvoice',transaction}),/重複/);assert.equal((await admin.listRecords('suppliers'))[0].payload.currentBalance,900000);assert.equal((await admin.listRecords('expenses')).length,1);assert.equal((await admin.listRecords('bankTransactions')).length,1);
+ await assert.rejects(exec(createService(staff),cmd),/管理者/);
+ }finally{admin.dispose();staff.dispose();}
+});
+test('existing interest and Visa debit cashback explicitly confirmed without policy prerequisite',async()=>{
+ const admin=await clientFor('admin'),s=createService(admin);try{
+ for(const [id,description,incoming]of [['interest','普通預金利息',2679],['cashback','Visaデビットキャッシュバック',3071]]){await exec(s,{type:'importBank',bank:{bankTxnId:id,bankTransactionDate:'2026-10-21',description,incoming,outgoing:0,amount:incoming,bankAccount:'GMO あおぞら'}});await exec(s,{type:'reviewBankIncome',bankTxnId:id,interest:id==='interest',cashback:id==='cashback',note:'銀行明細を確認',expectedRevision:1});}
+ assert.equal((await admin.listRecords('sales')).length,0);assert.equal((await admin.listRecords('payments')).length,0);assert.equal((await admin.listRecords('expenses')).length,0);assert.equal((await admin.listRecords('bankTransactions')).filter(b=>b.payload.status==='照合済').length,2);
  }finally{admin.dispose();}
 });

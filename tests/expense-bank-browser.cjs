@@ -35,6 +35,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  const bankCsv='日付,摘要,入金,出金,取引ID\n2026-10-04,電話会社,,1000,high\n2026-10-04,不明摘要,,3000,candidate\n2026-10-04,未登録,,4000,unmatched\n2026-10-04,VISA カード利用代金,,6060,card';
  await desktop.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(bankCsv)});await desktop.evaluate(()=>importBankCsv());await idle();
  assert.equal((await snapshot()).expenses.length,6);assert.match(await desktop.locator('#bankRows').innerText(),/要確認/);assert.match(await desktop.locator('#bankRows').innerText(),/候補/);assert.match(await desktop.locator('#bankRows').innerText(),/未一致/);
+ await desktop.evaluate(()=>{accountingBankView('all');document.querySelectorAll('#bankRows details').forEach(e=>e.open=true);});
  const high=desktop.locator('#bankRows tr').filter({hasText:'電話会社'});await high.locator('select').selectOption({index:1});await high.getByRole('button',{name:'照合確定'}).click();await idle();assert.match(await high.innerText(),/照合済/);assert.equal((await snapshot()).expenses.length,6);
  const candidate=desktop.locator('#bankRows tr').filter({hasText:'不明摘要'});const candidateId=(await snapshot()).bank.find(b=>b.externalId==='candidate').id;assert.equal((await snapshot()).bank.find(b=>b.id===candidateId).status,'未照合');
  await candidate.locator('select').selectOption({index:1});
@@ -60,7 +61,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   const row=(id,payload)=>({id,payload,revision:1}),s={id:'dynast-sale',salesDate:'2026-09-30',invoiceDate:'2026-09-30',amount:1594900,customer:'dynast合同会社',documentId:'dynast-doc'};
   TsukinowaAccountingUI.hydrate({sales:[row(s.id,s)],documents:[row('dynast-doc',{docType:'invoice',confirmed:true,saleId:s.id,amount:s.amount,snapshot:{invoiceNo:'20260930-001',invoiceDate:'2026-09-30',dueDate:'2026-10-30'}})],bankTransactions:[row('dynast-bank',{bankTxnId:'dynast-bank',bankTransactionDate:'2026-10-31',description:'ダイナスト（ド',incoming:1594900,outgoing:0,amount:1594900,status:'未照合',bankAccount:'試験'})]});bizSwitchPage('bank');renderBank();
  });
- const dynast=desktop.locator('#bankTarget_dynast-bank');assert.match(await dynast.innerText(),/20260930-001/);assert.match(await dynast.innerText(),/dynast合同会社/);assert.equal(await dynast.inputValue(),'');assert.equal(await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),beforePreview);
+ await desktop.locator('#bankRows details summary').click();const dynast=desktop.locator('#bankTarget_dynast-bank');assert.match(await dynast.innerText(),/20260930-001/);assert.match(await dynast.innerText(),/dynast合同会社/);assert.equal(await dynast.inputValue(),'');assert.equal(await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),beforePreview);
  assert.deepEqual(errors,[]);console.log('PASS expense/bank UI + real unchanged Firestore rules: manual/CSV, duplicate skip, cash isolation, high confidence, candidate confirm/cancel, unmatched explicit entry, card settlement blocked and simplified page');
  }finally{await browser.close();server.close();await env.cleanup();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});
