@@ -30,7 +30,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   await execute({type:'saveDocument',snapshot:snapshot('replacement'),revisedFromDocumentId:'old',expectedParentRevision:1,reason:'訂正',expectedRevision:0});
   for(const state of ['void','duplicate','cancelled']){await execute({type:'saveDocument',snapshot:snapshot(state),expectedRevision:0});await execute({type:'documentStatus',documentId:state,status:state,reason:'不要',duplicateOfDocumentId:'active',expectedRevision:1});}
   await execute({type:'saveDocument',snapshot:{...snapshot('september'),salesDate:'2026-09-20',invoiceDate:'2026-09-20'},expectedRevision:0});
-  bizSwitchPage('sales');document.getElementById('salesMonth').value='2026-10';document.getElementById('salesExportMonth').value='2026-10';document.getElementById('receivableAsOf').value='2026-10-08';renderSales();
+  bizSwitchPage('sales');document.getElementById('salesMonth').value='2026-10';document.getElementById('receivableAsOf').value='2026-10-08';renderSales();
  });
  await page.waitForFunction(()=>bizState.sales.length===3);
  assert.equal(await page.locator('#accountingPayments').count(),0);assert(!await page.locator('#pageSales').textContent().then(t=>t.includes('入金確認・訂正')));
@@ -46,20 +46,18 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  const result=await page.evaluate(()=>{
   renderSales();renderDashboard();renderAllSavedDocs();
   const csv=kind=>TsukinowaAccounting.parseCSV(TsukinowaAccounting.csv(TsukinowaAccountingUI.exportRows(kind)).replace(/^\uFEFF/,''));
-  const rs=csv('receivables'),ss=csv('sales'),unmoney=s=>String(Number(s.replace(/[¥￥,\s]/g,''))),table=id=>[...document.querySelectorAll('#'+id+(id==='salesRows'?' tr':' tbody tr'))].map(r=>[...r.cells].map(c=>c.textContent));
-  const receivablePage=table('receivableRows').map(r=>r.map((c,i)=>[3,4,5].includes(i)?unmoney(c):c));
-  const salesPage=table('salesRows').map(r=>r.slice(0,8).map((c,i)=>[3,5,6].includes(i)?unmoney(c):c));
-  return {rs,ss,receivablePage,salesPage,balance:TsukinowaBusinessUI.invoiceBalance('active'),home:document.getElementById('kpiReceivable').textContent};
+  const rs=csv('receivables'),table=id=>[...document.querySelectorAll('#'+id+(id==='salesRows'?' tr':' tbody tr'))].map(r=>[...r.cells].map(c=>c.textContent));
+  const receivablePage=table('receivableRows');
+  return {rs,receivablePage,balance:TsukinowaBusinessUI.invoiceBalance('active'),home:document.getElementById('kpiReceivable').textContent};
  });
- for(const [kind,label,expected] of [['receivables','未収金CSV',result.rs],['sales','売上・入金CSV',result.ss]]){const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:label,exact:true}).click()]);const file=path.join(root,'../'+kind+'-'+width+'.csv');await download.saveAs(file);const parsed=require('../js/accounting').parseCSV(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));assert.deepEqual(parsed,expected);}
- assert.deepEqual(result.rs.slice(1).map(r=>r.slice(1,10)),result.receivablePage);
- assert.deepEqual(result.ss.slice(1).filter(r=>r[12]==='売上').map(r=>r.slice(1,9)),result.salesPage);
- assert.equal(result.ss.filter(r=>r[12]==='売上').length,2);assert.equal(result.rs.length,4);
+ for(const [kind,label,expected] of [['receivables','未収金CSV',result.rs]]){const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:label,exact:true}).click()]);const file=path.join(root,'../'+kind+'-'+width+'.csv');await download.saveAs(file);const parsed=require('../js/accounting').parseCSV(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));assert.deepEqual(parsed,expected);}
+ assert.deepEqual(result.rs.slice(1),result.receivablePage);
+ assert.equal(result.rs.length,4);
  assert.equal(result.balance.paidAmount,400);assert.equal(result.balance.outstandingAmount,700);
- assert.equal(result.home,'2,900');assert.equal(result.rs.find(r=>r[0]==='sale_active')[5],'400');
+ assert.equal(result.home,'2,900');assert.deepEqual(result.rs.find(r=>r[0]==='2026-10-01'&&r[4]==='400').slice(3,6),['1,100','400','700']);
  // Date and month filters must carry through to exports.
- await page.evaluate(()=>{document.getElementById('salesMonth').value='2026-09';document.getElementById('salesExportMonth').value='2026-09';document.getElementById('receivableAsOf').value='2026-10-01';renderSales();});
- assert.equal(await page.locator('#salesRows tr').count(),1);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('sales')[1][0]),'sale_september');assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('receivables').find(r=>r[0]==='sale_active')[5]),0);
+ await page.evaluate(()=>{document.getElementById('salesMonth').value='2026-09';document.getElementById('receivableAsOf').value='2026-10-01';renderSales();});
+ assert.equal(await page.locator('#salesRows tr').count(),1);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('receivables').find(r=>r[0]==='2026-10-01')[4]),'0');
  await page.evaluate(()=>bizSwitchPage('savedDocs'));
  for(const id of ['active','replacement','september'])assert.equal(await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).getByRole('button',{name:'履歴から削除',exact:true}).count(),0);
  await page.screenshot({path:path.join(root,'../cleanup-before-'+width+'.png')});
