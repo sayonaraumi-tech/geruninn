@@ -1076,7 +1076,7 @@ body{padding-top:72px}
 .mobile-only{display:none!important}
 @media(max-width:800px){
   #bizNav button.mobile-hide{display:none!important}
-  #bizNav{display:grid!important;grid-template-columns:repeat(4,1fr);gap:4px;width:100%;padding:6px 8px;overflow:visible!important}
+  #bizNav{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;width:100%;padding:6px 8px;overflow:visible!important}
   #bizNav button{font-size:12px!important;padding:9px 4px!important;min-width:0!important;white-space:nowrap}
   .mobile-only{display:inline-flex!important}
   .biz-brand small{display:none}
@@ -1094,28 +1094,15 @@ body{padding-top:72px}
 </style>
 
 <style id="homeBankStyles">
-/* HOME and bank share one presentation layer; accounting commands stay in the domain. */
-body:has(#pageDashboard.active),body:has(#pageBank.active){background:#f1f3f6}
-body:has(#pageDashboard.active) .biz-topbar,body:has(#pageBank.active) .biz-topbar{background:#fff;color:#202323;box-shadow:0 1px 0 #e1e4e8}
-body:has(#pageDashboard.active) .biz-nav button,body:has(#pageBank.active) .biz-nav button{color:#303331}
-body:has(#pageDashboard.active) .biz-nav button.active,body:has(#pageBank.active) .biz-nav button.active{background:#eee9db;color:#514326}
-body:has(#pageDashboard.active) .biz-sync,body:has(#pageDashboard.active) .biz-user,body:has(#pageBank.active) .biz-sync,body:has(#pageBank.active) .biz-user{color:#656a68}
-#pageDashboard,#pageBank{font-family:"Noto Sans JP","Yu Gothic",Meiryo,sans-serif;color:#252a28;max-width:1480px;padding:24px 28px 44px}
-#pageDashboard .biz-title h1,#pageBank .biz-title h1{font-size:26px;font-weight:700;letter-spacing:.03em}
-#pageDashboard .biz-section,#pageBank .biz-section{padding:18px 20px;margin:16px 0;background:#fff;border:1px solid #dfe3e8;box-shadow:none;border-radius:15px}
-#pageDashboard .biz-grid{gap:14px;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:18px}
-#pageDashboard .biz-card{padding:20px 22px;border:1px solid #dfe3e8;box-shadow:none;min-width:0}
-#pageDashboard .biz-card h3{font-size:14px;font-weight:500;color:#626865;margin-bottom:10px}
-#pageDashboard .biz-kpi{font-size:clamp(22px,2.5vw,34px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+/* Use the same navigation, type, containers and controls as 見積履歴.
+   Only dashboard composition and bank interaction layouts belong here. */
+#pageDashboard .biz-card{min-width:0}
+#pageDashboard .biz-kpi{overflow-wrap:anywhere}
 #pageDashboard .home-secondary{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
-#pageDashboard .home-secondary .biz-card{display:flex;align-items:center;gap:28px;padding:14px 22px}
+#pageDashboard .home-secondary .biz-card{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 #pageDashboard .home-secondary h3{margin:0;white-space:nowrap}
-#pageDashboard .home-secondary .biz-kpi{font-size:24px}
 #pageDashboard .home-period .biz-form-grid{display:flex;align-items:end;flex-wrap:wrap;gap:12px}
 #pageDashboard .biz-field{margin:0;min-width:140px}#pageDashboard .biz-field[hidden]{display:none}
-#pageDashboard .biz-table td,#pageBank .biz-table td{padding:11px 10px;font-size:13px;font-variant-numeric:tabular-nums}
-#pageDashboard .biz-table th,#pageBank .biz-table th{background:#f6f7f9;font-size:12px;font-weight:500;color:#626865}
-#pageDashboard .biz-section h2,#pageBank .biz-section h2{font-size:18px}
 #pageBank .biz-table:has(#bankRows){table-layout:fixed;min-width:960px}
 #pageBank .biz-table:has(#bankRows) th:first-child{width:105px}#pageBank .biz-table:has(#bankRows) th:nth-child(2){width:25%}
 #pageBank .biz-table:has(#bankRows) th:nth-child(3),#pageBank .biz-table:has(#bankRows) th:nth-child(4){width:105px}#pageBank .biz-table:has(#bankRows) th:last-child{width:145px}
@@ -1124,9 +1111,9 @@ body:has(#pageDashboard.active) .biz-sync,body:has(#pageDashboard.active) .biz-u
 #pageBank td:nth-child(3){color:#187258;text-align:right}#pageBank td:nth-child(4){color:#b83939;text-align:right}
 #pageBank select,#pageBank input{max-width:100%;box-sizing:border-box}
 #pageBank td select{width:100%;min-width:0;margin:8px 0}
-#pageBank .biz-btn{margin:2px;padding:8px 10px;white-space:normal}
+#pageBank .biz-btn{margin:2px;white-space:normal}
 #pageBank details>summary{cursor:pointer;color:#65552d;padding:8px;border-radius:8px}
-#pageBank details[open]{background:#f4f8f6;border:1px solid #e0ebe6;border-radius:10px;padding:10px}
+#pageBank details[open]{background:#fafbfc;border:1px solid var(--biz-border);border-radius:9px;padding:10px}
 #pageBank .bank-candidate{display:block;color:#626865;font-size:12px;padding:3px 0 7px}
 #pageBank .bank-status{display:inline-block;border-radius:99px;padding:5px 10px;background:#f0f2f4;font-size:12px}
 #pageBank .bank-status.done{background:#eaf6f0;color:#24745a}
@@ -1146,13 +1133,11 @@ body:has(#pageDashboard.active) .biz-sync,body:has(#pageDashboard.active) .biz-u
  #pageBank details[open]>form{grid-column:1/-1;margin:0 10px 12px}
  #pageBank #bankRows{display:block}#pageBank .biz-table:has(#bankRows) thead{display:block}#pageBank .biz-table:has(#bankRows) thead tr{display:grid;grid-template-columns:105px minmax(180px,1.5fr) 105px 105px minmax(210px,2fr) 145px}#pageBank .biz-table:has(#bankRows) th{width:auto}
 }
-@media(max-width:800px){#pageDashboard,#pageBank{padding:18px 12px 36px}#pageDashboard .biz-title h1,#pageBank .biz-title h1{font-size:22px}#pageDashboard .biz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageDashboard .biz-card{padding:16px 14px}#pageDashboard .home-secondary .biz-card{gap:8px;flex-wrap:wrap;padding:12px 14px}#pageDashboard .home-secondary .biz-kpi{font-size:21px}}
-@media(max-width:600px){#pageBank .biz-table:has(#bankRows){min-width:0;width:100%}#pageDashboard .biz-section,#pageBank .biz-section{padding:14px 12px}#pageDashboard .home-period .biz-field{flex:1;min-width:130px}#pageDashboard .biz-card h3{font-size:12px}#pageBank .biz-table thead{display:none}#pageBank .biz-table,#pageBank .biz-table tbody,#pageBank .biz-table tr,#pageBank .biz-table td{display:block;min-width:0;width:auto}#pageBank .biz-table tr{border-bottom:1px solid #dfe3e8;padding:12px 0}#pageBank .biz-table td{border:0;padding:4px 0}#pageBank .biz-table td:empty{display:none}#pageBank .biz-table td:first-child{color:#68716c;font-size:12px}#pageBank .biz-table td:nth-child(2){font-weight:600}#pageBank .biz-table td:nth-child(3),#pageBank .biz-table td:nth-child(4){text-align:left}#pageBank .biz-table-wrap{overflow:visible}#pageBank .bank-status{margin-top:5px}}
+@media(max-width:600px){#pageBank .biz-table:has(#bankRows){min-width:0;width:100%}#pageDashboard .home-period .biz-field{flex:1;min-width:130px}#pageBank .biz-table thead{display:none}#pageBank .biz-table,#pageBank .biz-table tbody,#pageBank .biz-table tr,#pageBank .biz-table td{display:block;min-width:0;width:auto}#pageBank .biz-table tr{border-bottom:1px solid #dfe3e8;padding:12px 0}#pageBank .biz-table td{border:0;padding:4px 0}#pageBank .biz-table td:empty{display:none}#pageBank .biz-table td:first-child{color:#68716c;font-size:12px}#pageBank .biz-table td:nth-child(2){font-weight:600}#pageBank .biz-table td:nth-child(3),#pageBank .biz-table td:nth-child(4){text-align:left}#pageBank .biz-table-wrap{overflow:visible}#pageBank .bank-status{margin-top:5px}}
 
-#pageBank .bank-import .biz-form-grid{grid-template-columns:1.2fr 1.2fr auto;align-items:start}
+#pageBank .bank-import .biz-form-grid{grid-template-columns:minmax(0,1.2fr) minmax(0,1.2fr) auto;align-items:start}
 #pageBank .bank-import .span2{grid-column:auto}
 #pageBank .biz-table:has(#bankRows) thead th:nth-child(n){width:auto}
-@media(max-width:800px){body:has(#pageDashboard.active) #bizNav,body:has(#pageBank.active) #bizNav{display:flex!important;overflow-x:auto!important;padding:6px 0;width:100%}body:has(#pageDashboard.active) #bizNav button,body:has(#pageBank.active) #bizNav button{flex-shrink:0;padding:9px 12px!important}}
 @media(max-width:600px){#pageBank .bank-import .biz-form-grid{grid-template-columns:1fr}}
 </style>
 </head>
