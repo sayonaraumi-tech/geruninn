@@ -1082,6 +1082,7 @@ body{padding-top:72px}
   .biz-brand small{display:none}
   .biz-sync,.biz-user{display:none!important}
 }
+.home-kind{display:inline-block;padding:3px 9px;border-radius:12px;background:#f0f1f2;color:#62676d;font-size:12px;white-space:nowrap}.home-kind[data-kind="売上"]{background:#eaf5f0;color:#50786a}.home-kind[data-kind="入金"]{background:#faf2dd;color:#8d742d}.home-kind[data-kind="前渡"]{background:#edf1f6;color:#64768c}.home-kind[data-kind="立替"]{background:#f3f0e9;color:#80745e}.home-kind[data-kind="雑収"]{background:#f1edf5;color:#7f718c}
 </style>
 
 <style>
@@ -1205,12 +1206,12 @@ body{padding-top:72px}
  <div class="biz-field" id="homeEndField" hidden><label for="homeEnd">終了日</label><input type="date" id="homeEnd" onchange="renderDashboard()"></div>
  </div></div>
  <div class="biz-grid">
-  <div class="biz-card"><h3>売上</h3><div class="biz-kpi" id="kpiSales">¥0</div></div>
-  <div class="biz-card"><h3>入金</h3><div class="biz-kpi" id="kpiPayments">¥0</div></div>
-  <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">¥0</div></div>
-  <div class="biz-card"><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">¥0</div></div>
+  <div class="biz-card"><h3>売上</h3><div class="biz-kpi" id="kpiSales">0</div></div>
+  <div class="biz-card"><h3>入金</h3><div class="biz-kpi" id="kpiPayments">0</div></div>
+  <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div></div>
+  <div class="biz-card"><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">0</div></div>
  </div>
- <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
  <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
@@ -2954,7 +2955,7 @@ let bizState={sales:[],payments:[],expenses:[],bank:[],calendar:[],audit:[],esti
 let bizSettings={companyId:'tsukinowa',email:'local'};
 let bizDb=null,bizUnsub=null,bizCloudReady=false,bizRemoteApplying=false;
 function bizId(p='id'){return p+'_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,7)}
-function bizMoney(n){return '¥'+Math.round(Number(n)||0).toLocaleString('ja-JP')}
+function bizMoney(n){return Math.round(Number(n)||0).toLocaleString('ja-JP')}
 function bizMonth(d){return String(d||'').slice(0,7)}
 // Month selection is view state only: never persist or remove business records here.
 let bizCalendarObservedMonth='';

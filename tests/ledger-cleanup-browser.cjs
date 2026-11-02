@@ -56,7 +56,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  assert.deepEqual(result.ss.slice(1).map(r=>r.slice(1,9)),result.salesPage);
  assert.equal(result.ss.length,3);assert.equal(result.rs.length,4);
  assert.equal(result.balance.paidAmount,400);assert.equal(result.balance.outstandingAmount,700);
- assert.equal(result.home,'¥2,900');assert.equal(result.rs.find(r=>r[0]==='sale_active')[5],'400');
+ assert.equal(result.home,'2,900');assert.equal(result.rs.find(r=>r[0]==='sale_active')[5],'400');
  // Date and month filters must carry through to exports.
  await page.evaluate(()=>{document.getElementById('salesMonth').value='2026-09';document.getElementById('receivableAsOf').value='2026-10-01';renderSales();});
  assert.equal(await page.locator('#salesRows tr').count(),1);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('sales')[1][0]),'sale_september');assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('receivables').find(r=>r[0]==='sale_active')[5]),0);
