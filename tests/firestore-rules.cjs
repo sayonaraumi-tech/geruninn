@@ -590,3 +590,23 @@ test('existing interest and Visa debit cashback explicitly confirmed without pol
  assert.equal((await admin.listRecords('sales')).length,0);assert.equal((await admin.listRecords('payments')).length,0);assert.equal((await admin.listRecords('expenses')).length,0);assert.equal((await admin.listRecords('bankTransactions')).filter(b=>b.payload.status==='照合済').length,2);
  }finally{admin.dispose();}
 });
+
+test('integrated bank: atomic new supplier, four-order net settlement, retries and unmatch use real rules',async()=>{
+ const admin=await clientFor('admin'),service=createService(admin);try{
+ await exec(service,{type:'importBank',bank:{bankTxnId:'advance-new',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 壁紙前渡金',bankAccount:'GMO'}});
+ const advance={type:'supplierFromBank',bankTxnId:'advance-new',supplierName:'東鵬',description:'確認',expectedRevision:1};await exec(service,advance);await exec(service,advance);assert.equal((await admin.listRecords('suppliers')).length,1);assert.equal((await admin.listRecords('expenses')).length,0);
+ for(let i=0;i<4;i++){await exec(service,{type:'migrateRecord',collection:'sales',id:'order'+i,payload:{id:'order'+i,customer:'注文'+i,salesDate:'2026-09-28',amount:16250}});await exec(service,{type:'payment',paymentId:'platform'+i,saleId:'order'+i,amount:16250,paymentDate:'2026-09-30',method:'プラットフォーム経由',platformName:'くらしのマーケット'});}
+ await exec(service,{type:'saveExpense',expenseId:'platform-fee',expense:{expenseDate:'2026-10-01',category:'支払手数料',amount:2932,vendor:'くらしのマーケット',description:'控除',paymentMethod:'その他'}});
+ await exec(service,{type:'importBank',bank:{bankTxnId:'stripe-five',bankTransactionDate:'2026-10-01',incoming:62068,outgoing:0,amount:62068,description:'ストライプジャパン（カ',bankAccount:'GMO'}});
+ const cmd={type:'bankMatch',bankTxnId:'stripe-five',targetType:'platformSettlement',targetId:'stripe-five',paymentIds:Array.from({length:4},(_,i)=>'platform'+i),feeExpenseId:'platform-fee',statement:'STRIPE-10-01',expectedRevision:1};
+ await exec(service,cmd);await exec(service,cmd);assert.equal((await admin.listRecords('payments')).length,4);assert.equal((await admin.listRecords('cashLedger')).length,0);
+ await assert.rejects(exec(service,{type:'deleteExpense',expenseId:'platform-fee',reason:'linked',expectedRevision:2}),/照合/);
+ await exec(service,{type:'bankUnmatch',bankTxnId:'stripe-five',reason:'精算再確認',expectedRevision:2});await exec(service,{...cmd,expectedRevision:3});assert.equal((await admin.listRecords('payments')).length,4);
+ for(const change of [{amount:1},{saleId:'order1'},{confirmation:'cash-received'}])await assertFails(admin.transact(crypto.randomUUID(),{change},async({read,write})=>{const p=await read('payments','platform0'),bank=await read('bankTransactions','stripe-five');await write('payments','platform0',{...p.payload,...change},'bank match confirm');await write('bankTransactions','stripe-five',{...bank.payload,platformStatement:'forged'},'bank match confirm');return {}; }));
+ // A five-order settlement without fee is the largest supported allocation set.
+ await exec(service,{type:'bankUnmatch',bankTxnId:'stripe-five',reason:'5件試験',expectedRevision:4});
+ await exec(service,{type:'migrateRecord',collection:'sales',id:'order4',payload:{id:'order4',customer:'注文4',salesDate:'2026-09-28',amount:1000}});await exec(service,{type:'payment',paymentId:'platform4',saleId:'order4',amount:1000,paymentDate:'2026-09-30',method:'プラットフォーム経由',platformName:'くらしのマーケット'});
+ await exec(service,{type:'importBank',bank:{bankTxnId:'stripe-five-no-fee',bankTransactionDate:'2026-10-01',incoming:66000,outgoing:0,amount:66000,description:'Stripe Japan',bankAccount:'GMO'}});
+ await exec(service,{...cmd,bankTxnId:'stripe-five-no-fee',targetId:'stripe-five-no-fee',paymentIds:Array.from({length:5},(_,i)=>'platform'+i),feeExpenseId:'',expectedRevision:1});
+ }finally{admin.dispose();}
+});

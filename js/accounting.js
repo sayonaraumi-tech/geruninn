@@ -63,7 +63,7 @@ function ledgerRows(data,p){
  // Unlinked/premature payments remain visible for review; never invent a sale.
  for(const v of payments)if(!saleMap.has(v.saleId)&&p.includes(v.paymentDate||v.date))rows.push({id:'payment:'+(v.id||v.paymentId),date:v.paymentDate||v.date,type:'未関連入金',customer:v.customer||'',description:v.memo||'',method:v.method,sales:0,paid:confirmed(v)?amount(v):0,incoming:confirmed(v)?amount(v):0,outgoing:0,status:'要確認 / 売上リンクなし',paymentDates:v.paymentDate||v.date});
  for(const e of unique((data.expenses||[]).filter(e=>live(e)&&p.includes(e.expenseDate))))rows.push({id:'expense:'+(e.id||e.expenseId),date:e.expenseDate,type:'支出',customer:e.vendor,description:e.description||e.category,method:e.paymentMethod,sales:0,paid:0,incoming:0,outgoing:amount(e),status:expenseStatus(e),paymentDates:''});
- for(const b of (data.bankTransactions||[]).filter(b=>live(b)&&b.status==='照合済'&&b.matchType==='bankIncome'&&p.includes(b.bankTransactionDate)))rows.push({id:'interest:'+b.bankTxnId,date:b.bankTransactionDate,type:'営業外収益',customer:b.bankAccount,description:b.category,method:'銀行振込',sales:0,paid:b.incoming,incoming:b.incoming,outgoing:0,status:'照合済 / 税務要確認',paymentDates:b.bankTransactionDate});
+ for(const b of (data.bankTransactions||[]).filter(b=>live(b)&&b.status==='照合済'&&b.matchType==='bankIncome'&&p.includes(b.bankTransactionDate)))rows.push({id:'interest:'+b.bankTxnId,date:b.bankTransactionDate,type:'営業外収益',customer:b.bankAccount,description:b.category,method:'銀行振込',sales:0,paid:b.incoming,incoming:b.incoming,outgoing:0,status:b.category==='受取利息'?'照合済':'照合済 / 税務要確認',paymentDates:b.bankTransactionDate});
  for(const c of (data.cashLedger||[]).filter(c=>live(c)&&p.includes(c.date)))if(!c.linkedPaymentId&&!c.linkedExpenseId&&!c.linkedSupplierTransactionId)rows.push({id:'cash:'+c.cashTxnId,date:c.date,type:'現金調整',customer:'',description:c.description,method:'現金',sales:0,paid:0,incoming:c.type==='income'?amount(c):0,outgoing:c.type==='expense'?amount(c):0,status:'確認済',paymentDates:''});
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
 }
@@ -116,7 +116,7 @@ function incomingScore(bank,value,dates,name){
  return {score:near?(named?100:70):(named?90:50),reasons:['金額一致',near?'日付・支払期限7日以内':'請求・期限から120日以内',...(named?['名称一致']:['名称要確認'])]};
 }
 function suggestions(bank,data){
- if(['照合済','除外'].includes(bank.status))return [];if(!bank.incoming)return expenseMatch(bank,data).candidates;
+ if(['照合済','除外'].includes(bank.status)||platformBank(bank))return [];if(!bank.incoming)return expenseMatch(bank,data).candidates;
  const out=[],sales=unique([...(data.sales||[]),...(data.receivables||[])]).filter(live),payments=unique(data.payments||[]).filter(live),docs=(data.documents||[]).filter(d=>live(d)&&d.confirmed===true&&['invoice','onoda','receipt'].includes(d.docType));
  for(const s of sales){
   if(s.paymentMethod==='現金'||['calendar-cash','receipt-cash'].includes(s.sourceType)||/代表者立替/.test(s.paymentMethod||''))continue;
@@ -167,6 +167,9 @@ function bankCancellationReview(b,k,data){
  return {reasons,refs,evidence:key};
 }
 function bankDuplicate(b,rows,rules=[]){const key=bankIdentity(b,rules);return key?rows.filter(r=>live(r)&&(r.bankTxnId||r.id)!==(b.bankTxnId||b.id)&&bankIdentity(r,rules)===key):[];}
+function platformBank(b){return !!b.incoming&&/stripe|ストライプ|(?:くらし|暮らし)のマーケット/i.test(String(b.description||'').normalize('NFKC'));}
+function bankCashback(b){return !!b.incoming&&/(?:visa|デビット).*キャッシュバック/i.test(String(b.description||'').normalize('NFKC'));}
+function platformPayments(b,data){return unique(data.payments||[]).filter(p=>live(p)&&!p.bankTxnId&&!p.bankId&&['pending-bank','bank-confirmed'].includes(p.confirmation)&&paymentChannel(p).channel==='プラットフォーム経由'&&paymentChannel(p).platformName==='くらしのマーケット'&&(p.paymentDate||p.date)<=b.bankTransactionDate);}
 function bankSpecial(b){const text=normalize(b.description);if(b.incoming&&!b.outgoing&&/^(受取利息|普通預金利息|預金利息|利息)$/.test(text))return '受取利息';if(b.outgoing&&!b.incoming&&/^(振込手数料|振替手数料|銀行手数料)$/.test(text))return '支払手数料';return '';}
 function autoBankTarget(bank,data){
  if(!bankIdentity(bank,data.settings)||!bank.incoming||['照合済','除外'].includes(bank.status)||bankDuplicate(bank,data.bankTransactions||[],data.settings).length)return null;
@@ -181,9 +184,9 @@ function autoBankTarget(bank,data){
  if(trusted.length!==1||trusted[0].customerKey!==classificationKey(s.customer))return null;
  return {targetType:'sale',targetId:s.id,paymentId:c.paymentId};
 }
-function bankEvidence(p,data){return (data.bankTransactions||[]).some(b=>live(b)&&b.status==='照合済'&&(b.id||b.bankTxnId)===p.bankTxnId&&b.paymentId===(p.id||p.paymentId)&&b.incoming===p.amount);}
+function bankEvidence(p,data){return (data.bankTransactions||[]).some(b=>live(b)&&b.status==='照合済'&&(b.id||b.bankTxnId)===p.bankTxnId&&(b.paymentId===(p.id||p.paymentId)&&b.incoming===p.amount||b.matchType==='platformSettlement'&&(b.platformPayments||[]).some(v=>v.id===(p.id||p.paymentId)&&v.amount===p.amount)));}
 const knownSupplierAdvance=b=>b?.bankTransactionDate==='2026-10-13'&&b.outgoing===1000000&&/東鵬/.test(b.description||'');
 function bankMatch(bank,data){if(!live(bank))return {status:'取消済',candidates:[]};if(['照合済','除外'].includes(bank.status))return {status:bank.status,candidates:[]};if(bank.outgoing)return expenseMatch(bank,data);const candidates=suggestions(bank,data);return {status:candidates.length?'要確認':'未一致',candidates};}
 function csv(rows){const cell=v=>'"'+(typeof v==='number'?String(v):String(v??'').replace(/^[\s]*[=+@-]/,"'$&")).replace(/"/g,'""')+'"';return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');}
-return {knownSupplierAdvance,expenseBankEligible,bankCancellationReview,creditExpense,cardExpenses,bankAccountKey,bankIdentity,bankDuplicate,bankSpecial,autoBankTarget,bankEvidence,expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
+return {platformBank,bankCashback,platformPayments,knownSupplierAdvance,expenseBankEligible,bankCancellationReview,creditExpense,cardExpenses,bankAccountKey,bankIdentity,bankDuplicate,bankSpecial,autoBankTarget,bankEvidence,expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
 });

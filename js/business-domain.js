@@ -85,7 +85,7 @@ function createService(client,{now=()=>new Date()}={}){
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
  if(cmd.type==='saveExpense'&&client.getState().role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
  const expenseSeed=(cmd.type==='expenseFromBank'||cmd.type==='saveExpense'&&cmd.skipDuplicate)?(await client.listRecords('expenses')).filter(r=>{try{return A.live(r.payload)&&(cmd.type==='expenseFromBank'||A.expenseKey(r.payload)===A.expenseKey(cmd.expense));}catch(_){return false;}}):[];
- const bankSeed=cmd.type==='supplierFromBank'?Object.fromEntries(await Promise.all(['supplierTransactions','expenses'].map(async n=>[n,await client.listRecords(n)]))):['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type)?Object.fromEntries(await Promise.all(COLLECTIONS.filter(n=>n!=='auditLogs').map(async n=>[n,await client.listRecords(n)]))):cmd.type==='importBank'?Object.fromEntries(await Promise.all(['settings','bankTransactions','sales','receivables','payments','documents','expenses'].map(async n=>[n,await client.listRecords(n)]))):null;
+ const bankSeed=cmd.type==='supplierFromBank'?Object.fromEntries(await Promise.all(['suppliers','supplierTransactions','expenses'].map(async n=>[n,await client.listRecords(n)]))):['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type)?Object.fromEntries(await Promise.all(COLLECTIONS.filter(n=>n!=='auditLogs').map(async n=>[n,await client.listRecords(n)]))):cmd.type==='importBank'?Object.fromEntries(await Promise.all(['settings','bankTransactions','sales','receivables','payments','documents','expenses'].map(async n=>[n,await client.listRecords(n)]))):null;
  const importSeed=cmd.type==='historicalPdfImport'?{documents:await client.listRecords('documents'),sales:await client.listRecords('sales')}:null;
  const repairing=receiptRepair||cmd.type==='repairFormalDocument';
  if(repairing&&client.getState().role!=='admin')throw Error('正式帳票の補録は管理者のみです。');
@@ -111,7 +111,7 @@ function createService(client,{now=()=>new Date()}={}){
     }
     return {cleaned:cleanupPlan.map(e=>e.collection+'/'+e.id)};
   }
-  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable,expenseSeed,relatedPayments,bankSeed,backupDigest:x=>client.digest(core.canonical(core.normalizeDates(Object.fromEntries(Object.entries(x).map(([n,rs])=>[n,rs.slice().sort((a,b)=>a.id.localeCompare(b.id))])))))});
+  if(AD.TYPES.includes(cmd.type))return AD.handle(cmd,{read,write,who,stable,expenseSeed,relatedPayments,bankSeed,writePaymentEvidence:(id,payload)=>rawWrite('payments',id,payload,'bank match confirm'),backupDigest:x=>client.digest(core.canonical(core.normalizeDates(Object.fromEntries(Object.entries(x).map(([n,rs])=>[n,rs.slice().sort((a,b)=>a.id.localeCompare(b.id))])))))});
   const refs={};
   if(cmd.type==='registerCalendarSale'){
     if(who.role!=='admin')throw Error('売上登録は管理者のみです。');

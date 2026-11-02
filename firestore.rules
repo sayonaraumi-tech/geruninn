@@ -6,14 +6,22 @@ service cloud.firestore {
   function core(n) { return n in ['calendarLinks','estimates','projects','documents','sales','receivables','payments']; }
   function business(n) { return core(n) || n in ['expenses','suppliers','cashLedger','settings','bankTransactions','supplierTransactions','migrations']; }
   function before(c,n,id) { return exists(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)) ? get(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)).data.payload : null; }
+  // Select the known audit shape before fetching: existing rows need one get,
+  // new rows need one exists. This preserves the before-image check while keeping
+  // multi-order bank settlements within Firestore's 20-call transaction budget.
+  function auditBefore(c,n,id,expected) {
+   return expected==null ? !exists(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)) : expected==get(/databases/$(database)/documents/companies/$(c)/$(n)/$(id)).data.payload;
+  }
   // Historical cancellation is deliberately unavailable in this release. Never
   // infer absence of reverse references from a browser collection scan.
   // Freeze existing tombstones too: restoring one has the same reference race.
   function bankHistoryGuard(c,n,id) {
+   return n!='bankTransactions' || bankHistoryPayloadGuard(c,n,id);
+  }
+  function bankHistoryPayloadGuard(c,n,id) {
    let p=request.resource.data.payload;
    let old=before(c,n,id);
-   return n!='bankTransactions' ||
-    (!(p.get('status','') in ['void','cancelled','duplicate','revised'])
+   return (!(p.get('status','') in ['void','cancelled','duplicate','revised'])
      && !(p.get('documentStatus','') in ['void','cancelled','duplicate','revised']) && !p.keys().hasAny(['duplicateCancellation'])
      && p.get('deletedAt',null)==null
      && (old==null || (!(old.get('status','') in ['void','cancelled','duplicate','revised'])
@@ -32,7 +40,7 @@ service cloud.firestore {
     && (n!='documents' || (!exists(/databases/$(database)/documents/companies/$(c)/documents/$(id)) || (d.payload.documentId==resource.data.payload.documentId && d.payload.docType==resource.data.payload.docType)))
     && op.actorId==request.auth.uid && op.createdAt==request.time
     && a.userId==request.auth.uid && a.timestamp==request.time && a.entityType==n && a.entityId==id
-    && a.operationId==d.lastOperationId && a.after==d.payload && a.before==before(c,n,id);
+    && a.operationId==d.lastOperationId && a.after==d.payload && auditBefore(c,n,id,a.before);
   }
   function cashMirror(c,id,p) {
    let payment=getAfter(/databases/$(database)/documents/companies/$(c)/payments/$(p.linkedPaymentId)).data.payload;
@@ -80,8 +88,27 @@ service cloud.firestore {
    let p=request.resource.data.payload;
    let targetCollection=p.saleId.matches('receivable_.*')?'receivables':'sales';
    let sale=getAfter(/databases/$(database)/documents/companies/$(c)/$(targetCollection)/$(p.saleId));
-   return sale.data.payload.paymentIds.hasAny([id]) && sale.data.lastOperationId==request.resource.data.lastOperationId
+   return sale.data.payload.paymentIds.hasAny([id]) && (sale.data.lastOperationId==request.resource.data.lastOperationId || (admin(c) && resource!=null && platformPaymentEvidence(c,id,p)))
      && (p.get('deletedAt',null)!=null || active(sale.data.payload));
+  }
+  // Admin-only evidence updates keep all economic/identity fields immutable.
+  // The bank and its allocation list must be committed in this same operation.
+  function platformPaymentEvidence(c,id,p) {
+   let old=resource.data.payload;
+   let bankId=p.get('bankTxnId','')!=''?p.bankTxnId:old.get('bankTxnId','');
+   let bank=getAfter(/databases/$(database)/documents/companies/$(c)/bankTransactions/$(bankId));
+   let fields=p.diff(old).affectedKeys();
+   return bankId!='' && bank.data.lastOperationId==request.resource.data.lastOperationId
+    && p.amount==old.amount && p.saleId==old.saleId
+    && old.confirmation in ['pending-bank','bank-confirmed']
+    && fields.hasOnly(['confirmation','paymentDate','date','bankTxnId','bankTransactionDate','platformStatement'])
+    && ((bank.data.payload.status=='照合済' && bank.data.payload.matchType=='platformSettlement'
+      && bank.data.payload.platformPayments.hasAny([{'id':id,'amount':p.amount}])
+      && p.confirmation=='bank-confirmed' && p.bankTxnId==bankId
+      && p.bankTransactionDate==bank.data.payload.bankTransactionDate)
+     || (bank.data.payload.status=='未照合' && bank.data.payload.matchType==''
+      && p.get('bankTxnId','')=='' && old.bankTxnId==bankId && p.confirmation in ['pending-bank','bank-confirmed']
+      && before(c,'bankTransactions',bankId).matchType=='platformSettlement'));
   }
   function calendarCashSale(c,id,p) {
    let link=getAfter(/databases/$(database)/documents/companies/$(c)/calendarLinks/$(p.calendarEventId));
@@ -206,7 +233,7 @@ service cloud.firestore {
     && (!(request.resource.data.action in ['migration','historicalPdfImport'])||admin(c))
     && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.lastAuditId==id
     && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.updatedAt==request.time
-    && request.resource.data.before==before(c,request.resource.data.entityType,request.resource.data.entityId)
+    && auditBefore(c,request.resource.data.entityType,request.resource.data.entityId,request.resource.data.before)
     && request.resource.data.after==getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.payload));
    allow update,delete: if false;
   }
