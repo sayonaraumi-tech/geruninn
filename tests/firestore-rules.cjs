@@ -554,3 +554,13 @@ test('historical bank cancellation/restoration fails closed including forged ord
  assert.equal((await getDoc(ref(db('admin'),'bankTransactions','old-cancelled'))).data().payload.status,'cancelled');
  }finally{admin.dispose();}
 });
+test('reviewed supplier prepayment and invoice use unchanged real rules, duplicate deduction and staff denied',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin);try{
+ await exec(a,{type:'saveSupplier',supplierId:'dongpeng',supplier:{supplierName:'東鵬',openingBalance:0,openingDate:'2026-10-01'},expectedRevision:0});
+ await exec(a,{type:'importBank',bank:{bankTxnId:'dp',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 壁紙前渡金',bankAccount:'GMO あおぞら'}});
+ const cmd={type:'supplierFromBank',bankTxnId:'dp',supplierId:'dongpeng',description:'壁紙前渡金',expectedRevision:1};await exec(a,cmd);await exec(a,cmd);assert.equal((await admin.listRecords('expenses')).length,0);
+ const transaction={supplierId:'dongpeng',invoiceNo:'DP10',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,deductionAmount:100000,description:'壁紙',reviewed:true,sourceHash:'b'.repeat(64)};
+ await exec(a,{type:'settleSupplierInvoice',transaction});await assert.rejects(exec(a,{type:'settleSupplierInvoice',transaction}),/重複/);assert.equal((await admin.listRecords('suppliers'))[0].payload.currentBalance,900000);assert.equal((await admin.listRecords('expenses')).length,1);assert.equal((await admin.listRecords('bankTransactions')).length,1);
+ await assert.rejects(exec(createService(staff),cmd),/管理者/);
+ }finally{admin.dispose();staff.dispose();}
+});

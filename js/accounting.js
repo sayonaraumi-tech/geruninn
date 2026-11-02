@@ -17,7 +17,7 @@ function paymentChannels(payments){
 }
 function date(value){const m=String(value||'').trim().normalize('NFKC').match(/^(\d{4})[-/.年]?(\d{1,2})[-/.月]?(\d{1,2})日?$/);if(!m)throw Error('日付は YYYY-MM-DD で指定してください。');const s=`${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;const parsed=new Date(s+'T00:00:00Z');if(!Number.isFinite(parsed.getTime())||parsed.toISOString().slice(0,10)!==s)throw Error('日付が不正です。');return s;}
 function money(v,signed=false){const n=Number(String(v??'').normalize('NFKC').replace(/[¥￥,\s円]/g,''));if(!Number.isSafeInteger(n)||(!signed&&n<=0))throw Error('金額は整数の円で入力してください。');return n;}
-const delta=t=>t.deletedAt?0:t.type==='monthlyInvoice'?-amount(t):amount(t);
+const delta=t=>t.deletedAt?0:t.type==='monthlyInvoice'?-(t.deductionAmount===undefined?amount(t):Number(t.deductionAmount)):amount(t);
 function cashRows(rows){let runningBalance=0;return rows.filter(live).slice().sort((a,b)=>a.date.localeCompare(b.date)||a.cashTxnId.localeCompare(b.cashTxnId)).map(r=>({...r,runningBalance:runningBalance+=(r.type==='income'?1:-1)*amount(r)}));}
 // Deduplicate stable record IDs only: same-date/same-amount real payments remain distinct.
 function unique(rows){const seen=new Set();return rows.filter(r=>{const id=r.id||r.paymentId;if(!id)return true;if(seen.has(id))return false;seen.add(id);return true;});}

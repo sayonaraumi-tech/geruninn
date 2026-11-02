@@ -1093,7 +1093,24 @@ body{padding-top:72px}
 @media print{#cloudDialog{display:none!important}}
 </style>
 
-</head>
+<style>
+#pageDashboard,#pageBank{font-family:"Noto Sans JP","Yu Gothic",Meiryo,sans-serif;color:#272727}
+#pageDashboard .biz-section,#pageBank .biz-section{padding:14px;margin-bottom:14px;background:#fff;border:1px solid #e5e5e3;box-shadow:none}
+#pageDashboard .biz-grid{gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
+#pageDashboard .biz-card{padding:14px;border:1px solid #e5e5e3;box-shadow:none;background:#fff;min-width:0}
+#pageDashboard .biz-kpi{font-size:clamp(20px,2.1vw,28px);font-weight:500;text-align:right;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
+#pageDashboard .home-secondary{display:flex;gap:24px;border-bottom:1px solid #ddd;padding:8px 0}
+#pageDashboard .home-secondary .biz-card{display:flex;align-items:center;gap:14px;padding:0;border:0}
+#pageDashboard .home-secondary h3{margin:0}#pageDashboard .home-secondary .biz-kpi{font-size:18px}
+#pageDashboard>.biz-section:nth-child(2) .biz-form-grid{display:flex;flex-wrap:wrap;gap:10px}
+#pageDashboard .biz-field{margin:0}#pageDashboard .biz-field[hidden]{display:none}
+#pageDashboard .biz-table td,#pageBank .biz-table td{padding:10px 8px;font-size:13px;font-variant-numeric:tabular-nums}
+#pageBank details>summary{cursor:pointer;color:#67552c;padding:8px}#pageBank details[open]{background:#f6f6f4;padding:8px}
+#pageBank .biz-table select{max-width:100%;min-width:0}#pageBank .biz-table td{vertical-align:top;overflow-wrap:anywhere}
+.bank-status-filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
+.bank-status-filter button[aria-pressed=true]{background:#eee9dd;border-color:#aa9257}
+@media(max-width:600px){#pageDashboard .biz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageDashboard .home-secondary{gap:12px;flex-wrap:wrap}#pageBank .biz-table thead{display:none}#pageBank .biz-table{min-width:0!important;width:100%!important}#pageBank .biz-section,#pageBank input,#pageBank select{max-width:100%;box-sizing:border-box}#pageBank .biz-table,#pageBank .biz-table tbody,#pageBank .biz-table tr,#pageBank .biz-table td{display:block;min-width:0;width:auto}#pageBank .biz-table tr{border-bottom:1px solid #ccc;padding:8px}#pageBank .biz-table td{border:0;padding:4px}#pageBank .biz-table-wrap{overflow:visible}}
+</style></head>
 <body>
 <div class="biz-topbar">
   <div class="biz-brand">月輪合同会社<small>業務連動・帳票・記帳</small></div>
@@ -1132,7 +1149,7 @@ body{padding-top:72px}
 </dialog>
 
 <div id="pageDashboard" class="biz-page app-page active">
- <div class="biz-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
+ <div class="biz-title"><div><h1>経営状況</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
  <div class="biz-section"><div class="biz-form-grid">
  <div class="biz-field"><label for="homePeriodMode">対象期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
  <div class="biz-field" id="homeMonthField"><label for="homeMonth">対象月</label><input type="month" id="homeMonth" onchange="renderDashboard()"></div>
@@ -1146,7 +1163,7 @@ body{padding-top:72px}
   <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">¥0</div></div>
   <div class="biz-card"><h3>当月支出</h3><div class="biz-kpi" id="kpiExpenses">¥0</div></div>
  </div>
- <div class="biz-grid" style="margin-top:12px"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認件数</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="biz-grid home-secondary" style="margin-top:12px"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認件数</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
  <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
