@@ -55,17 +55,18 @@ async function handle(cmd,context){
  if(cmd.type==='settleSupplierInvoice'){
   const t=cmd.transaction;if(!t?.reviewed)throw Error('請求書と実際の控除額を確認してください。');
   const supplier=await read('suppliers',t.supplierId);if(!supplier||!A.live(supplier.payload))throw Error('仕入先がありません。');
-  const invoiceNo=required(t.invoiceNo,'請求書番号'),month=required(t.invoiceMonth,'請求月');if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('請求月が不正です。');
+  const invoiceNo=required(t.invoiceNo|| (t.simpleMonthly?t.invoiceMonth:''),'請求書番号'),month=required(t.invoiceMonth,'請求月');if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('請求月が不正です。');
   const id=await stable('supplierinvoice',t.supplierId+'|'+month),old=await read('supplierTransactions',id);
   const evidenceId=await stable('supplier_evidence',t.supplierId+'|'+A.classificationKey(invoiceNo)),evidence=await read('settings',evidenceId);
   const hashId=t.sourceHash?await stable('supplier_pdf',t.sourceHash):null,hash=hashId?await read('settings',hashId):null;
-  if(old||evidence||hash)throw Error('同じ請求月・請求書番号・PDFの登録があります。重複控除はできません。');
-  const amount=A.money(t.amount),deductionAmount=A.money(t.deductionAmount,true);if(deductionAmount<0||deductionAmount>amount||deductionAmount>Number(supplier.payload.currentBalance||0))throw Error('控除額が請求額または前渡残高を超えています。');
-  const payload={transactionId:id,supplierId:t.supplierId,type:'monthlyInvoice',date:A.date(t.date),amount,deductionAmount,invoiceMonth:month,invoiceNo,description:required(t.description,'材料購入内容'),paymentMethod:'月締',bankAccount:'',sourceHash:t.sourceHash||'',sourceName:t.sourceName||'',reviewedBy:who.uid,deletedAt:null};
-  await write('supplierTransactions',id,payload,'supplier transaction',0);
-  await write('suppliers',t.supplierId,{...supplier.payload,currentBalance:Number(supplier.payload.currentBalance||0)-deductionAmount},'supplier transaction');
-  const expenseId='expense_'+id;await write('expenses',expenseId,{expenseId,expenseDate:payload.date,category:'材料費',vendor:supplier.payload.supplierName,description:payload.description,amount,paymentMethod:'月締',bankAccount:'',receiptAttachmentRef:payload.sourceHash,supplierTransactionId:id,supplierId:t.supplierId,invoiceMonth:month,deletedAt:null},'expense create',0);
-  const marker={type:'supplierInvoiceEvidence',transactionId:id,supplierId:t.supplierId,invoiceNo,deletedAt:null};await write('settings',evidenceId,marker,'create',0);if(hashId)await write('settings',hashId,marker,'create',0);return {transactionId:id};
+  if(cmd.correct&&(!Number.isInteger(cmd.expectedRevision)||cmd.expectedRevision!==old?.revision))throw Error('別端末で変更されています。再読込して訂正してください。');
+  if(cmd.correct ? (!old||!A.live(old.payload)||old.payload.supplierId!==t.supplierId||old.payload.invoiceMonth!==month||!t.simpleMonthly||old.payload.sourceHash||old.payload.invoiceNo!==invoiceNo) : (old||evidence||hash))throw Error('同じ請求月・請求書番号・PDFの登録があります。重複控除はできません。');
+  const amount=A.money(t.amount),deductionAmount=t.simpleMonthly?amount:A.money(t.deductionAmount,true),previousDeduction=cmd.correct?Number(old.payload.deductionAmount||0):0;if(deductionAmount<0||deductionAmount>amount||deductionAmount>Number(supplier.payload.currentBalance||0)+previousDeduction)throw Error('控除額が請求額または前渡残高を超えています。');
+  const payload={transactionId:id,supplierId:t.supplierId,type:'monthlyInvoice',date:A.date(t.date),amount,deductionAmount,invoiceMonth:month,invoiceNo,description:required(t.description||(t.simpleMonthly?'材料請求 '+month:''),'材料購入内容'),paymentMethod:'月締',bankAccount:'',sourceHash:t.sourceHash||'',sourceName:t.sourceName||'',reviewedBy:who.uid,deletedAt:null};
+  await write('supplierTransactions',id,payload,'supplier transaction',cmd.correct?cmd.expectedRevision:0);
+  await write('suppliers',t.supplierId,{...supplier.payload,currentBalance:Number(supplier.payload.currentBalance||0)+previousDeduction-deductionAmount},'supplier transaction');
+  const expenseId='expense_'+id;const priorExpense=await read('expenses',expenseId);if(cmd.correct&&(!priorExpense||priorExpense.payload.bankTxnId||priorExpense.payload.platformSettlementBankId||priorExpense.payload.deletedAt))throw Error('関連費用の状態を確認してください。');await write('expenses',expenseId,{expenseId,expenseDate:payload.date,category:'材料費',vendor:supplier.payload.supplierName,description:payload.description,amount,paymentMethod:'月締',bankAccount:'',receiptAttachmentRef:payload.sourceHash,supplierTransactionId:id,supplierId:t.supplierId,invoiceMonth:month,deletedAt:null},cmd.correct?'expense update':'expense create',cmd.correct?priorExpense.revision:0);
+  const marker={type:'supplierInvoiceEvidence',transactionId:id,supplierId:t.supplierId,invoiceNo,deletedAt:null};if(!cmd.correct)await write('settings',evidenceId,marker,'create',0);if(hashId)await write('settings',hashId,marker,'create',0);return {transactionId:id};
  }
  if(cmd.type==='supplierFromBank'){
   const row=await read('bankTransactions',cmd.bankTxnId);if(!row||!A.live(row.payload))throw Error('銀行明細がありません。');const b=row.payload;
@@ -136,6 +137,7 @@ async function handle(cmd,context){
   const old=await read('bankTransactions',b.bankTxnId);if(old){const p=old.payload;if(p.incoming!==b.incoming||p.outgoing!==b.outgoing||p.bankTransactionDate!==b.bankTransactionDate)throw Error('同一銀行取引IDの金額・日付が既存データと異なります。');return {bankTxnId:b.bankTxnId,unchanged:true};}
   if((b.incoming>0)===(b.outgoing>0))throw Error('銀行の入出金区分が不正です。');A.money(b.incoming||b.outgoing);A.date(b.bankTransactionDate);
   await write('bankTransactions',b.bankTxnId,{...b,status:'未照合',deletedAt:null},'bank csv import',0);
+  if(cmd.autoKnownIncome&&(A.bankSpecial(b)==='受取利息'||A.bankCashback(b)))return handle({type:'reviewBankIncome',bankTxnId:b.bankTxnId,interest:A.bankSpecial(b)==='受取利息',cashback:A.bankCashback(b),note:'銀行CSVの明確な摘要による自動分類',expectedRevision:1},context);
   const target=A.autoBankTarget(b,data);
   if(target)return handle({type:'bankMatch',bankTxnId:b.bankTxnId,...target,expectedRevision:1},context);
   const category=A.bankSpecial(b),policies=rules.filter(r=>r.type==='bankSpecialPolicy'&&r.key===category&&A.live(r)&&r.enabled!==false);

@@ -610,3 +610,15 @@ test('integrated bank: atomic new supplier, four-order net settlement, retries a
  await exec(service,{...cmd,bankTxnId:'stripe-five-no-fee',targetId:'stripe-five-no-fee',paymentIds:Array.from({length:5},(_,i)=>'platform'+i),feeExpenseId:'',expectedRevision:1});
  }finally{admin.dispose();}
 });
+
+test('simple supplier correction and platform source-only review commit under production rules without new bank or sale records',async()=>{
+ const admin=await clientFor('admin'),service=createService(admin);try{
+ await exec(service,{type:'saveSupplier',supplierId:'simple',supplier:{supplierName:'東鵬',openingBalance:0,openingDate:'2026-10-01'},expectedRevision:0});
+ await exec(service,{type:'importBank',bank:{bankTxnId:'simple-bank',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 前渡金',bankAccount:'GMO'}});
+ await exec(service,{type:'supplierFromBank',bankTxnId:'simple-bank',supplierId:'simple',description:'前渡',expectedRevision:1});
+ const transaction={supplierId:'simple',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,simpleMonthly:true,reviewed:true};await exec(service,{type:'settleSupplierInvoice',transaction});
+ const row=(await admin.listRecords('supplierTransactions')).find(r=>r.payload.type==='monthlyInvoice');await exec(service,{type:'settleSupplierInvoice',transaction:{...transaction,amount:100000},correct:true,expectedRevision:row.revision});
+ assert.equal((await admin.listRecords('expenses')).length,1);assert.equal((await admin.listRecords('expenses'))[0].payload.amount,100000);assert.equal((await admin.listRecords('suppliers'))[0].payload.currentBalance,900000);assert.equal((await admin.listRecords('bankTransactions')).length,1);
+ await exec(service,{type:'importBank',bank:{bankTxnId:'source',bankTransactionDate:'2026-10-01',incoming:62068,outgoing:0,amount:62068,description:'Stripe Japan',bankAccount:'GMO'}});await exec(service,{type:'reviewBankIncome',bankTxnId:'source',note:'くらしのマーケット入金元確認済・明細配分待ち',expectedRevision:1});assert.equal((await admin.listRecords('bankTransactions')).find(r=>r.id==='source').payload.status,'未照合');for(const n of ['sales','payments','documents'])assert.equal((await admin.listRecords(n)).length,0);
+ }finally{admin.dispose();}
+});

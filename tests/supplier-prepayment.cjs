@@ -53,3 +53,19 @@ test('interest and debit cashback confirm explicitly without duplicate sales, ad
  await h.execute({type:'importBank',bank:{bankTxnId:'cashback',bankTransactionDate:'2026-10-21',incoming:3071,outgoing:0,amount:3071,description:'Visaデビットキャッシュバック',bankAccount:'GMO あおぞら'}});
  await h.execute({type:'reviewBankIncome',bankTxnId:'cashback',note:'値引・返金・特典の原本確認待ち',interest:false,expectedRevision:1});const cash=h.list('bankTransactions').find(r=>r.id==='cashback').payload;assert.equal(cash.status,'未照合');assert.equal(cash.matchType,undefined);assert.equal(h.list('expenses').length,0);await h.execute({type:'reviewBankIncome',bankTxnId:'cashback',note:'GMO Visaデビット利用還元',cashback:true,expectedRevision:2});assert.equal(h.list('bankTransactions').find(r=>r.id==='cashback').payload.category,'雑収入');assert.equal(h.list('sales').length,0);
 });
+
+test('simple monthly invoice corrects the same expense atomically and prevents stale correction, overdraft and duplicate month',async()=>{
+ const h=await setup();await h.execute({type:'supplierFromBank',bankTxnId:'dongpeng',supplierId:'dongpeng',description:'前渡',expectedRevision:1});
+ const transaction={supplierId:'dongpeng',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,simpleMonthly:true,reviewed:true};
+ await h.execute({type:'settleSupplierInvoice',transaction});await assert.rejects(h.execute({type:'settleSupplierInvoice',transaction}),/重複/);
+ const row=h.list('supplierTransactions').find(r=>r.payload.type==='monthlyInvoice');
+ const correct={type:'settleSupplierInvoice',correct:true,expectedRevision:row.revision,transaction:{...transaction,amount:100000}};
+ await h.execute(correct);await assert.rejects(h.execute({...correct,transaction:{...transaction,amount:50000}}));
+ assert.equal(h.list('suppliers')[0].payload.currentBalance,900000);assert.equal(h.list('expenses').length,1);assert.equal(h.list('expenses')[0].payload.amount,100000);assert.equal(h.list('bankTransactions').length,1);
+ await assert.rejects(h.execute({type:'settleSupplierInvoice',transaction:{...transaction,invoiceMonth:'2026-11',date:'2026-11-30',amount:900001}}),/控除額/);
+ await h.execute({type:'importBank',bank:{...bank,bankTxnId:'topup',bankTransactionDate:'2026-11-01',amount:200000,outgoing:200000}});await h.execute({type:'supplierFromBank',bankTxnId:'topup',supplierId:'dongpeng',description:'再送金',expectedRevision:1});assert.equal(h.list('suppliers')[0].payload.currentBalance,1100000);assert.equal(h.list('expenses').length,1);assert.equal(h.list('bankTransactions').length,2);
+});
+test('CSV known-income classification and Stripe source note create no sales or payments',async()=>{
+ const h=await harness();for(const [id,description,amount]of [['i','普通預金利息',2679],['c','Visaデビットキャッシュバック',3071],['s','Stripe Japan',62068]])await h.execute({type:'importBank',autoKnownIncome:true,bank:{bankTxnId:id,description,amount,incoming:amount,outgoing:0,bankTransactionDate:'2026-10-01',bankAccount:'GMO'}});
+ assert.deepEqual(h.list('bankTransactions').filter(r=>r.payload.status==='照合済').map(r=>r.payload.category),['受取利息','雑収入']);await h.execute({type:'reviewBankIncome',bankTxnId:'s',note:'くらしのマーケット入金元確認済・明細配分待ち',expectedRevision:1});assert.equal(h.list('bankTransactions').find(r=>r.id==='s').payload.status,'未照合');assert.equal(h.list('sales').length,0);assert.equal(h.list('payments').length,0);
+});
