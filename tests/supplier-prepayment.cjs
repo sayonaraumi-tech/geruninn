@@ -13,6 +13,22 @@ const A=require('../js/accounting');
 
 const supplier={supplierName:'東鵬',openingBalance:0,openingDate:'2026-10-01'};
 const bank={bankTxnId:'dongpeng',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 壁紙前渡',bankAccount:'GMO あおぞら'};
+test('two devices confirming the same advance and invoice keep one bank link and one deduction',async()=>{
+ const h=await setup();
+ const advance={type:'supplierFromBank',bankTxnId:'dongpeng',supplierId:'dongpeng',description:'原本確認',expectedRevision:1};
+ await Promise.all([h.execute(advance),h.execute(advance)]);
+ assert.equal(h.list('supplierTransactions').length,1);
+ assert.equal(h.list('suppliers')[0].payload.currentBalance,1000000);
+ const invoice={type:'settleSupplierInvoice',transaction:{supplierId:'dongpeng',invoiceNo:'CONCURRENT',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,deductionAmount:100000,description:'材料',reviewed:true}};
+ const results=await Promise.allSettled([h.execute(invoice),h.execute(invoice)]);
+ assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+ assert.match(results.find(r=>r.status==='rejected').reason.message,/重複/);
+ assert.equal(h.list('suppliers')[0].payload.currentBalance,900000);
+ assert.equal(h.list('expenses').length,1);
+ assert.equal(h.list('bankTransactions').length,1);
+ assert.equal(h.list('payments').length,0);
+ assert(h.retries()>0);
+});
 async function setup(){const h=await harness();await h.execute({type:'saveSupplier',supplierId:'dongpeng',supplier,expectedRevision:0});await h.execute({type:'importBank',bank});return h;}
 test('million yen prepayment is one supplier asset and bank link, no expense or duplicate outflow',async()=>{
  const h=await setup(),cmd={type:'supplierFromBank',bankTxnId:bank.bankTxnId,supplierId:'dongpeng',description:'壁紙前渡金',expectedRevision:1};await h.execute(cmd);await h.execute(cmd);

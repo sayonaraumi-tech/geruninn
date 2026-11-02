@@ -23,6 +23,26 @@ async function clientFor(role){
 async function until(fn){const start=Date.now();while(!fn()){if(Date.now()-start>12000)throw Error('snapshot timeout');await new Promise(r=>setTimeout(r,30));}}
 const snapshot=(id,type='invoice')=>({documentId:id,docType:type,customerName:'共有テスト',invoiceDate:'2026-09-20',salesDate:'2026-09-10',items:[{content:'施工',qty:1,price:90909.09}],travelFee:0,paymentMethod:'現金'});
 const exec=(service,cmd)=>service.execute({operationId:crypto.randomUUID(),...cmd});
+
+test('concurrent supplier confirmations under real rules create one advance and one invoice deduction',async()=>{
+ const one=await clientFor('admin'),two=await clientFor('admin'),a=createService(one),b=createService(two);
+ try{
+  await exec(a,{type:'saveSupplier',supplierId:'parallel',supplier:{supplierName:'東鵬',openingBalance:0,openingDate:'2026-10-01'},expectedRevision:0});
+  await exec(a,{type:'importBank',bank:{bankTxnId:'parallel-bank',bankTransactionDate:'2026-10-13',incoming:0,outgoing:1000000,amount:1000000,description:'東鵬 壁紙前渡',bankAccount:'GMO あおぞら'}});
+  const advance={type:'supplierFromBank',bankTxnId:'parallel-bank',supplierId:'parallel',description:'原本確認',expectedRevision:1};
+  const advances=await Promise.allSettled([exec(a,advance),exec(b,advance)]);assert(advances.some(r=>r.status==='fulfilled'),JSON.stringify(advances));
+  const invoice={type:'settleSupplierInvoice',transaction:{supplierId:'parallel',invoiceNo:'PARALLEL',invoiceMonth:'2026-10',date:'2026-10-31',amount:120000,deductionAmount:100000,description:'材料',reviewed:true}};
+  const results=await Promise.allSettled([exec(a,invoice),exec(b,invoice)]);
+  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);
+  const denied=results.find(r=>r.status==='rejected').reason;assert(denied.code==='permission-denied'||/重複/.test(denied.message));
+  const beforeRetry=JSON.stringify(await one.listRecords('suppliers'));await assert.rejects(exec(b,invoice),/重複/);assert.equal(JSON.stringify(await one.listRecords('suppliers')),beforeRetry);
+  assert.equal((await one.listRecords('suppliers'))[0].payload.currentBalance,900000);
+  assert.equal((await one.listRecords('expenses')).length,1);
+  assert.equal((await one.listRecords('bankTransactions')).length,1);
+  assert.equal((await one.listRecords('supplierTransactions')).length,2);
+  for(const name of ['sales','payments','cashLedger','documents'])assert.equal((await one.listRecords(name)).length,0);
+ }finally{one.dispose();two.dispose();}
+});
 test('bank evidence workflow: alias dedup, auto receipt reuse and special accounting under real rules',async()=>{
  const admin=await clientFor('admin'),s=createService(admin);try{
  await exec(s,{type:'saveDocument',snapshot:{...snapshot('evidence'),paymentMethod:'銀行振込'},expectedRevision:0});

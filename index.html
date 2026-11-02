@@ -1093,24 +1093,69 @@ body{padding-top:72px}
 @media print{#cloudDialog{display:none!important}}
 </style>
 
-<style>
-#pageDashboard,#pageBank{font-family:"Noto Sans JP","Yu Gothic",Meiryo,sans-serif;color:#272727}
-#pageDashboard .biz-section,#pageBank .biz-section{padding:14px;margin-bottom:14px;background:#fff;border:1px solid #e5e5e3;box-shadow:none}
-#pageDashboard .biz-grid{gap:10px;grid-template-columns:repeat(4,minmax(0,1fr))}
-#pageDashboard .biz-card{padding:14px;border:1px solid #e5e5e3;box-shadow:none;background:#fff;min-width:0}
-#pageDashboard .biz-kpi{font-size:clamp(20px,2.1vw,28px);font-weight:500;text-align:right;font-variant-numeric:tabular-nums;letter-spacing:-.4px}
-#pageDashboard .home-secondary{display:flex;gap:24px;border-bottom:1px solid #ddd;padding:8px 0}
-#pageDashboard .home-secondary .biz-card{display:flex;align-items:center;gap:14px;padding:0;border:0}
-#pageDashboard .home-secondary h3{margin:0}#pageDashboard .home-secondary .biz-kpi{font-size:18px}
-#pageDashboard>.biz-section:nth-child(2) .biz-form-grid{display:flex;flex-wrap:wrap;gap:10px}
-#pageDashboard .biz-field{margin:0}#pageDashboard .biz-field[hidden]{display:none}
-#pageDashboard .biz-table td,#pageBank .biz-table td{padding:10px 8px;font-size:13px;font-variant-numeric:tabular-nums}
-#pageBank details>summary{cursor:pointer;color:#67552c;padding:8px}#pageBank details[open]{background:#f6f6f4;padding:8px}
-#pageBank .biz-table select{max-width:100%;min-width:0}#pageBank .biz-table td{vertical-align:top;overflow-wrap:anywhere}
-.bank-status-filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0}
-.bank-status-filter button[aria-pressed=true]{background:#eee9dd;border-color:#aa9257}
-@media(max-width:600px){#pageDashboard .biz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageDashboard .home-secondary{gap:12px;flex-wrap:wrap}#pageBank .biz-table thead{display:none}#pageBank .biz-table{min-width:0!important;width:100%!important}#pageBank .biz-section,#pageBank input,#pageBank select{max-width:100%;box-sizing:border-box}#pageBank .biz-table,#pageBank .biz-table tbody,#pageBank .biz-table tr,#pageBank .biz-table td{display:block;min-width:0;width:auto}#pageBank .biz-table tr{border-bottom:1px solid #ccc;padding:8px}#pageBank .biz-table td{border:0;padding:4px}#pageBank .biz-table-wrap{overflow:visible}}
-</style></head>
+<style id="homeBankStyles">
+/* HOME and bank share one presentation layer; accounting commands stay in the domain. */
+body:has(#pageDashboard.active),body:has(#pageBank.active){background:#f1f3f6}
+body:has(#pageDashboard.active) .biz-topbar,body:has(#pageBank.active) .biz-topbar{background:#fff;color:#202323;box-shadow:0 1px 0 #e1e4e8}
+body:has(#pageDashboard.active) .biz-nav button,body:has(#pageBank.active) .biz-nav button{color:#303331}
+body:has(#pageDashboard.active) .biz-nav button.active,body:has(#pageBank.active) .biz-nav button.active{background:#eee9db;color:#514326}
+body:has(#pageDashboard.active) .biz-sync,body:has(#pageDashboard.active) .biz-user,body:has(#pageBank.active) .biz-sync,body:has(#pageBank.active) .biz-user{color:#656a68}
+#pageDashboard,#pageBank{font-family:"Noto Sans JP","Yu Gothic",Meiryo,sans-serif;color:#252a28;max-width:1480px;padding:24px 28px 44px}
+#pageDashboard .biz-title h1,#pageBank .biz-title h1{font-size:26px;font-weight:700;letter-spacing:.03em}
+#pageDashboard .biz-section,#pageBank .biz-section{padding:18px 20px;margin:16px 0;background:#fff;border:1px solid #dfe3e8;box-shadow:none;border-radius:15px}
+#pageDashboard .biz-grid{gap:14px;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:18px}
+#pageDashboard .biz-card{padding:20px 22px;border:1px solid #dfe3e8;box-shadow:none;min-width:0}
+#pageDashboard .biz-card h3{font-size:14px;font-weight:500;color:#626865;margin-bottom:10px}
+#pageDashboard .biz-kpi{font-size:clamp(22px,2.5vw,34px);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+#pageDashboard .home-secondary{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
+#pageDashboard .home-secondary .biz-card{display:flex;align-items:center;gap:28px;padding:14px 22px}
+#pageDashboard .home-secondary h3{margin:0;white-space:nowrap}
+#pageDashboard .home-secondary .biz-kpi{font-size:24px}
+#pageDashboard .home-period .biz-form-grid{display:flex;align-items:end;flex-wrap:wrap;gap:12px}
+#pageDashboard .biz-field{margin:0;min-width:140px}#pageDashboard .biz-field[hidden]{display:none}
+#pageDashboard .biz-table td,#pageBank .biz-table td{padding:11px 10px;font-size:13px;font-variant-numeric:tabular-nums}
+#pageDashboard .biz-table th,#pageBank .biz-table th{background:#f6f7f9;font-size:12px;font-weight:500;color:#626865}
+#pageDashboard .biz-section h2,#pageBank .biz-section h2{font-size:18px}
+#pageBank .biz-table:has(#bankRows){table-layout:fixed;min-width:960px}
+#pageBank .biz-table:has(#bankRows) th:first-child{width:105px}#pageBank .biz-table:has(#bankRows) th:nth-child(2){width:25%}
+#pageBank .biz-table:has(#bankRows) th:nth-child(3),#pageBank .biz-table:has(#bankRows) th:nth-child(4){width:105px}#pageBank .biz-table:has(#bankRows) th:last-child{width:145px}
+#pageBank td{vertical-align:top;overflow-wrap:anywhere;white-space:normal}
+#pageBank td:first-child,#pageBank td:nth-child(3),#pageBank td:nth-child(4){white-space:nowrap}
+#pageBank td:nth-child(3){color:#187258;text-align:right}#pageBank td:nth-child(4){color:#b83939;text-align:right}
+#pageBank select,#pageBank input{max-width:100%;box-sizing:border-box}
+#pageBank td select{width:100%;min-width:0;margin:8px 0}
+#pageBank .biz-btn{margin:2px;padding:8px 10px;white-space:normal}
+#pageBank details>summary{cursor:pointer;color:#65552d;padding:8px;border-radius:8px}
+#pageBank details[open]{background:#f4f8f6;border:1px solid #e0ebe6;border-radius:10px;padding:10px}
+#pageBank .bank-candidate{display:block;color:#626865;font-size:12px;padding:3px 0 7px}
+#pageBank .bank-status{display:inline-block;border-radius:99px;padding:5px 10px;background:#f0f2f4;font-size:12px}
+#pageBank .bank-status.done{background:#eaf6f0;color:#24745a}
+.bank-status-filter{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 14px}
+.bank-status-filter button[aria-pressed=true]{background:#edf7f2;border-color:#a9d3c1;color:#206c52}
+.biz-btn:focus-visible,summary:focus-visible{outline:2px solid #ad8b47;outline-offset:3px}
+@media(min-width:601px){
+ #pageBank #bankRows tr{display:grid;grid-template-columns:105px minmax(180px,1.5fr) 105px 105px minmax(210px,2fr) 145px;border-bottom:1px solid #edf0f2}
+ #pageBank #bankRows td{border:0}
+ #pageBank #bankRows td:nth-child(5){display:contents}
+ #pageBank #bankRows details{grid-column:5;grid-row:1;display:block}
+ #pageBank #bankRows details[open]{grid-column:1/-1;grid-row:2;margin:0 10px 12px}
+ #pageBank #bankRows td:last-child{grid-column:6;grid-row:1}
+ #pageBank #bankRows summary{margin:3px 8px}
+ #pageBank .bank-controls{padding:6px 0}
+ #pageBank details:not([open]) .bank-controls{display:none}
+ #pageBank details[open]>form{grid-column:1/-1;margin:0 10px 12px}
+ #pageBank #bankRows{display:block}#pageBank .biz-table:has(#bankRows) thead{display:block}#pageBank .biz-table:has(#bankRows) thead tr{display:grid;grid-template-columns:105px minmax(180px,1.5fr) 105px 105px minmax(210px,2fr) 145px}#pageBank .biz-table:has(#bankRows) th{width:auto}
+}
+@media(max-width:800px){#pageDashboard,#pageBank{padding:18px 12px 36px}#pageDashboard .biz-title h1,#pageBank .biz-title h1{font-size:22px}#pageDashboard .biz-grid{grid-template-columns:repeat(2,minmax(0,1fr))}#pageDashboard .biz-card{padding:16px 14px}#pageDashboard .home-secondary .biz-card{gap:8px;flex-wrap:wrap;padding:12px 14px}#pageDashboard .home-secondary .biz-kpi{font-size:21px}}
+@media(max-width:600px){#pageBank .biz-table:has(#bankRows){min-width:0;width:100%}#pageDashboard .biz-section,#pageBank .biz-section{padding:14px 12px}#pageDashboard .home-period .biz-field{flex:1;min-width:130px}#pageDashboard .biz-card h3{font-size:12px}#pageBank .biz-table thead{display:none}#pageBank .biz-table,#pageBank .biz-table tbody,#pageBank .biz-table tr,#pageBank .biz-table td{display:block;min-width:0;width:auto}#pageBank .biz-table tr{border-bottom:1px solid #dfe3e8;padding:12px 0}#pageBank .biz-table td{border:0;padding:4px 0}#pageBank .biz-table td:empty{display:none}#pageBank .biz-table td:first-child{color:#68716c;font-size:12px}#pageBank .biz-table td:nth-child(2){font-weight:600}#pageBank .biz-table td:nth-child(3),#pageBank .biz-table td:nth-child(4){text-align:left}#pageBank .biz-table-wrap{overflow:visible}#pageBank .bank-status{margin-top:5px}}
+
+#pageBank .bank-import .biz-form-grid{grid-template-columns:1.2fr 1.2fr auto;align-items:start}
+#pageBank .bank-import .span2{grid-column:auto}
+#pageBank .biz-table:has(#bankRows) thead th:nth-child(n){width:auto}
+@media(max-width:800px){body:has(#pageDashboard.active) #bizNav,body:has(#pageBank.active) #bizNav{display:flex!important;overflow-x:auto!important;padding:6px 0;width:100%}body:has(#pageDashboard.active) #bizNav button,body:has(#pageBank.active) #bizNav button{flex-shrink:0;padding:9px 12px!important}}
+@media(max-width:600px){#pageBank .bank-import .biz-form-grid{grid-template-columns:1fr}}
+</style>
+</head>
 <body>
 <div class="biz-topbar">
   <div class="biz-brand">月輪合同会社<small>業務連動・帳票・記帳</small></div>
@@ -1150,7 +1195,7 @@ body{padding-top:72px}
 
 <div id="pageDashboard" class="biz-page app-page active">
  <div class="biz-title"><div><h1>経営状況</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
- <div class="biz-section"><div class="biz-form-grid">
+ <div class="biz-section home-period"><div class="biz-form-grid">
  <div class="biz-field"><label for="homePeriodMode">対象期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
  <div class="biz-field" id="homeMonthField"><label for="homeMonth">対象月</label><input type="month" id="homeMonth" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeYearField" hidden><label for="homeYear">年度開始年（10月）</label><input type="number" min="2000" max="9998" id="homeYear" onchange="renderDashboard()"></div>
@@ -1163,7 +1208,7 @@ body{padding-top:72px}
   <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">¥0</div></div>
   <div class="biz-card"><h3>当月支出</h3><div class="biz-kpi" id="kpiExpenses">¥0</div></div>
  </div>
- <div class="biz-grid home-secondary" style="margin-top:12px"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認件数</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認件数</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
  <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
@@ -1212,18 +1257,10 @@ body{padding-top:72px}
  <div class="biz-section"><div class="biz-section-head"><h2>支出台帳</h2><input type="month" id="expenseMonth" onchange="renderExpenses()"></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>科目</th><th>取引先</th><th>内容</th><th>方法</th><th class="biz-money">金額</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
 </div>
 
-<style>
-#pageBank .biz-table{table-layout:fixed;min-width:980px}
-#pageBank th:first-child{width:102px}#pageBank th:nth-child(2){width:25%}
-#pageBank th:nth-child(3),#pageBank th:nth-child(4){width:110px}
-#pageBank th:last-child{width:110px}#pageBank td{vertical-align:top;overflow-wrap:anywhere;white-space:normal}
-#pageBank td:first-child,#pageBank td:nth-child(3),#pageBank td:nth-child(4){white-space:nowrap}
-#pageBank td select{width:100%;max-width:100%;margin-bottom:6px}
-#pageBank .biz-btn{margin:2px;padding:7px 9px;white-space:normal}
-</style>
+
 <div id="pageBank" class="biz-page app-page">
  <div class="biz-title"><div><h1>銀行照合</h1><div class="biz-muted">GMO あおぞらのCSVを読み込み、請求入金と既存支出を照合します。銀行明細だけで費用は追加しません。</div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>CSV取込</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>銀行CSV</label><input type="file" id="bankFile" accept=".csv,text/csv"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="importBankCsv()">読込</button></div></div></div>
+ <div class="biz-section bank-import"><div class="biz-section-head"><h2>CSV取込</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>銀行CSV</label><input type="file" id="bankFile" accept=".csv,text/csv"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="importBankCsv()">読込</button></div></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
 </div>
 
