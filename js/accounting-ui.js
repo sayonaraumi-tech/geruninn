@@ -164,12 +164,33 @@ root.accountingChangeRule=(id,action)=>{if(!isAdmin())return;const r=(data.setti
 function prefillCategory(){if(expenseEdit||categoryChosen)return;const c=A.classifyExpense(value('expVendor'),'',data.settings||[]);el('expCategory').value=c.category||'その他';el('expenseLearnCategory').checked=!(data.settings||[]).some(r=>r.type==='expenseCategoryRule'&&r.key===A.classificationKey(value('expVendor')));el('expenseClassificationStatus').textContent=c.source+(c.review?'：科目を確認してください。':'：登録前に確認してください。');}
 function renderReceivables(){if(!el('receivableRows'))return;const rs=currentReceivables();el('receivableRows').innerHTML=table(['売上日','請求日','顧客','請求額','入金済','未収','最終入金日','経過日数','状態'],rs.map(s=>'<tr>'+[s.salesDate,s.invoiceDate,s.customer,money(s.amount),money(s.paid),money(s.outstanding),s.lastPaymentDate,s.ageDays,s.status].map(cell).join('')+'</tr>').join(''));}
 function homeData(){if(enabled())return root.TsukinowaYearEnd.effective(data);return {sales:bizState.sales.map(s=>({...s,salesDate:s.salesDate||s.saleDate})),payments:bizState.payments.map(p=>({...p,paymentDate:p.paymentDate||p.date})),expenses:bizState.expenses.map(e=>({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description||e.memo})),bankTransactions:[],cashLedger:[]};}
+// HOME-only projection; accounting rows and CSV evidence remain untouched.
+function homeMerchant(value){
+ const raw=String(value||'').trim();
+ if(!/Visa\s*デビット利用/i.test(raw))return raw;
+ return raw.replace(/^.*?Visa\s*デビット利用\s*/i,'').replace(/(?:承認番号|TID)\s*[:：]?.*$/i,'').replace(/^[\s:：/]+|[\s/]+$/g,'').trim()||'取引先要確認';
+}
+function homePresentation(r,d){
+ const expense=(d.expenses||[]).find(e=>'expense:'+(e.id||e.expenseId)===r.id);
+ return {type:['過月売上の入金','未関連入金'].includes(r.type)?'入金':r.type,
+ direction:r.outgoing>0?'out':r.incoming>0?'in':'neutral',amount:r.outgoing||r.incoming||r.sales||0,
+ customer:homeMerchant(r.customer),description:expense?(expense.category&&!expense.reviewRequired&&!expense.accountingReviewRequired?expense.category:'内容要確認'):r.description,
+ hint:r.type==='過月売上の入金'?'売上日 '+r.date+' / 入金 '+r.paymentDates:r.type==='未関連入金'?'売上リンクなし':r.sales&&r.incoming?'期間内売上 '+money(r.sales):''};
+}
+function homeRows(d,p){
+ const rows=A.ledgerRows(d,p);
+ for(const t of (d.supplierTransactions||[]).filter(t=>A.live(t)&&t.type==='prepayment'&&p.includes(t.date))){
+  if(rows.some(r=>r.id==='cash:'+t.cashTxnId))continue;
+  rows.push({id:'prepayment:'+(t.id||t.transactionId),date:t.date,type:'前渡金',customer:(d.suppliers||[]).find(s=>(s.id||s.supplierId)===t.supplierId)?.supplierName||'取引先要確認',description:'前渡金（費用計上なし）',method:t.paymentMethod||'',outgoing:Number(t.amount)||0,status:'確認済'});
+ }
+ return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
+}
 function homePeriod(){const mode=value('homePeriodMode');return A.periodFilter(mode==='year'?{year:value('homeYear')}:mode==='custom'?{start:value('homeStart'),end:value('homeEnd')}:{month:value('homeMonth')||bizNowMonth()});}
 root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth();if(!value('homeMonth'))el('homeMonth').value=now;if(!value('homeYear'))el('homeYear').value=+now.slice(0,4)-(+now.slice(5)<10?1:0);if(!value('homeStart'))el('homeStart').value=now+'-01';if(!value('homeEnd'))el('homeEnd').value=A.periodFilter({month:now}).end;
  const mode=value('homePeriodMode');for(const [id,shown] of [['homeMonthField',mode==='month'],['homeYearField',mode==='year'],['homeStartField',mode==='custom'],['homeEndField',mode==='custom']])el(id).hidden=!shown;
  let p;try{p=homePeriod();}catch(e){el('dashPeriod').textContent=e.message;return;}const d=homeData(),m=A.aggregate(d,p);el('dashPeriod').textContent=p.start+' ～ '+p.end;for(const [id,k] of [['kpiSales','sales'],['kpiPayments','income'],['kpiExpenses','expenseTotal'],['kpiReceivable','receivables'],['kpiDifference','cashFlowDifference']])el(id).textContent=money(m[k]);el('kpiAttention').textContent=m.attention;for(const [id,label] of [['kpiSales','売上'],['kpiPayments','入金'],['kpiExpenses','支出']])el(id).previousElementSibling.textContent=label;
  el('attentionList').replaceChildren(...m.reminders.map(message=>{const p=document.createElement('p');p.textContent=message;return p;}));if(!m.reminders.length)el('attentionList').textContent='確認事項はありません。';
- el('homeLedger').innerHTML=table(['日付','区分','取引先','内容','支払方法','金額','状態'],A.ledgerRows(d,p).map(r=>{const status=r.homeStatus||r.status.replace(/^照合済/,'入金済').split(' / ').filter(v=>!['銀行未照合','照合済','引落照合待ち'].includes(v)).join(' / ');return '<tr>'+[r.date,r.type,r.customer,r.description,r.method,money(r.outgoing||r.sales||r.incoming||0)].map(cell).join('')+'<td><span class="home-status '+(/要確認|未入金|待ち/.test(status)?'pending':'')+'">'+esc(status)+'</span></td></tr>';}).join(''));
+ el('homeLedger').innerHTML=table(['日付','区分','取引先','内容','支払方法','金額','状態'],homeRows(d,p).map(r=>{const v=homePresentation(r,d),status=r.homeStatus||r.status.replace(/^照合済/,'入金済').split(' / ').filter(v=>!['銀行未照合','照合済','引落照合待ち'].includes(v)).join(' / '),textCell=x=>'<td><span class="home-text" title="'+esc(x)+'">'+esc(x)+'</span></td>';return '<tr>'+cell(r.date)+'<td><span title="'+esc(v.hint)+'">'+esc(v.type)+'</span></td>'+[v.customer,v.description,r.method].map(textCell).join('')+'<td class="home-amount '+v.direction+'" title="'+esc(v.hint)+'">'+(v.direction==='in'?'＋':v.direction==='out'?'−':'')+esc(money(v.amount))+'</td><td><span class="home-status '+(/要確認|未入金|待ち/.test(status)?'pending':'')+'">'+esc(status)+'</span></td></tr>';}).join(''));
  el('homeBreakdown').innerHTML=table(['内訳','金額'],[...Object.entries(m.categories).filter(([,v])=>v).map(([k,v])=>['支出 / '+k,v]),...m.incomeChannels.map(c=>['入金経路 / '+c.channel+(c.platformName?' / '+c.platformName:''),c.amount])].map(([k,v])=>'<tr>'+cell(k)+cell(money(v))+'</tr>').join(''));root.renderYearEnd?.();};
 root.TsukinowaAccountingUI.homePeriod=homePeriod;root.TsukinowaAccountingUI.homeData=homeData;
 function currentSales(){return A.salesRows(data.sales||[],data.payments||[],value('salesMonth'));}
