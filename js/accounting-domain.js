@@ -1,6 +1,7 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./accounting.js'):root.TsukinowaAccounting);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaAccountingDomain=api;})(globalThis,function(A){
 'use strict';
 const TYPES=['reviewBankIncome','settleSupplierInvoice','supplierFromBank','bankCancelDuplicate','bankRestoreDuplicate','saveBankRule','saveExpenseCategoryRule','saveExpense','deleteExpense','cashAdjustment','saveSupplier','supplierTransaction','deleteSupplierTransaction','importBank','bankMatch','expenseFromBank','bankUnmatch','bankExclude','backfillCash','migrateAccounting','accountingMigrationComplete'];
+const knownSupplierAdvance=b=>b?.bankTransactionDate==='2026-10-13'&&b.outgoing===1000000&&/東鵬/.test(b.description||'');
 async function mirrorCash(name,id,p,read,write){
  let eligible=false,type='expense',category='',description='',date='',linkedPaymentId='',linkedExpenseId='',linkedSupplierTransactionId='';
  if(name==='payments'){eligible=p.confirmation==='cash-received'&&p.method==='現金';type='income';category='現金入金';description=p.memo||'現場入金';date=p.paymentDate;linkedPaymentId=id;}
@@ -139,7 +140,7 @@ async function handle(cmd,context){
  }
  if(cmd.type==='bankExclude'){const b=await read('bankTransactions',cmd.bankTxnId);if(!b||!A.live(b.payload)||b.payload.status==='照合済')throw Error('照合を解除してから除外してください。');await write('bankTransactions',cmd.bankTxnId,{...b.payload,status:cmd.excluded?'除外':'未照合',excludeReason:required(cmd.reason,'理由')},'adjustment',cmd.expectedRevision);return {bankTxnId:cmd.bankTxnId};}
  if(cmd.type==='expenseFromBank'){
-  const advance=await read('bankTransactions',cmd.bankTxnId);if(advance?.payload.bankTransactionDate==='2026-10-13'&&advance.payload.outgoing===1000000&&/東鵬/.test(advance.payload.description||''))throw Error('東鵬の壁紙前渡金は費用ではありません。前渡金として処理してください。');
+  const advance=await read('bankTransactions',cmd.bankTxnId);if(knownSupplierAdvance(advance?.payload))throw Error('東鵬の壁紙前渡金は費用ではありません。前渡金として処理してください。');
   const linkedBank=await read('bankTransactions',cmd.bankTxnId);
   if(linkedBank&&A.live(linkedBank.payload)&&linkedBank.payload.status==='照合済'&&linkedBank.payload.matchType==='expense'){
    const b=linkedBank.payload,linked=await read('expenses',b.matchId);
@@ -155,6 +156,7 @@ async function handle(cmd,context){
  }
  if(cmd.type==='bankMatch'){
   const row=await read('bankTransactions',cmd.bankTxnId);if(!row)throw Error('銀行取引がありません。');const b=row.payload;if(!A.live(b))throw Error('取消済み銀行明細です。');if(b.status==='照合済'){if(b.matchId===cmd.targetId&&b.matchType===cmd.targetType&&(cmd.targetType!=='cardSettlement'||JSON.stringify([...(cmd.expenseIds||[])].sort())===JSON.stringify(b.expenseIds)))return {unchanged:true};throw Error('別の記録と照合済みです。先に解除してください。');}if(b.status==='除外')throw Error('除外を解除してください。');
+  if(cmd.targetType==='expense'&&knownSupplierAdvance(b))throw Error('東鵬の壁紙前渡金は費用ではありません。仕入先の前渡金を選択してください。');
   let paymentId='',pendingBefore=null,expenseIds=[];
   if(cmd.targetType==='cardSettlement'){
    expenseIds=[...new Set(cmd.expenseIds||[])].sort();

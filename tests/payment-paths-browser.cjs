@@ -57,8 +57,8 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await page.evaluate(async()=>{await pathRun({type:'bankUnmatch',bankTxnId:'path-card-bank',reason:'UI replay'});});
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.find(e=>e.id==='path-credit-a').bankTxnId===undefined);
  await page.evaluate(()=>bizSwitchPage('bank'));
- const row=page.locator('#bankRows tr').filter({hasText:'VISA カード利用代金'}).filter({has:page.locator('input[data-card-bank="path-card-bank"]')});
- await row.locator('input[value="path-credit-a"]').check();await row.locator('input[value="path-credit-b"]').check();await row.getByRole('button',{name:'選択支出の引落照合'}).click();
+ await page.evaluate(()=>accountingBankView('all'));const row=page.locator('#bankRows tr').filter({hasText:'VISA カード利用代金'}).filter({has:page.locator('input[data-card-bank="path-card-bank"]')});
+ await row.locator('summary').click();await row.locator('input[value="path-credit-a"]').check();await row.locator('input[value="path-credit-b"]').check();await row.getByRole('button',{name:'選択支出の引落照合'}).click();
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='path-card-bank').status==='照合済');
  assert.match(await page.locator('#bankRows').innerText(),/path-credit-a/);
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

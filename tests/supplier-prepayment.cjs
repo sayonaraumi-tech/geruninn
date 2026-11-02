@@ -30,7 +30,7 @@ test('unreviewed and excessive deductions perform zero writes',async()=>{
  await assert.rejects(h.execute({type:'settleSupplierInvoice',transaction}),/控除額/);await assert.rejects(h.execute({type:'settleSupplierInvoice',transaction:{...transaction,reviewed:false}}),/確認/);assert.equal(h.list('expenses').length,0);assert.equal(h.list('supplierTransactions').length,0);
 });
 test('interest requires reviewed policy, cashback note cannot post income, advance cannot become expense',async()=>{
- const h=await setup();await assert.rejects(h.execute({type:'expenseFromBank',bankTxnId:'dongpeng',expense:{expenseDate:'2026-10-13',category:'材料費',paymentMethod:'銀行振込',amount:1000000,vendor:'東鵬',description:'壁紙'},expectedRevision:1}),/前渡金/);
+ const h=await setup();await assert.rejects(h.execute({type:'bankMatch',bankTxnId:'dongpeng',targetType:'expense',targetId:'any',expectedRevision:1}),/前渡金/);await assert.rejects(h.execute({type:'expenseFromBank',bankTxnId:'dongpeng',expense:{expenseDate:'2026-10-13',category:'材料費',paymentMethod:'銀行振込',amount:1000000,vendor:'東鵬',description:'壁紙'},expectedRevision:1}),/前渡金/);
  await h.execute({type:'importBank',bank:{bankTxnId:'interest',bankTransactionDate:'2026-10-01',incoming:2679,outgoing:0,amount:2679,description:'普通預金利息',bankAccount:'GMO あおぞら'}});
  const c={type:'reviewBankIncome',bankTxnId:'interest',note:'承認済み口径を原本照合',interest:true,expectedRevision:1};await assert.rejects(h.execute(c),/会計口径/);await h.execute({type:'saveBankRule',ruleType:'bankSpecialPolicy',key:'受取利息'});await h.execute(c);
  assert.equal(h.list('bankTransactions').find(r=>r.id==='interest').payload.matchType,'bankIncome');
