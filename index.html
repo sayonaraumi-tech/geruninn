@@ -1061,7 +1061,7 @@ body{padding-top:72px}
 #homeBreakdown .biz-table{min-width:0}
 .biz-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.biz-card{background:#fff;border:1px solid var(--biz-border);border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.03)}.biz-card h3{font-size:12px;color:#777;margin-bottom:8px}.biz-kpi{font-size:25px;font-weight:800;font-variant-numeric:tabular-nums}.biz-kpi small{font-size:12px;color:#777;font-weight:500;margin-left:4px}
 .biz-section{background:#fff;border:1px solid var(--biz-border);border-radius:14px;padding:16px;margin-top:14px}.biz-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.biz-section h2{font-size:15px}.biz-actions{display:flex;gap:8px;flex-wrap:wrap}.biz-btn{border:1px solid #d5d9de;background:#fff;padding:9px 12px;border-radius:9px;cursor:pointer;font:inherit;font-size:13px}.biz-btn.primary{background:linear-gradient(135deg,#d4b574,#9c7a2e);border-color:#9c7a2e;color:#fff;font-weight:700}.biz-btn.danger{color:#b42318;border-color:#f0c6c2}.biz-btn.ok{color:#116b58;border-color:#b9dfd6;background:#f5fffc}
-#homeLedger .biz-table{min-width:1120px}#homeLedger th,#homeLedger td:first-child{white-space:nowrap}
+#homeLedger th,#homeLedger td:first-child{white-space:nowrap}
 .biz-table-wrap{overflow:auto}.biz-table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}.biz-table th,.biz-table td{padding:10px 9px;border-bottom:1px solid #edf0f2;text-align:left;vertical-align:middle}.biz-table th{font-size:11px;color:#777;background:#fafbfc;position:sticky;top:0}.biz-money{text-align:right!important;font-variant-numeric:tabular-nums}.biz-badge{display:inline-block;padding:4px 7px;border-radius:999px;font-size:11px;background:#f0f2f5;color:#555}.biz-badge.ok{background:#e8f7f2;color:#116b58}.biz-badge.warn{background:#fff6df;color:#8a5a00}.biz-badge.bad{background:#fff0ee;color:#b42318}
 .biz-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.biz-field label{display:block;font-size:11px;color:#666;margin-bottom:4px}.biz-field input,.biz-field select,.biz-field textarea{width:100%;border:1px solid #dfe3e8;border-radius:8px;padding:9px 10px;background:#fff;font:inherit;font-size:13px}.biz-field.full{grid-column:1/-1}.biz-field.span2{grid-column:span 2}
 .biz-alert{padding:10px 12px;border-radius:9px;background:#fff8e6;border:1px solid #f1dfaa;font-size:12px;color:#7b5b13}.biz-log{border-left:2px solid #d9dde2;padding-left:12px}.biz-log-row{padding:7px 0;font-size:12px}.biz-log-row b{display:block;font-size:12px}.biz-log-row span{color:#777}
@@ -1096,8 +1096,26 @@ body{padding-top:72px}
 <style id="homeBankStyles">
 /* Use the same navigation, type, containers and controls as 見積履歴.
    Only dashboard composition and bank interaction layouts belong here. */
-#pageDashboard .biz-card{min-width:0}
-#pageDashboard .biz-kpi{overflow-wrap:anywhere}
+#pageDashboard,#pageBank{font-family:"Hiragino Kaku Gothic ProN","Yu Gothic","Meiryo","Noto Sans CJK JP",Arial,sans-serif}
+#pageDashboard .biz-card{min-width:0;position:relative;padding:20px 62px 20px 20px;box-shadow:none}
+#pageDashboard .biz-card:after{content:'▥';position:absolute;right:18px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#edf8f3;color:#579980;font:24px Arial,sans-serif}
+#pageDashboard .biz-card:nth-child(2):after{content:'▤'}
+#pageDashboard .biz-card:nth-child(3):after{content:'▧'}
+#pageDashboard .biz-card:nth-child(4):after{content:'▣'}
+#pageDashboard .home-secondary .biz-card:after{content:'⚖'}
+#pageDashboard .home-secondary .biz-card:nth-child(2):after{content:'▱'}
+#pageDashboard .biz-card h3{font-size:14px;font-weight:600}
+#pageDashboard .biz-kpi{font-size:28px;line-height:1.3;overflow-wrap:anywhere;letter-spacing:-.4px}
+#pageDashboard .home-secondary .biz-kpi{font-size:25px}
+#homeLedger>.biz-table-wrap>.biz-table{min-width:760px;table-layout:fixed}
+#homeLedger th:first-child{width:100px}#homeLedger th:nth-child(2){width:110px}#homeLedger th:nth-child(5){width:125px}#homeLedger th:nth-child(6){width:115px}#homeLedger th:last-child{width:150px}
+#homeLedger td{vertical-align:top;overflow-wrap:anywhere;padding-top:10px;padding-bottom:10px}#homeLedger td:nth-child(6){text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+#homeLedger summary{cursor:pointer;color:#796536;font-size:12px;padding-top:5px}
+#homeLedger dl{display:grid;grid-template-columns:1fr;gap:3px;font-size:12px;margin:8px 0}#homeLedger dt{color:#777}#homeLedger dd{margin:0 0 6px}
+#homeLedger .home-status{display:inline-block;border-radius:12px;background:#edf7f2;color:#367c65;padding:3px 9px;font-size:12px}
+#homeLedger .home-status.pending{background:#fff6df;color:#8a5a00}
+#pageBank form label{display:block;margin:8px 0}#pageBank form input:not([type=checkbox]),#pageBank form select{display:block;width:100%;padding:8px;border:1px solid var(--biz-border);border-radius:8px}#pageBank .bank-order{padding:6px;background:#fff;border-radius:6px}
+@media(max-width:600px){#pageDashboard .biz-card{padding:14px}#pageDashboard .biz-card:after{display:none}#pageDashboard .biz-kpi{font-size:21px}#pageDashboard .home-secondary .biz-kpi{font-size:20px}#pageDashboard .home-secondary .biz-card{gap:8px}}
 #pageDashboard .home-secondary{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:14px}
 #pageDashboard .home-secondary .biz-card{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
 #pageDashboard .home-secondary h3{margin:0;white-space:nowrap}
@@ -1179,7 +1197,7 @@ body{padding-top:72px}
 </dialog>
 
 <div id="pageDashboard" class="biz-page app-page active">
- <div class="biz-title"><div><h1>経営状況</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
+ <div class="biz-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
  <div class="biz-section home-period"><div class="biz-form-grid">
  <div class="biz-field"><label for="homePeriodMode">対象期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
  <div class="biz-field" id="homeMonthField"><label for="homeMonth">対象月</label><input type="month" id="homeMonth" onchange="renderDashboard()"></div>
@@ -1188,12 +1206,12 @@ body{padding-top:72px}
  <div class="biz-field" id="homeEndField" hidden><label for="homeEnd">終了日</label><input type="date" id="homeEnd" onchange="renderDashboard()"></div>
  </div></div>
  <div class="biz-grid">
-  <div class="biz-card"><h3>当月売上</h3><div class="biz-kpi" id="kpiSales">¥0</div></div>
-  <div class="biz-card"><h3>当月入金</h3><div class="biz-kpi" id="kpiPayments">¥0</div></div>
+  <div class="biz-card"><h3>売上</h3><div class="biz-kpi" id="kpiSales">¥0</div></div>
+  <div class="biz-card"><h3>入金</h3><div class="biz-kpi" id="kpiPayments">¥0</div></div>
   <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">¥0</div></div>
-  <div class="biz-card"><h3>当月支出</h3><div class="biz-kpi" id="kpiExpenses">¥0</div></div>
+  <div class="biz-card"><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">¥0</div></div>
  </div>
- <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認件数</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">¥0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
  <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
