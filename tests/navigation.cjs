@@ -29,6 +29,7 @@ async function checkPage(page,route){
    await context.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:true,companyId:'tsukinowa',firebase:{apiKey:'test',authDomain:'test.firebaseapp.com',projectId:'test',appId:'test'}}}));
    await page.goto(base);
    await page.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});
+   await page.evaluate(()=>bizSwitchPage('bank'));assert.match(await page.locator('#bankRows').innerText(),/ログイン/);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.evaluate(()=>bizSwitchPage('calendar'));
    await page.locator('#bizCloudAccountButton').click();
    await page.locator('#cloudEmail').fill(role+'@example.com');await page.locator('#cloudPassword').fill('test');await page.locator('#cloudLogin').click();
    await page.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});

@@ -51,10 +51,10 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.waitForFunction(()=>document.getElementById('expenseCategoryRules').textContent.includes('ＡＢＣ 店'));
  await desktop.locator('#expVendor').fill('abc   店');await desktop.locator('#expVendor').dispatchEvent('change');assert.equal(await desktop.locator('#expCategory').inputValue(),'通信費');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/学習ルール/);
  const history=JSON.stringify((await snapshot()).expenses);
- let rule=desktop.locator('#expenseCategoryRules tr').filter({hasText:'ＡＢＣ 店'});await rule.getByRole('button',{name:'有効・停止'}).click();await idle();assert.match(await rule.innerText(),/停止/);
+ let rule=desktop.locator('#expenseCategoryRules tr').filter({hasText:'ＡＢＣ 店'});await rule.getByRole('button',{name:'有効・停止'}).click();await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().settings.some(r=>r.vendor==='ＡＢＣ 店'&&r.enabled===false&&!r.deletedAt));assert.equal(await rule.locator('td').nth(2).innerText(),'停止');
  await desktop.locator('#expVendor').dispatchEvent('change');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/要確認/);assert.equal(await desktop.locator('#expenseLearnCategory').isChecked(),false);
  desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.type()==='prompt'?d.accept('材料費'):d.type()==='confirm'?d.accept():d.dismiss());
- await rule.getByRole('button',{name:'変更',exact:true}).click();await idle();assert.match(await rule.innerText(),/材料費/);await rule.getByRole('button',{name:'削除',exact:true}).click();await idle();assert.equal(await rule.count(),0);assert.equal(JSON.stringify((await snapshot()).expenses),history);
+ await rule.getByRole('button',{name:'変更',exact:true}).click();await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().settings.some(r=>r.vendor==='ＡＢＣ 店'&&r.category==='材料費'));assert.equal(await rule.locator('td').nth(1).innerText(),'材料費');await rule.getByRole('button',{name:'削除',exact:true}).click();await idle();await rule.waitFor({state:'detached'});assert.equal(await rule.count(),0);assert.equal(JSON.stringify((await snapshot()).expenses),history);
  // Render the reported production shape; preview/dropdown must never write anything.
  const beforePreview=await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length);
  await desktop.evaluate(()=>{
