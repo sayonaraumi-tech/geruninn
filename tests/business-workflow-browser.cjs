@@ -19,6 +19,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  });
  for(const type of ['invoice','estimate','receipt','onoda']){
   const id=await page.evaluate(async type=>{bizSwitchPage('chohyo');setDocType(type);while(onodaGenerating)await new Promise(r=>setTimeout(r,10));document.getElementById('customerName').value=type==='onoda'?'dynast合同会社':'原本顧客';document.getElementById('invoiceDate').value='2026-10-06';document.getElementById('salesDate').value=type==='estimate'?'2026-10-20':'';items=[{content:'クロス張替',qty:1,unit:'m',price:1000,taxable:true}];if(type==='receipt'){document.getElementById('receiptTotal').value='1100';document.getElementById('tadashi').value='クロス張替代';document.getElementById('paymentMethod').value='現金';}recalc();await doPrint();return collectFormState().documentId;},type);
+  if(type==='receipt'){for(const media of ['screen','print']){await page.emulateMedia({media});assert.equal(await page.locator('.invoice .items-classic').evaluate(e=>getComputedStyle(e).display),'none');}await page.emulateMedia({media:'screen'});}
   await page.waitForFunction(id=>loadConfirmedHistory().some(h=>h.documentId===id),id);await page.waitForFunction(n=>pdfSaves===n,['invoice','estimate','receipt','onoda'].indexOf(type)*3+1);
   assert.equal(await page.evaluate(()=>pdfNames.at(-1)),type==='onoda'?'26／10／31 dynast合同会社様10月分クロス張替請求書.pdf':`26／10／6 原本顧客様クロス張替${{invoice:'請求書',estimate:'見積書',receipt:'領収書'}[type]}.pdf`);
   assert.equal(await page.evaluate(()=>bizGoogleNeedToken()),true);

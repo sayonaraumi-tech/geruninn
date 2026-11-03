@@ -622,3 +622,22 @@ test('simple supplier correction and platform source-only review commit under pr
  await exec(service,{type:'importBank',bank:{bankTxnId:'source',bankTransactionDate:'2026-10-01',incoming:62068,outgoing:0,amount:62068,description:'Stripe Japan',bankAccount:'GMO'}});await exec(service,{type:'reviewBankIncome',bankTxnId:'source',note:'くらしのマーケット入金元確認済・明細配分待ち',expectedRevision:1});assert.equal((await admin.listRecords('bankTransactions')).find(r=>r.id==='source').payload.status,'未照合');for(const n of ['sales','payments','documents'])assert.equal((await admin.listRecords(n)).length,0);
  }finally{admin.dispose();}
 });
+
+
+test('two devices: CSV and bank new expense share a transaction identity under unchanged rules',async()=>{
+ const one=await clientFor('admin'),two=await clientFor('admin');
+ try{
+  const a=createService(one),b=createService(two),expense={expenseDate:'2026-10-04',category:'消耗品費',vendor:'同時購入',description:'備品',paymentMethod:'法人銀行デビット',amount:6060};
+  await exec(a,{type:'importBank',bank:{bankTxnId:'race-bank',bankTransactionDate:'2026-10-04',incoming:0,outgoing:6060,amount:6060,description:'同時購入',bankAccount:'試験'}});
+  const results=await Promise.allSettled([exec(a,{type:'saveExpense',expense,skipDuplicate:true,expectedRevision:0}),exec(b,{type:'expenseFromBank',bankTxnId:'race-bank',expense,expectedRevision:1})]);
+  assert(results.some(r=>r.status==='fulfilled'));
+  assert.equal((await one.listRecords('expenses')).length,1);
+  assert.equal((await one.listRecords('cashLedger')).length,0);
+  const row=(await one.listRecords('expenses'))[0];
+  const before=JSON.stringify(await one.listRecords('expenses'));
+  await exec(a,{type:'saveExpense',expense,skipDuplicate:true,expectedRevision:0});
+  assert.equal(JSON.stringify(await one.listRecords('expenses')),before);
+  await exec(a,{type:'saveExpense',expenseId:row.id,expense:{...expense,amount:6061},expectedRevision:0}).then(()=>assert.fail('stale write accepted'),()=>{});
+  assert.equal(JSON.stringify(await one.listRecords('expenses')),before);
+ }finally{one.dispose();two.dispose();}
+});

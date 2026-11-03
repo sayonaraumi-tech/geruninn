@@ -28,7 +28,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  assert.equal((await snapshot()).cash.length,1);
  const csv='日付,科目,支払方法,金額,取引先,内容・備考\n2026-10-02,旅費交通費,現金,100,手工,現金\n2026-10-02,消耗品費,法人銀行デビット,6060,ビックカメラ,備品\n2026-10-02,交通費,代表者立替（交通系IC）,200,駅,電車\n2026-10-02,通信費,銀行振込,1000,電話会社,10月\n2026-10-02,地代家賃,口座振替,2000,家主,家賃\n2026-10-02,その他,銀行振込,3000,候補店,候補';
  await desktop.locator('#expenseFile').setInputFiles({name:'expenses.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/6件.*12,260.*重複候補 1件.*エラー 0件/);
- await desktop.locator('#expenseImportCommit').click();await idle();assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
+ await desktop.locator('#expenseImportCommit').click();await desktop.waitForFunction(()=>document.getElementById('expenseImportPreview').textContent==='5件を同期キューに保存しました。重複はスキップします。');await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.length===6);assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
  await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/重複候補 6件/);assert(await desktop.locator('#expenseImportCommit').isDisabled());
  assert.equal(await desktop.locator('#pageExpenses > .biz-section').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
  await desktop.evaluate(()=>bizSwitchPage('bank'));
@@ -55,6 +55,49 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.locator('#expVendor').dispatchEvent('change');assert.match(await desktop.locator('#expenseClassificationStatus').innerText(),/要確認/);assert.equal(await desktop.locator('#expenseLearnCategory').isChecked(),false);
  desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.type()==='prompt'?d.accept('材料費'):d.type()==='confirm'?d.accept():d.dismiss());
  await rule.getByRole('button',{name:'変更',exact:true}).click();await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().settings.some(r=>r.vendor==='ＡＢＣ 店'&&r.category==='材料費'));assert.equal(await rule.locator('td').nth(1).innerText(),'材料費');await rule.getByRole('button',{name:'削除',exact:true}).click();await idle();await rule.waitFor({state:'detached'});assert.equal(await rule.count(),0);assert.equal(JSON.stringify((await snapshot()).expenses),history);
+
+ // Real downloads must match the current visible month on desktop and phone.
+ const phone=await device('admin',390);
+ async function verifyCsv(page,month){
+  await page.evaluate(month=>{bizSwitchPage('expenses');expenseMonth.value=month;renderExpenses();},month);
+  const visible=await page.locator('#expenseRows tr').evaluateAll(rs=>rs.map(r=>[...r.cells].slice(0,6).map(c=>c.textContent)));
+  const [download]=await Promise.all([page.waitForEvent('download'),page.locator('#expenseCsvExport').click()]);
+  const bytes=fs.readFileSync(await download.path()),rows=require('../js/accounting').parseCSV(bytes.toString('utf8').slice(1));
+  assert.deepEqual([...bytes.subarray(0,3)],[239,187,191]);assert.equal(download.suggestedFilename(),'expenses_'+month+'.csv');
+  assert.deepEqual(rows[0],['支出日','科目','取引先','内容','支払方法','金額','状態','領収書参照']);
+  assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),visible.map(r=>[...r.slice(0,4),r[4].split(' / ')[0],r[5].replaceAll(',','')]));
+  const summary=await page.evaluate(month=>TsukinowaAccounting.monthly(TsukinowaAccountingUI.homeData(),month).expenseTotal,month);
+  assert.equal(rows.slice(1).reduce((n,r)=>n+Number(r[5]),0),summary);
+  assert(await page.locator('#expenseFile').count());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  if(process.env.PREVIEW_DIR&&month==='2026-10')await page.screenshot({path:path.join(process.env.PREVIEW_DIR,'expense-ledger-'+page.viewportSize().width+'.png'),fullPage:true});
+ }
+ for(const page of [desktop,phone]){await verifyCsv(page,'2026-10');await verifyCsv(page,'2026-09');}
+ // Two independent browser contexts queue the same purchase offline. A reload must
+ // preserve its operation identity, then reconnect produces one expense/cash row.
+ const command={type:'saveExpense',operationId:'offline-ui-expense',skipDuplicate:true,expectedRevision:0,expense:{expenseDate:'2026-10-05',category:'消耗品費',vendor:'断網試験',description:'備品',paymentMethod:'現金',amount:4321}};
+ await desktop.context().setOffline(true);await phone.context().setOffline(true);
+ await desktop.evaluate(c=>TsukinowaBusinessUI.enqueue(c),command);
+ await phone.evaluate(c=>TsukinowaBusinessUI.enqueue({...c,operationId:'offline-ui-expense-phone'}),command);
+ const pending=await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue());
+ assert.equal(pending.length,1);
+ // Stop the old tab before reconnecting so the persisted outbox is restored
+ // by a fresh login, rather than being drained by the old tab's online event.
+ await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().stop());
+ await desktop.context().setOffline(false);await desktop.reload();
+ await desktop.waitForFunction(()=>document.getElementById('cloudStatus').textContent==='未ログイン');
+ await desktop.locator('#bizCloudAccountButton').click();await desktop.locator('#cloudEmail').fill('admin@example.com');await desktop.locator('#cloudPassword').fill('password');
+ await phone.context().setOffline(false);
+ await desktop.locator('#cloudLogin').click();await idle();await desktop.getByRole('button',{name:'閉じる',exact:true}).click();
+ await phone.evaluate(()=>TsukinowaBusinessUI.getSync().flush());await phone.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);
+ await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.some(e=>e.vendor==='断網試験'));
+ const once=await snapshot();assert.equal(once.expenses.filter(e=>e.vendor==='断網試験').length,1);const purchase=once.expenses.find(e=>e.vendor==='断網試験');assert.equal(once.cash.filter(c=>c.linkedExpenseId===purchase.id).length,1);
+ // Replaying the original persisted operation also handles a lost acknowledgement.
+ await desktop.evaluate(c=>TsukinowaBusinessUI.enqueue(c),pending[0].command);await idle();
+ assert.equal((await snapshot()).expenses.filter(e=>e.vendor==='断網試験').length,1);
+ await desktop.evaluate(()=>{expenseMonth.value='';renderExpenses();});
+ assert.equal(await desktop.locator('#expenseMonth').inputValue(),await desktop.evaluate(()=>bizNowMonth()));
+ console.log('PASS desktop/phone current-month CSV downloads match HOME and visible rows; two offline devices and reload/replay keep one expense/cash entry');
+
  // Render the reported production shape; preview/dropdown must never write anything.
  const beforePreview=await desktop.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length);
  await desktop.evaluate(()=>{
