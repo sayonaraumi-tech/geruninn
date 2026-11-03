@@ -9,21 +9,25 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  });
 
  await page.evaluate(()=>{const wrap=payload=>({id:payload.id,payload});TsukinowaAccountingUI.hydrate({sales:[wrap({id:'partial',salesDate:'2026-08-01',invoiceDate:'2026-08-01',amount:779379,customer:'顧客,"引用"\n改行'}),wrap({id:'paid',salesDate:'2026-09-20',amount:1000,customer:'入金済顧客'}),wrap({id:'unpaid',salesDate:'2026-10-31',amount:2000,customer:'未入金顧客'}),wrap({id:'future',salesDate:'2026-11-01',amount:500})],payments:[wrap({id:'p',saleId:'partial',paymentDate:'2026-08-25',amount:770379,confirmation:'bank-confirmed'}),wrap({id:'paid-p',saleId:'paid',paymentDate:'2026-10-01',amount:1000,confirmation:'bank-confirmed'}),wrap({id:'final',saleId:'partial',paymentDate:'2026-11-01',amount:9000,confirmation:'bank-confirmed'}),wrap({id:'pending',saleId:'unpaid',paymentDate:'2026-10-31',amount:2000,confirmation:'pending-bank'})]});bizSwitchPage('sales');document.getElementById('homePeriodMode').value='custom';document.getElementById('homeStart').value='';});
- const table=()=>page.locator('#receivableRows table').evaluate(t=>[...t.rows].map(r=>[...r.cells].map(c=>c.textContent)));
- assert.equal(await page.getByRole('button',{name:'売上・入金CSV',exact:true}).count(),0);
- assert.equal(await page.locator('#salesExportMode').count(),0);
- assert.equal(await page.locator('#receivableRows').locator('..').getByRole('button').count(),2);
+
+ await page.evaluate(()=>{document.getElementById('salesPeriodMode').value='custom';document.getElementById('salesStart').value='2026-08-01';document.getElementById('salesEnd').value='2026-11-30';renderSales();});
+ const table=()=>page.locator('#salesRegisterTable table').evaluate(t=>[...t.rows].map(r=>[...r.cells].slice(0,-1).map(c=>c.textContent)));
+ assert.equal(await page.getByRole('button',{name:'CSV出力',exact:true}).count(),1);
+ assert.equal(await page.locator('#receivableRows').count(),0);
  for(const date of ['2026-10-31','2026-09-30','2026-11-01']){
   await page.locator('#receivableAsOf').fill(date);await page.locator('#receivableAsOf').dispatchEvent('change');
-  await page.getByRole('button',{name:'基準日で表示',exact:true}).click();
-  const expected=await table();assert.equal(expected[0].length,9);assert.deepEqual(expected[0],['売上日','請求日','顧客','請求額','入金済','未収','最終入金日','経過日数','状態']);
-  if(date==='2026-10-31'){assert.equal(expected.length,4);assert.deepEqual(expected.slice(1).map(r=>r[8]),['一部入金','入金済','未入金']);assert.deepEqual(expected[1].slice(3,6),['779,379','770,379','9,000']);assert.equal(expected[1][0],'2026-08-01');}
-  // A date typed but not applied must never silently change the displayed CSV snapshot or filename.
+  const expected=await table();assert.deepEqual(expected[0],['売上日','顧客','内容','請求書発行日','領収書発行日','請求額','入金済','未収','最終入金日','経過日数','状態']);
+  if(date==='2026-10-31'){assert.equal(expected.length,4);assert.deepEqual(expected.slice(1).map(r=>r[10]),['一部入金','入金済','未入金']);assert.deepEqual(expected[1].slice(5,8),['779,379','770,379','9,000']);assert.equal(expected[1][8],'2026-08-25');assert.equal(expected[1][4],'');}
   await page.locator('#receivableAsOf').evaluate(e=>e.value='2027-01-01');
-  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'未収金CSV',exact:true}).click()]);
-  const bytes=fs.readFileSync(await download.path());assert.deepEqual([...bytes.subarray(0,3)],[239,187,191]);assert(bytes.toString('utf8').includes('\r\n'));assert.deepEqual(require('../js/accounting').parseCSV(bytes.toString('utf8').slice(1)),expected);assert.equal(download.suggestedFilename(),'receivables_'+date+'.csv');
-  assert.deepEqual(await table(),expected);
+  const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'CSV出力',exact:true}).click()]);
+  const bytes=fs.readFileSync(await download.path());assert.deepEqual([...bytes.subarray(0,3)],[239,187,191]);assert(bytes.toString('utf8').includes('\r\n'));assert.deepEqual(require('../js/accounting').parseCSV(bytes.toString('utf8').slice(1)),expected);assert.equal(download.suggestedFilename(),'salesRegister_'+date+'.csv');assert.deepEqual(await table(),expected);
  }
+ await page.locator('#salesSort').selectOption('desc');assert.deepEqual((await table()).slice(1).map(r=>r[0]),['2026-11-01','2026-10-31','2026-09-20','2026-08-01']);
+ await page.locator('#salesSort').selectOption('asc');
+ await page.locator('#salesPeriodMode').selectOption('month');await page.locator('#salesMonth').fill('2026-10');await page.locator('#salesMonth').dispatchEvent('change');assert.equal((await table()).length,2);assert.equal((await table())[1][0],'2026-10-31');
+ await page.locator('#salesPeriodMode').selectOption('year');await page.locator('#salesYear').fill('2026');await page.locator('#salesYear').dispatchEvent('change');assert.equal((await table()).length,3);
+ await page.locator('[data-sale-detail="0"]').click();assert(await page.locator('#salesDetails').isVisible());await page.locator('#closeSalesDetails').click();assert(!await page.locator('#salesDetails').isVisible());
+ if(process.env.PREVIEW_DIR){await page.evaluate(()=>{document.getElementById('salesPeriodMode').value='custom';document.getElementById('receivableAsOf').value='2026-10-31';renderSales();document.querySelector('#salesRegisterTable .biz-table-wrap').scrollLeft=0;});await page.screenshot({path:path.join(process.env.PREVIEW_DIR,'sales-register-'+width+'.png'),fullPage:true});}
  await page.locator('#receivableAsOf').fill('2026-01-01');await page.locator('#receivableAsOf').dispatchEvent('change');
- const [empty]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'未収金CSV',exact:true}).click()]);assert.equal(require('../js/accounting').parseCSV(fs.readFileSync(await empty.path(),'utf8').slice(1)).length,1);
- assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);console.log('PASS exact nine-column visible snapshot / UTF8 BOM CRLF / quoted Japanese / grouped yen / all statuses / historical cutoff / empty / real download / '+width);await page.close();}}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});
+ const [empty]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'CSV出力',exact:true}).click()]);assert.equal(require('../js/accounting').parseCSV(fs.readFileSync(await empty.path(),'utf8').slice(1)).length,1);
+ assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);console.log('PASS unified register / cutoff / sort / month fiscal custom / UTF8 BOM CRLF / real CSV download / detail / '+width);await page.close();}}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

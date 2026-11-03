@@ -4,7 +4,7 @@
 const A=root.TsukinowaAccounting,el=id=>document.getElementById(id),B=()=>root.TsukinowaBusinessUI,enabled=()=>B().isEnabled(),uid=()=>crypto.randomUUID(),esc=s=>bizEsc(String(s??''));
 let duplicateBackup=null;
 let data={},expenseEdit=null,importing=false,expensePreview=null,expenseBank=null,categoryChosen=false;
-const old={};for(const n of ['deleteExpense','renderExpenses','matchBankSale','bizPaid','bizOutstanding','renderSales','exportBackup'])old[n]=root[n];
+const old={};for(const n of ['deleteExpense','renderExpenses','matchBankSale','bizPaid','bizOutstanding','exportBackup'])old[n]=root[n];
 function isAdmin(){if(!enabled()||B().getClient()?.getState().role!=='admin'){root.bizOpenCloudAccount();return false;}return true;}
 function rev(n,id){return B().getSync()?.getRevision(n,id)||0;}
 function send(c){if(!isAdmin())return;return B().enqueue(c);}
@@ -12,7 +12,7 @@ const value=id=>el(id)?.value||'',table=(headers,body)=>`<div class="biz-table-w
 function notice(message){el('accountingMessage').textContent=message;}
 function guard(fn){return async(...args)=>{try{return await fn(...args);}catch(e){notice(e.message);alert(e.message);}};}
 function flatten(rows){return rows.map(r=>({...r.payload,id:r.id,createdAt:r.createdAt,updatedAt:r.updatedAt,createdBy:r.createdBy,updatedBy:r.updatedBy,revision:r.revision}));}
-function hydrate(rows){data={};for(const n of ['documents','sales','payments',...A.COLLECTIONS])data[n]=flatten(rows[n]||[]);data.sales.push(...flatten(rows.receivables||[]));bizState.expenses=data.expenses.filter(A.live).map(e=>({...e,date:e.expenseDate,method:e.paymentMethod,memo:e.description}));bizState.bank=data.bankTransactions.map(b=>({...b,date:b.bankTransactionDate,desc:b.description,matched:b.status==='照合済'}));renderCash();renderReceivables();renderCategoryRules();renderBankRules();renderDuplicateReview();renderSupplierLedger();}
+function hydrate(rows){data={};for(const n of ['documents','sales','payments',...A.COLLECTIONS])data[n]=flatten(rows[n]||[]);data.sales.push(...flatten(rows.receivables||[]));bizState.expenses=data.expenses.filter(A.live).map(e=>({...e,date:e.expenseDate,method:e.paymentMethod,memo:e.description}));bizState.bank=data.bankTransactions.map(b=>({...b,date:b.bankTransactionDate,desc:b.description,matched:b.status==='照合済'}));renderCash();root.renderSales();renderCategoryRules();renderBankRules();renderDuplicateReview();renderSupplierLedger();}
 root.TsukinowaAccountingUI={hydrate,role:()=>{supplierCorrection=null;if(el('supplierMonth'))el('supplierMonth').disabled=false;if(el('supplierChoice'))el('supplierChoice').disabled=false;duplicateBackup=null;expenseBank=null;expenseEdit=null;expensePreview=null;if(el('expenseImportCommit'))el('expenseImportCommit').disabled=true;},getData:()=>data};
 root.bizPaid=function(s){if(!enabled())return old.bizPaid(s);return A.ledger([s],data.payments||[]).sales[0]?.paid||0;};
 root.bizOutstanding=function(s){if(!enabled())return old.bizOutstanding(s);return Number(s.amount)-bizPaid(s);};
@@ -160,9 +160,9 @@ root.accountingExpenseFromBank=bankTxnId=>{
 function renderCategoryRules(){if(!el('expenseCategoryRules'))return;el('expenseCategoryRules').innerHTML=table(['取引先（完全一致）','科目','状態','操作'],(data.settings||[]).filter(r=>r.type==='expenseCategoryRule'&&!r.deletedAt).map(r=>'<tr>'+cell(r.vendor)+cell(r.category)+cell(r.enabled?'有効':'停止')+`<td><button class="biz-btn" onclick="accountingChangeRule('${esc(r.id)}','edit')">変更</button><button class="biz-btn" onclick="accountingChangeRule('${esc(r.id)}','toggle')">有効・停止</button><button class="biz-btn" onclick="accountingChangeRule('${esc(r.id)}','delete')">削除</button></td></tr>`).join(''));}
 root.accountingChangeRule=(id,action)=>{if(!isAdmin())return;const r=(data.settings||[]).find(r=>r.id===id);if(!r)return;let category=r.category;if(action==='edit'){category=prompt('科目: '+A.CATEGORIES.join(' / '),r.category);if(!category)return;if(!A.CATEGORIES.includes(category))return alert('科目を確認してください。');}if(action==='delete'&&!confirm('学習ルールを削除しますか？過去の支出は変更しません。'))return;send({type:'saveExpenseCategoryRule',vendor:r.vendor,category,enabled:action==='toggle'?!r.enabled:r.enabled,deleted:action==='delete',expectedRevision:r.revision});};
 function prefillCategory(){if(expenseEdit||categoryChosen)return;const c=A.classifyExpense(value('expVendor'),'',data.settings||[]);el('expCategory').value=c.category||'その他';el('expenseLearnCategory').checked=!(data.settings||[]).some(r=>r.type==='expenseCategoryRule'&&r.key===A.classificationKey(value('expVendor')));el('expenseClassificationStatus').textContent=c.source+(c.review?'：科目を確認してください。':'：登録前に確認してください。');}
-const receivableHeaders=['売上日','請求日','顧客','請求額','入金済','未収','最終入金日','経過日数','状態'];
-let receivableView={asOf:'',rows:[]};
-function renderReceivables(){if(!el('receivableRows'))return;const asOf=A.date(value('receivableAsOf')||todayISO()),rows=A.receivables(data.sales||[],data.payments||[],asOf).map(s=>[s.salesDate,s.invoiceDate,s.customer,money(s.amount),money(s.paid),money(s.outstanding),s.lastPaymentDate,s.ageDays,s.status].map(v=>String(v??'')));el('receivableRows').innerHTML=table(receivableHeaders,rows.map(r=>'<tr>'+r.map(cell).join('')+'</tr>').join(''));receivableView={asOf,rows};}
+const registerHeaders=['売上日','顧客','内容','請求書発行日','領収書発行日','請求額','入金済','未収','最終入金日','経過日数','状態'];
+let registerView={asOf:'',rows:[],sales:[]};
+function registerData(){return enabled()?data:{sales:bizState.sales,payments:bizState.payments,documents:(root.loadConfirmedHistory?.()||[]).map(d=>({...d,confirmed:true,snapshot:d}))};}
 function homeData(){if(enabled())return root.TsukinowaYearEnd.effective(data);return {sales:bizState.sales.map(s=>({...s,salesDate:s.salesDate||s.saleDate})),payments:bizState.payments.map(p=>({...p,paymentDate:p.paymentDate||p.date})),expenses:bizState.expenses.map(e=>({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description||e.memo})),bankTransactions:[],cashLedger:[]};}
 // HOME-only projection; accounting rows and CSV evidence remain untouched.
 function homeMerchant(value){
@@ -193,16 +193,29 @@ root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth
  el('homeLedger').innerHTML=table(['日付','区分','取引先','内容','支払方法','金額','状態'],homeRows(d,p).map(r=>{const v=homePresentation(r,d),status=(r.homeStatus||r.status.replace(/^照合済/,'入金済').split(' / ').filter(v=>!['銀行未照合','照合済','引落照合待ち'].includes(v)).join(' / ')).replace(/未入金/g,'入金待ち'),textCell=x=>'<td><span class="home-text" title="'+esc(x)+'">'+esc(x)+'</span></td>';return '<tr>'+cell(r.date)+'<td><span class="home-kind" data-kind="'+esc(v.type)+'" title="'+esc(v.hint)+'">'+esc(v.type)+'</span></td>'+[v.customer,v.description,r.method].map(textCell).join('')+'<td class="home-amount '+v.direction+'" title="'+esc(v.hint)+'">'+(v.direction==='in'?'＋':v.direction==='out'?'−':'')+esc(money(v.amount))+'</td><td><span class="home-status '+(/要確認|未入金|待ち/.test(status)?'pending':'')+'">'+esc(status)+'</span></td></tr>';}).join(''));
  el('homeBreakdown').innerHTML=table(['内訳','金額'],[...Object.entries(m.categories).filter(([,v])=>v).map(([k,v])=>['支出 / '+(!k||k==='undefined'?'内容要確認':k),v]),...m.incomeChannels.map(c=>['入金経路 / '+c.channel+(c.platformName?' / '+c.platformName:''),c.amount])].map(([k,v])=>'<tr>'+cell(k)+cell(money(v))+'</tr>').join(''));root.renderYearEnd?.();};
 root.TsukinowaAccountingUI.homePeriod=homePeriod;root.TsukinowaAccountingUI.homeData=homeData;
-function currentSales(){return A.salesRows(data.sales||[],data.payments||[],value('salesMonth'));}
-root.renderSales=function(){if(!enabled())return old.renderSales();el('salesRows').innerHTML=currentSales().map(s=>'<tr>'+[s.salesDate,s.customer,s.content,money(s.amount),s.invoiceDate||'—',money(s.paid),money(s.outstanding)].map(cell).join('')+cell(s.status)+`<td>${s.outstanding>0?`<button class="biz-btn" onclick="selectSaleForPayment('${esc(s.id)}')">入金</button>`:'—'}</td></tr>`).join('')||'<tr><td colspan="9">対象月の売上はありません。</td></tr>';renderPaymentSaleOptions();renderReceivables();};
+root.renderSales=function(){
+ if(!el('salesRegisterTable'))return;
+ const now=bizNowMonth(),mode=value('salesPeriodMode')||'month';
+ for(const [id,v] of [['salesMonth',now],['salesYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0))],['salesStart',now+'-01'],['salesEnd',A.periodFilter({month:now}).end],['receivableAsOf',todayISO()]])if(!value(id))el(id).value=v;
+ for(const [id,show] of [['salesMonthField',mode==='month'],['salesYearField',mode==='year'],['salesStartField',mode==='custom'],['salesEndField',mode==='custom']])el(id).hidden=!show;
+ try{
+ const period=A.periodFilter(mode==='year'?{year:value('salesYear')}:mode==='custom'?{start:value('salesStart'),end:value('salesEnd')}:{month:value('salesMonth')}),asOf=A.date(value('receivableAsOf'));
+ const sales=A.salesRegister(registerData(),period,asOf,value('salesSort')==='desc'),rows=sales.map(s=>[s.salesDate,s.customer,s.content,s.invoiceIssueDate,s.receiptIssueDate,money(s.amount),money(s.paid),money(s.outstanding),s.lastPaymentDate,s.ageDays,s.status].map(v=>String(v??'')));
+ el('salesRegisterTable').innerHTML=table([...registerHeaders,'必要操作'],rows.map((r,i)=>'<tr data-sale-id="'+esc(sales[i].id)+'">'+r.map((v,j)=>j===10?'<td><span class="register-status '+(v==='入金済'?'paid':'')+'">'+esc(v)+'</span></td>':cell(v)).join('')+'<td>'+(sales[i].outstanding>0&&bizOutstanding(sales[i])>0?'<button class="biz-btn" data-sale-payment="'+i+'">入金登録</button> ':'')+'<button class="biz-btn" data-sale-detail="'+i+'">詳細</button></td></tr>').join(''));
+ el('salesRegisterTable').querySelector('tbody').id='salesRows';registerView={asOf,rows,sales};el('salesDetails').hidden=true;
+ el('salesViewStatus').textContent=period.start+' ～ '+period.end+' ｜ 入金基準日 '+asOf+' ｜ '+sales.length+'件';
+ }catch(e){el('salesViewStatus').textContent=e.message+' 表示・CSVは直前の有効な条件です。';}
+ renderPaymentSaleOptions();
+};
+root.TsukinowaAccountingUI.renderSales=root.renderSales;
 function exportRows(kind){switch(kind){case'monthly':return A.settlementExport(homeData(),homePeriod());
 case'expenses':return [['expenseId','支出日','分類','仕入先','摘要','金額','支払方法','銀行口座','添付参照','取消日'],...(data.expenses||[]).map(e=>[e.id,e.expenseDate,e.category,e.vendor,e.description,e.amount,e.paymentMethod,e.bankAccount,e.receiptAttachmentRef,e.deletedAt])];
 case'payments':return [['入金ID','売上ID','入金日','金額','入金経路','プラットフォーム名','確認状態'],...(data.payments||[]).filter(p=>homePeriod().includes(p.paymentDate||p.date)).map(p=>[p.id,p.saleId,p.paymentDate||p.date,p.amount,A.paymentChannel(p).channel,A.paymentChannel(p).platformName,p.confirmation])];
-case'receivables':return [receivableHeaders,...receivableView.rows].map(r=>r.slice());
+case'salesRegister':return [registerHeaders,...registerView.rows].map(r=>r.slice());
 case'suppliers':return [['仕入先ID','仕入先','取引ID','日付','区分','金額','請求月','摘要','取消日','期首残高','現在残高'],...(data.suppliers||[]).map(s=>[s.id,s.supplierName,'',s.openingDate,'期首',s.openingBalance,'','','',s.openingBalance,A.supplierBalance(s,data.supplierTransactions||[])]),...(data.supplierTransactions||[]).map(t=>[t.supplierId,data.suppliers.find(s=>s.id===t.supplierId)?.supplierName,t.id,t.date,t.type,t.amount,t.invoiceMonth,t.description,t.deletedAt,'',''])];
 case'bank':return [['bankTxnId','銀行取引日','銀行口座','摘要','入金','出金','残高','メモ','状態','照合区分','照合先','入金ID','固定口座名','取引番号','hash','出現番号','同一証拠の別ID','監査判定'],...(data.bankTransactions||[]).map(b=>[b.id,b.bankTransactionDate,b.bankAccount,b.description,b.incoming,b.outgoing,b.balance,b.memo,A.bankMatch(b,data).status,b.matchType,b.matchType==='cardSettlement'?(b.expenseIds||[]).join(' / '):b.matchId,b.paymentId,A.bankAccountKey(b.bankAccount,data.settings),b.externalId,b.hash,b.occurrence,A.bankDuplicate(b,data.bankTransactions,data.settings).map(r=>r.id).join(' / '),A.bankDuplicate(b,data.bankTransactions,data.settings).length?'原記録を照合してから個別承認':!A.bankIdentity(b,data.settings)?'取引番号・残高なし：自動統合不可':'証拠キーあり'])];
 case'cash':return [['cashTxnId','日付','区分','分類','摘要','金額','残高','入金ID','支出ID'],...A.cashRows(data.cashLedger||[]).map(c=>[c.cashTxnId,c.date,c.type,c.category,c.description,c.amount,c.runningBalance,c.linkedPaymentId,c.linkedExpenseId])];default:throw Error('出力形式が不正です。');}}
-root.accountingExport=guard(kind=>{if(!isAdmin())return;const text=A.csv(exportRows(kind)),url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=kind+'_'+(kind==='receivables'?receivableView.asOf:todayISO())+'.csv';a.hidden=true;document.body.append(a);try{a.click();}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}});
+root.accountingExport=guard(kind=>{if(!isAdmin())return;const text=A.csv(exportRows(kind)),url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=kind+'_'+(kind==='salesRegister'?registerView.asOf:todayISO())+'.csv';a.hidden=true;document.body.append(a);try{a.click();}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}});
 root.exportBackup=function(){if(!enabled())return old.exportBackup();if(!isAdmin())return;const sync=B().getSync(),blob=new Blob([JSON.stringify({schemaVersion:3,exportedAt:new Date().toISOString(),records:sync.getRows(),pending:sync.getQueue()},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='tsukinowa-accounting-backup_'+todayISO()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 root.exportDecisionCsv=function(){root.accountingExport('monthly');};
 root.TsukinowaAccountingUI.exportRows=exportRows;
@@ -229,8 +242,12 @@ document.addEventListener('DOMContentLoaded',()=>{
  el('pageBank').querySelector('.biz-title .biz-muted').textContent='銀行CSVを実収支の証拠として照合します。確認済みルールの唯一一致は自動処理し、例外だけ確認します。利息は受取利息、デビット還元は雑収入に分類します。Stripeは入金元を確認し、明細未配分は未照合で保持します。';
  el('pageBank').append(section('歴史銀行明細の重複確認（管理者・1件ずつ）','<p>現在、正式庫は監査・バックアップのみ。取消・復元は無効です。同日同額は候補のみ。確認済み口座別名と強い取引証拠、関連なしでも、このリリースでは取消できません。GMO あおぞらの原記録は保持します。既存の取消済み記録も復元できません。</p><button class="biz-btn" onclick="accountingDuplicateBackup()">最新の全業務記録・監査履歴をバックアップ</button><p id="bankDuplicateStatus" role="status"></p><div id="bankDuplicateReview"></div>'));
  const bankOptions=document.createElement('div');bankOptions.className='biz-field span2';bankOptions.innerHTML=field('口座名（別名は確認済みルールで統一）','bankAccountName','text','value="メイン口座"')+'<p class="biz-muted">UTF-8 / Shift_JIS。日付・摘要・入金・出金の列が必要です。信頼済み名称・唯一の全額一致は取込時に自動照合。その他は要確認。手入力の入金日は銀行証拠ではありません。</p><p id="bankImportStatus" role="status"></p><button class="biz-btn" onclick="accountingExport(\'bank\')">銀行照合結果CSV</button>';el('bankFile').parentElement.before(bankOptions);
- el('pageSales').append(section('未収一覧',field('基準日','receivableAsOf','date')+'<button class="biz-btn" onclick="renderSales()">基準日で表示</button><button class="biz-btn" onclick="accountingExport(\'receivables\')">未収金CSV</button><div id="receivableRows"></div>'));
- for(const id of ['cashAdjustDate','receivableAsOf'])el(id).value=todayISO();
- el('receivableAsOf').addEventListener('change',guard(renderReceivables));
+ el('cashAdjustDate').value=todayISO();
+ el('salesRegisterTable').addEventListener('click',e=>{
+  const payment=e.target.closest('[data-sale-payment]'),detail=e.target.closest('[data-sale-detail]');
+  if(payment){const sale=registerView.sales[Number(payment.dataset.salePayment)];if(sale)root.selectSaleForPayment(sale.id);}
+  if(detail){const sale=registerView.sales[Number(detail.dataset.saleDetail)];if(!sale)return;const ps=A.unique(registerData().payments||[]).filter(p=>A.live(p)&&p.saleId===sale.id);el('salesDetails').innerHTML='<h3>'+esc(sale.customer)+' / '+esc(sale.salesDate)+'</h3><p>'+esc(sale.content)+'</p>'+table(['入金日','入金額','確認状態'],ps.map(p=>'<tr>'+[p.paymentDate||p.date||'',money(p.amount),p.confirmation||''].map(cell).join('')+'</tr>').join(''))+'<button class="biz-btn" id="closeSalesDetails">閉じる</button>';el('salesDetails').hidden=false;el('closeSalesDetails').onclick=()=>el('salesDetails').hidden=true;}
+ });
+ root.renderSales();
 });
 })(window);

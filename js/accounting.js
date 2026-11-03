@@ -29,17 +29,21 @@ function ledger(sales,payments,asOf='9999-12-31'){
  return {...s,salesDate:s.salesDate||s.saleDate,saleDate:s.salesDate||s.saleDate,paid,outstanding,lastPaymentDate,status:outstanding<0||s.reviewRequired||s.accountingReviewRequired?'要確認':outstanding===0?'入金済':paid>0?'一部入金':'未入金'};});
  return {sales:rows,payments:effectivePayments};
 }
-function salesRows(sales,payments,month=''){return ledger(sales,payments).sales.filter(s=>!s.receivableOnly&&(!month||s.salesDate.slice(0,7)===month));}
+// One immutable business row per sale; payment dates never determine revenue membership.
+function salesRegister(data,period,asOf,descending=false){
+ date(asOf);
+ const documents=unique(data.documents||[]).filter(d=>live(d)&&d.confirmed===true);
+ return receivables([...(data.sales||[]),...(data.receivables||[])],data.payments||[],asOf)
+ .filter(s=>period.includes(s.salesDate))
+ .map(s=>{
+  const linked=documents.filter(d=>d.saleId===s.id||d.snapshot?.saleId===s.id||d.receivableId===s.id||!!s.documentId&&(d.id===s.documentId||d.documentId===s.documentId));
+  const dates=types=>linked.filter(d=>types.includes(d.docType)).map(d=>d.issueDate||d.invoiceDate||d.snapshot?.issueDate||d.snapshot?.invoiceDate||'').filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)&&v<=asOf).sort();
+  const invoiceDates=dates(['invoice','onoda']);
+  return {...s,invoiceIssueDate:invoiceDates.at(-1)||s.invoiceDate||'',receiptIssueDate:dates(['receipt']).at(-1)||'',ageDays:s.invoiceDate?s.ageDays:''};
+ }).sort((a,b)=>(descending?-1:1)*a.salesDate.localeCompare(b.salesDate)||String(a.id).localeCompare(String(b.id)));
+}
 function receivables(sales,payments,asOf=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Tokyo'})){
  return ledger(sales,payments,asOf).sales.map(s=>{const ageDays=s.invoiceDate?Math.max(0,Math.floor((Date.parse(asOf)-Date.parse(s.invoiceDate))/86400000)):0;return {...s,ageDays,status:!Number.isFinite(ageDays)?'要確認':s.status};});
-}
-// Read-only CSV projection; source fields and accounting algorithms are untouched.
-function salesPaymentExport(sales,payments,p){
- const all=ledger(sales,payments,p.end),map=new Map(all.sales.map(s=>[s.id,s])),rows=[];
- const base=s=>s?[s.id,s.salesDate,s.customer,s.content,s.amount,s.invoiceDate,s.paid,s.outstanding,s.status,s.lastPaymentDate]:['','','','','','','','','要確認 / 売上リンクなし',''];
- for(const s of all.sales)if(!s.receivableOnly&&p.includes(s.salesDate))rows.push([...base(s),'','','売上',s.salesDate,amount(s),'',0,'',p.start,p.end,'']);
- for(const v of unique(payments.filter(live)))if(p.includes(v.paymentDate||v.date)){const c=paymentChannel(v);rows.push([...base(map.get(v.saleId)||{id:v.saleId,status:'要確認 / 売上リンクなし'}),c.channel,c.platformName,'入金',v.paymentDate||v.date,0,v.id||v.paymentId,confirmed(v)?amount(v):0,v.confirmation||'未確認',p.start,p.end,amount(v)]);}
- return [['売上ID','売上日','顧客','内容','請求額','請求日','入金済','未収','状態','最終入金日','入金経路','プラットフォーム名','取引区分','取引日','売上（期間内）','入金ID','入金額（期間内）','確認状態','期間開始','期間終了','入金原額（未確認を含む）'],...rows.sort((a,b)=>a[13].localeCompare(b[13]))];
 }
 function supplierBalance(s,txs,asOf='9999-12-31'){return (s.openingDate<=asOf?Number(s.openingBalance)||0:0)+txs.filter(t=>t.supplierId===s.supplierId&&t.date<=asOf).reduce((n,t)=>n+delta(t),0);}
 function periodFilter({month,year,start,end}={}){if(year!==undefined){year=Number(year);if(!Number.isInteger(year)||year<2000||year>9998)throw Error('年度が不正です。');start=year+'-10-01';end=(year+1)+'-09-30';}else if(month){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(month))throw Error('対象月を指定してください。');start=month+'-01';end=new Date(Date.UTC(+month.slice(0,4),+month.slice(5),0)).toISOString().slice(0,10);}start=date(start);end=date(end);if(start>end)throw Error('期間の開始・終了を確認してください。');return {start,end,includes:value=>typeof value==='string'&&value>=start&&value<=end};}
@@ -196,5 +200,5 @@ function bankEvidence(p,data){return (data.bankTransactions||[]).some(b=>live(b)
 const knownSupplierAdvance=b=>b?.bankTransactionDate==='2026-10-13'&&b.outgoing===1000000&&/東鵬/.test(b.description||'');
 function bankMatch(bank,data){if(!live(bank))return {status:'取消済',candidates:[]};if(['照合済','除外'].includes(bank.status))return {status:bank.status,candidates:[]};if(bank.outgoing)return expenseMatch(bank,data);const candidates=suggestions(bank,data);return {status:candidates.length?'要確認':'未一致',candidates};}
 function csv(rows){const cell=v=>'"'+(typeof v==='number'?String(v):String(v??'').replace(/^[\s]*[=+@-]/,"'$&")).replace(/"/g,'""')+'"';return '\ufeff'+rows.map(r=>r.map(cell).join(',')).join('\r\n');}
-return {salesPaymentExport,platformBank,bankCashback,platformPayments,knownSupplierAdvance,expenseBankEligible,bankCancellationReview,creditExpense,cardExpenses,bankAccountKey,bankIdentity,bankDuplicate,bankSpecial,autoBankTarget,bankEvidence,expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,salesRows,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
+return {salesRegister,platformBank,bankCashback,platformPayments,knownSupplierAdvance,expenseBankEligible,bankCancellationReview,creditExpense,cardExpenses,bankAccountKey,bankIdentity,bankDuplicate,bankSpecial,autoBankTarget,bankEvidence,expenseStatus,LEDGER_HEADERS,ledgerCells,classificationKey,classifyExpense,incomingScore,periodFilter,aggregate,ledgerRows,settlementExport,bankMatch,bankMatchScore,nameMatch,METHODS,expenseInput,expenseKey,expensePreview,bankExpense,cardSettlement,expenseMatch,COLLECTIONS,CATEGORIES,paymentChannel,paymentChannels,live,confirmed,unique,ledger,date,money,delta,cashRows,receivables,supplierBalance,monthly,parseCSV,parseBank,suggestions,csv};
 });
