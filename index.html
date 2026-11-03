@@ -1162,6 +1162,24 @@ body{padding-top:72px}
 @media(max-width:600px){#pageBank .bank-import .biz-form-grid{grid-template-columns:1fr}}
 </style>
 
+<style id="estimateHistoryStyles">
+/* Keep history metadata and actions intact; only the summary column wraps. */
+.estimate-history{min-width:1200px;table-layout:fixed}
+.estimate-history th:nth-child(1){width:110px}
+.estimate-history th:nth-child(2){width:170px}
+.estimate-history th:nth-child(4){width:110px}
+.estimate-history th:nth-child(5){width:130px}
+.estimate-history th:nth-child(6){width:110px}
+.estimate-history th:last-child{width:360px}
+.estimate-history td:not(:nth-child(3)),.estimate-history th{white-space:nowrap}
+.estimate-history td:nth-child(2){white-space:normal;overflow-wrap:anywhere}
+.estimate-history td:nth-child(3){overflow-wrap:anywhere}
+.estimate-history .biz-actions{flex-wrap:nowrap}
+.estimate-history .biz-btn{flex-shrink:0;white-space:nowrap}
+.biz-sort{border:0;padding:0;background:none;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}
+.biz-sort:focus-visible{outline:2px solid #ad8b47;outline-offset:3px}
+</style>
+
 <style id="businessVisualBaseline">
 /* 見積履歴 is the source: 13px body, 11px headers, 10px 9px cells.
    Shared screen controls cover editor/search/filter and dynamically created dialogs. */
@@ -1261,7 +1279,7 @@ dialog h2{font-size:15px}
 <div id="pageEstimates" class="biz-page app-page">
  <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">見積だけで終わったお客様もここには残します。未成約の見積は正式案件・売上には入りません。</div></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>保存済み見積</h2><div class="biz-actions"><input id="estimateSearch" placeholder="客户名・地区・金额" oninput="renderEstimates()"></div></div>
-  <div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>見積日</th><th>客户</th><th>項目分類 / 内容摘要</th><th class="biz-money">金额</th><th>状态</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
+  <div class="biz-table-wrap"><table class="biz-table estimate-history"><thead><tr><th aria-sort="descending" id="estimateDateHeader"><button class="biz-sort" onclick="bizToggleEstimateDateSort()">見積日 <span id="estimateDateDirection">▼</span></button></th><th>客户</th><th>項目分類 / 内容摘要</th><th class="biz-money">金额</th><th>状态</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
  </div>
 </div>
 
@@ -3541,8 +3559,16 @@ function bizConvertEstimateRecordToInvoice(id){
 }
 function bizRegisterEstimatePayment(id){const sale=bizState.sales.find(s=>s.estimateId===id);if(sale)return selectSaleForPayment(sale.id);alert('対象請求書を正式保存してから入金を登録してください。見積だけでは売上を作成しません。');}
 
+let bizEstimateDateDescending=true;
+function bizToggleEstimateDateSort(){bizEstimateDateDescending=!bizEstimateDateDescending;renderEstimates()}
+function bizEstimateCreatedTime(value){
+  if(typeof value?.seconds==='number')return BigInt(value.seconds)*1000000000n+BigInt(value.nanoseconds||0);
+  const time=Date.parse(value||'');return Number.isFinite(time)?BigInt(time)*1000000n:0n;
+}
 function renderEstimates(){
-  bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.map(r=>{const snapshot=r.snapshot||loadConfirmedHistory().find(h=>h.historyId===r.historyId);return {...r,content:TsukinowaBusiness.rawContent(snapshot||r),projectCategory:TsukinowaBusiness.projectCategory({...r,snapshot})};}).filter(r=>!q||[r.customer,r.projectCategory,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q));
+  bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.map(r=>{const snapshot=r.snapshot||loadConfirmedHistory().find(h=>h.historyId===r.historyId);return {...r,content:TsukinowaBusiness.rawContent(snapshot||r),projectCategory:TsukinowaBusiness.projectCategory({...r,snapshot}),historyCreatedAt:snapshot?.savedAt};}).filter(r=>!q||[r.customer,r.projectCategory,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q)).sort((a,b)=>(bizEstimateDateDescending?-1:1)*String(a.date||'').localeCompare(String(b.date||''))||Number(bizEstimateCreatedTime(b.displayCreatedAt||b.createdAt||b.historyCreatedAt)-bizEstimateCreatedTime(a.displayCreatedAt||a.createdAt||a.historyCreatedAt))||String(a.id||'').localeCompare(String(b.id||'')));
+  document.getElementById('estimateDateHeader')?.setAttribute('aria-sort',bizEstimateDateDescending?'descending':'ascending');
+  const direction=document.getElementById('estimateDateDirection');if(direction)direction.textContent=bizEstimateDateDescending?'▼':'▲';
   const el=document.getElementById('estimateRows');if(!el)return;
   el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${bizEsc(r.status||'見積済')}</span></td><td>${bizEsc(r.workDate||'—')}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''}<button class="biz-btn" onclick="bizRegisterEstimatePayment('${r.id}')">入金</button><button class="biz-btn primary" onclick="${String(r.status||'').includes('受注')?`bizConvertEstimateRecordToInvoice('${r.id}')`:`bizAcceptEstimate('${r.id}',true)`}">請求書へ</button></div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
 }
