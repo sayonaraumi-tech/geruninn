@@ -24,6 +24,10 @@ module.exports=async function assertSharedTheme(page,pageId){
   return{navFits,titleClear:target.querySelector('.biz-title').getBoundingClientRect().top>=bar.bottom,targetStyles,referenceStyles,targetButton,baselineButton,background:getComputedStyle(document.body).backgroundColor,nav:nav.backgroundColor,selected:selected.backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth};
  },pageId);
  for(const key of ['page','title','th','table']){assert.equal(styles.targetStyles[key].fontFamily,styles.referenceStyles[key].fontFamily);}
+ // History needs a wider desktop container for its intact action group.
+ assert.equal(styles.referenceStyles.page.maxWidth,'1440px');
+ assert.equal(styles.targetStyles.page.maxWidth,pageId==='pageEstimates'?'1440px':'1180px');
+ delete styles.targetStyles.page.maxWidth;delete styles.referenceStyles.page.maxWidth;
  assert.deepEqual(styles.targetStyles,styles.referenceStyles,pageId+' must share 見積履歴 typography and containers');
  for(const button of [...styles.targetButton,...styles.baselineButton])delete button.fontFamily;
  assert.deepEqual(styles.targetButton,styles.baselineButton,pageId+' ordinary and gold primary buttons');
