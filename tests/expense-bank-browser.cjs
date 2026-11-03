@@ -28,7 +28,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  assert.equal((await snapshot()).cash.length,1);
  const csv='日付,科目,支払方法,金額,取引先,内容・備考\n2026-10-02,旅費交通費,現金,100,手工,現金\n2026-10-02,消耗品費,法人銀行デビット,6060,ビックカメラ,備品\n2026-10-02,交通費,代表者立替（交通系IC）,200,駅,電車\n2026-10-02,通信費,銀行振込,1000,電話会社,10月\n2026-10-02,地代家賃,口座振替,2000,家主,家賃\n2026-10-02,その他,銀行振込,3000,候補店,候補';
  await desktop.locator('#expenseFile').setInputFiles({name:'expenses.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/6件.*12,260.*重複候補 1件.*エラー 0件/);
- await desktop.locator('#expenseImportCommit').click();await idle();assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
+ await desktop.locator('#expenseImportCommit').click();await desktop.waitForFunction(()=>document.getElementById('expenseImportPreview').textContent==='5件を同期キューに保存しました。重複はスキップします。');await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.length===6);assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
  await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/重複候補 6件/);assert(await desktop.locator('#expenseImportCommit').isDisabled());
  assert.equal(await desktop.locator('#pageExpenses > .biz-section').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
  await desktop.evaluate(()=>bizSwitchPage('bank'));
