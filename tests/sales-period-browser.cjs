@@ -29,6 +29,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.locator('[data-sale-detail="0"]').click();assert(await page.locator('#salesDetails').isVisible());await page.locator('#closeSalesDetails').click();assert(!await page.locator('#salesDetails').isVisible());
  if(process.env.PREVIEW_DIR){await page.evaluate(()=>{document.getElementById('salesPeriodMode').value='custom';document.getElementById('receivableAsOf').value='2026-10-31';renderSales();document.querySelector('#salesRegisterTable .biz-table-wrap').scrollLeft=0;});await page.screenshot({path:path.join(process.env.PREVIEW_DIR,'sales-register-'+width+'.png'),fullPage:true});}
  await require('./visual-baseline.cjs')(page,width);
+ if(width===1280)await require('./estimate-history-layout.cjs')(page);
  await page.locator('#receivableAsOf').fill('2026-01-01');await page.locator('#receivableAsOf').dispatchEvent('change');
  const [empty]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:'CSV出力',exact:true}).click()]);assert.equal(require('../js/accounting').parseCSV(fs.readFileSync(await empty.path(),'utf8').slice(1)).length,1);
  assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));assert.deepEqual(errors,[]);console.log('PASS unified register / cutoff / sort / month fiscal custom / UTF8 BOM CRLF / real CSV download / detail / '+width);await page.close();}}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});
