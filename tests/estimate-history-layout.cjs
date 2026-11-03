@@ -20,6 +20,7 @@ module.exports=async(page)=>{
   }));
   for(const m of metrics){assert.equal(m.buttons,4);assert.equal(new Set(m.tops).size,1);assert(m.nowrap);assert(m.fit);assert.equal(m.font,'13px');assert(m.height<90);}
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+  if(width===1920)assert(await page.locator('#pageEstimates .biz-table-wrap').evaluate(e=>e.scrollWidth<=e.clientWidth));
   if(width===390)assert(await page.locator('#pageEstimates .biz-table-wrap').evaluate(e=>e.scrollWidth>e.clientWidth));
   await page.locator('#estimateSearch').fill('株式会社');assert.equal((await dates())[0],'2026-11-03');assert.match(await page.locator('#estimateRows tr').first().innerHTML(),/newer/);
   await page.getByRole('button',{name:'見積日'}).click();assert.equal((await dates())[0],'2026-10-03');assert.equal(await page.locator('#estimateDateHeader').getAttribute('aria-sort'),'ascending');
