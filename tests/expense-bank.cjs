@@ -12,6 +12,19 @@ const A=require('../js/accounting');
 
 const expense=(over={})=>({expenseDate:'2026-10-02',category:'旅費交通費',paymentMethod:'銀行振込',amount:6060,vendor:'ビックカメラ',description:'備品',...over});
 const bank=(over={})=>({bankTxnId:'bank-one',bankTransactionDate:'2026-10-04',incoming:0,outgoing:6060,amount:6060,description:'ビックカメラ',bankAccount:'メイン口座',...over});
+
+test('concurrent CSV and bank-created expense cannot book the same purchase twice',async()=>{
+ const h=await harness(),e=expense({expenseDate:'2026-10-04'});
+ await h.execute({type:'importBank',bank:bank()});
+ const results=await Promise.allSettled([
+  h.execute({type:'saveExpense',expense:e,skipDuplicate:true,expectedRevision:0}),
+  h.execute({type:'expenseFromBank',bankTxnId:'bank-one',expense:e,expectedRevision:1})
+ ]);
+ assert(results.some(r=>r.status==='fulfilled'));
+ assert.equal(h.list('expenses').length,1);
+ assert.equal(A.monthly({expenses:h.list('expenses').map(r=>r.payload)},'2026-10').expenseTotal,6060);
+ assert.equal(h.list('cashLedger').length,0);
+});
 test('CSV format, BOM, quoted commas/newlines, validation and all six duplicate fields',()=>{
  const csv='\ufeff日付,科目,支払方法,金額,取引先,内容・備考\r\n2026/10/02,旅費交通費,銀行振込,"6,060",ビックカメラ,"備品\n購入"\r\n';
  const p=A.expensePreview(csv);assert.equal(p.count,1);assert.equal(p.total,6060);assert.deepEqual(p.errors,[]);assert.equal(p.records[0].expense.description,'備品\n購入');
@@ -62,4 +75,26 @@ test('2026-10-24 Bic Camera debit reuses the legacy corporate expense and safely
  await h.execute({type:'bankMatch',bankTxnId:b.bankTxnId,targetType:'expense',targetId:'bic-existing',expectedRevision:1});
  assert.equal((await h.execute(queued)).unchanged,true);assert.equal((await h.execute(queued)).unchanged,true);assert.equal(h.list('expenses').length,1);assert.equal(h.list('cashLedger').length,0);
  assert.equal(h.list('expenses')[0].payload.expenseDate,'2026-10-24');assert.equal(h.list('expenses')[0].payload.paymentMethod,'法人カード決済');
+});
+
+
+test('lost acknowledgement and browser restart replay the persisted expense command without a second cost or cash row',async()=>{
+ const h=await harness(),{createSync}=require('../js/business-sync'),values=new Map();let online=false,lost=true;
+ const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},transact=h.client.transact;
+ const client={...h.client,transact:async(...args)=>{const result=await transact(...args);if(lost){lost=false;throw Object.assign(Error('ack lost'),{code:'unavailable'});}return result;}};
+ const command={type:'saveExpense',operationId:'offline-expense',expenseId:'cash-purchase',expense:expense({paymentMethod:'現金'}),expectedRevision:0};
+ let sync=createSync({client,storage,online:()=>online});sync.enqueue(command);sync.enqueue(command);assert.equal(sync.getQueue().length,1);
+ online=true;await sync.flush();assert.equal(h.list('expenses').length,1);assert.equal(h.list('cashLedger').length,1);assert.equal(sync.getQueue().length,1);
+ const before=sync.getQueue();sync.stop();sync=createSync({client,storage,online:()=>online});assert.deepEqual(sync.getQueue(),before);await sync.flush();
+ assert.equal(sync.getQueue().length,0);assert.equal(h.list('expenses').length,1);assert.equal(h.list('cashLedger').length,1);assert.equal(h.list('expenses')[0].revision,1);
+});
+
+
+test('concurrent automatic bank fee and CSV import count one expense',async()=>{
+ const h=await harness();await h.execute({type:'saveBankRule',ruleType:'bankSpecialPolicy',key:'支払手数料'});
+ const e=expense({expenseDate:'2026-10-04',category:'支払手数料',vendor:'メイン口座',description:'振込手数料'});
+ const b=bank({description:'振込手数料',externalId:'fee-proof'});
+ const results=await Promise.allSettled([h.execute({type:'saveExpense',expense:e,skipDuplicate:true,expectedRevision:0}),h.execute({type:'importBank',bank:b})]);
+ assert(results.every(r=>r.status==='fulfilled'));
+ assert.equal(h.list('expenses').length,1);assert.equal(h.list('cashLedger').length,0);
 });

@@ -144,7 +144,7 @@ async function handle(cmd,context){
   if(category&&policies.length===1&&identity){
    if(category==='受取利息')await write('bankTransactions',b.bankTxnId,{...b,status:'照合済',matchType:'bankIncome',matchId:b.bankTxnId,category,taxTreatment:'要確認',confirmedBy:who.uid,deletedAt:null},'bank match confirm');
    else if(!(data.expenses||[]).some(e=>A.live(e)&&e.amount===b.outgoing&&e.expenseDate===b.bankTransactionDate)){
-    const expenseId=await stable('expense_bank',b.bankTxnId);await handle({type:'saveExpense',expenseId,expense:{expenseDate:b.bankTransactionDate,category,vendor:b.bankAccount,description:b.description,amount:b.outgoing,paymentMethod:'銀行振込',bankAccount:b.bankAccount},expectedRevision:0},context);
+    const {expenseId}=await handle({type:'saveExpense',skipDuplicate:true,expense:{expenseDate:b.bankTransactionDate,category,vendor:b.bankAccount,description:b.description,amount:b.outgoing,paymentMethod:'銀行振込',bankAccount:b.bankAccount},expectedRevision:0},context);
     await handle({type:'bankMatch',bankTxnId:b.bankTxnId,targetType:'expense',targetId:expenseId,expectedRevision:1},context);
    }
   }
@@ -162,7 +162,10 @@ async function handle(cmd,context){
   const row=linkedBank;if(!row||!A.live(row.payload)||['照合済','除外'].includes(row.payload.status)||!row.payload.outgoing||A.cardSettlement(row.payload))throw Error('未一致の銀行出金を選択してください。');
   const b=row.payload,e=A.expenseInput(cmd.expense);if(e.amount!==b.outgoing||e.expenseDate!==b.bankTransactionDate||!A.bankExpense(e)||!e.vendor||!e.description)throw Error('金額・日付・科目・取引先・内容・銀行支払方法を確認してください。');
   const existing=[];for(const seed of expenseSeed){const row=await read('expenses',seed.id);if(row)existing.push({...row.payload,id:seed.id});}if(existing.some(x=>A.live(x)&&(A.creditExpense(x)||x.paymentMethod==='法人カード決済')&&x.amount===b.outgoing&&Math.abs(Date.parse(b.bankTransactionDate)-Date.parse(x.expenseDate))/86400000<=120)||A.expenseMatch(b,{expenses:existing}).candidates.length||existing.some(x=>{try{return A.live(x)&&A.expenseKey(x)===A.expenseKey(e);}catch(_){return false;}}))throw Error('既存の支出候補があります。銀行照合から確認してください。');
-  const expenseId=await stable('expense_bank',cmd.bankTxnId);if(await read('expenses',expenseId))throw Error('この銀行明細の支出は登録済みです。');
+  // Retain the historical bank ID check; new records share the CSV/manual
+  // identity so a concurrent import must retry rather than create a second cost.
+  const legacyId=await stable('expense_bank',cmd.bankTxnId);if(await read('expenses',legacyId))throw Error('この銀行明細の支出は登録済みです。');
+  const expenseId=await stable('expense_csv',A.expenseKey(e));if(await read('expenses',expenseId))throw Error('既存の支出候補があります。銀行照合から確認してください。');
   await handle({type:'saveExpense',expenseId,expense:{...e,bankAccount:b.bankAccount},learnCategory:cmd.learnCategory,expectedRevision:0},context);
   return handle({type:'bankMatch',bankTxnId:cmd.bankTxnId,targetType:'expense',targetId:expenseId,expectedRevision:cmd.expectedRevision},context);
  }

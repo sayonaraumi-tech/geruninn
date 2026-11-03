@@ -281,9 +281,6 @@ body {
   opacity: 0.9;
 }
 
-/* 領収書模式不显示明细表 */
-.invoice.receipt-mode .items-classic { display: none; }
-
 /* 見積書：印章在右中部，跟請求一样 */
 .seal-bottom {
   display: none;
@@ -1302,7 +1299,7 @@ dialog h2{font-size:15px}
 <div id="pageExpenses" class="biz-page app-page">
  <div class="biz-title"><div><h1>支出・現金</h1><div class="biz-muted">材料費・交通費は案件に無理に紐付けません。</div></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>支出登録</h2></div><div class="biz-form-grid"><div class="biz-field"><label>日付</label><input type="date" id="expDate"></div><div class="biz-field"><label>科目</label><select id="expCategory"><option>材料仕入</option><option>旅費交通費</option><option>外注費</option><option>給与</option><option>地代家賃</option><option>車両費</option><option>通信費</option><option>消耗品費</option><option>租税公課</option><option>その他</option></select></div><div class="biz-field"><label>支払方法</label><select id="expMethod"><option>現金</option><option>代表者立替（交通系IC）</option><option>法人カード決済</option><option>銀行振込</option><option>口座振替</option><option>その他</option></select></div><div class="biz-field"><label>金額</label><input type="number" id="expAmount"></div><div class="biz-field span2"><label>取引先</label><input id="expVendor"></div><div class="biz-field span2"><label>内容・備考</label><input id="expMemo" placeholder="駐車場、ゴミ処理、10月材料前払 等"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="addExpense()">支出登録</button></div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>支出台帳</h2><input type="month" id="expenseMonth" onchange="renderExpenses()"></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>科目</th><th>取引先</th><th>内容</th><th>方法</th><th class="biz-money">金額</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
+ <div class="biz-section"><div class="biz-section-head"><h2>支出台帳</h2><button type="button" class="biz-btn" id="expenseCsvExport" onclick="accountingExport('expenses')">CSV出力</button><input type="month" id="expenseMonth" onchange="renderExpenses()"></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>科目</th><th>取引先</th><th>内容</th><th>方法</th><th class="biz-money">金額</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
 </div>
 
 
@@ -3062,7 +3059,6 @@ function autoSuggestBank(){bizState.bank.forEach(b=>{if(b.matched)return;if(b.in
 function matchBankSale(bankId,saleId){const b=bizState.bank.find(x=>x.id===bankId),s=bizState.sales.find(x=>x.id===saleId);if(!b||!s)return;bizState.payments.push({id:bizId('pay'),saleId:s.id,date:b.date,amount:b.incoming,method:'GMO銀行',memo:'銀行CSV照合',bankId:b.id,createdAt:new Date().toISOString()});b.matched=true;b.matchType='sale';b.matchId=s.id;bizAudit('銀行入金照合',`${s.customer} ${b.incoming}円`);bizPersist();bizRefreshAll()}
 function renderBank(){autoSuggestBank();document.getElementById('bankRows').innerHTML=bizState.bank.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>{let sug='';if(b.suggestSaleId){const s=bizState.sales.find(x=>x.id===b.suggestSaleId);if(s)sug=`${bizEsc(s.customer)} ${bizMoney(s.amount)} <button class="biz-btn ok" onclick="matchBankSale('${b.id}','${s.id}')">入金確定</button>`}return `<tr><td>${bizEsc(b.date)}</td><td>${bizEsc(b.desc)}</td><td class="biz-money">${b.incoming?bizMoney(b.incoming):''}</td><td class="biz-money">${b.outgoing?bizMoney(b.outgoing):''}</td><td>${sug||'<span class="biz-muted">候補なし</span>'}</td><td>${b.matched?'<span class="biz-badge ok">照合済</span>':'<span class="biz-badge warn">未照合</span>'}</td></tr>`}).join('')||'<tr><td colspan="6" class="biz-muted">銀行CSVはまだ取り込まれていません。</td></tr>'}
 function downloadText(name,text,type='text/csv;charset=utf-8'){const blob=new Blob(['\uFEFF'+text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function csvCell(v){return '"'+String(v??'').replace(/"/g,'""')+'"'}
 function exportBackup(){downloadText('月輪合同会社_全データ_'+todayISO()+'.json',JSON.stringify({version:2,mode:'production',exportedAt:new Date().toISOString(),state:bizState},null,2),'application/json;charset=utf-8')}
 // Google Calendar 予備機能：ICSファイルをローカル読込
 function icsUnescape(v){return String(v||'').replace(/\\n/gi,'\n').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\')}
@@ -3236,7 +3232,6 @@ async function importOnodaFromCalendar(options={}){
 }
 async function importBackup(){const f=document.getElementById('backupFile')?.files?.[0];if(!f)return alert('バックアップJSONを選択してください。');if(!confirm('現在の業務データをバックアップ内容で置き換えます。よろしいですか？'))return;try{const j=JSON.parse(await f.text());if(!j.state||!Array.isArray(j.state.sales))throw new Error('対応するバックアップ形式ではありません。');bizState=Object.assign({sales:[],payments:[],expenses:[],bank:[],calendar:[],audit:[]},j.state);localStorage.setItem(BIZ_KEY,JSON.stringify(bizState));bizAudit('バックアップ復元',f.name);bizPersist();bizRefreshAll();alert('バックアップを復元しました。')}catch(e){alert('復元に失敗しました: '+e.message)}}
 function fillSettings(){}
-function saveBizSettings(){alert('Google Calendar API は接続済みです。業務データは現在このブラウザにローカル保存され、Firestore 接続後にスマホ・PCで共有されます。')}
 function bizCloudLogout(){}
 function tryAutoCloud(){}
 document.addEventListener('DOMContentLoaded',()=>{bizLoad();document.querySelectorAll('#bizNav button').forEach(b=>b.addEventListener('click',()=>bizSwitchPage(b.dataset.page)));bizRefreshAll();tryAutoCloud();});
@@ -3534,7 +3529,6 @@ function bizLoadDocFromEvent(e,type){
   recalc();closeEventModal();
 }
 function bizCreateDocFromCurrentEvent(type){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e)bizLoadDocFromEvent(e,type)}
-function bizCreateDocFromEvent(id,type){const e=bizState.calendar.find(x=>x.id===id);if(e)bizLoadDocFromEvent(e,type)}
 function bizEstimateFromHistory(id){
   bizEnsureV5State();const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
   bizCurrentEstimateId=id;bizCurrentCalendarId=r.calendarEventId||'';bizCurrentProjectId=r.projectId||'';
