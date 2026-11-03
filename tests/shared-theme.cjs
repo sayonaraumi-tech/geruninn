@@ -23,7 +23,7 @@ module.exports=async function assertSharedTheme(page,pageId){
   if(before!==null&&JSON.stringify([...testRecords])!==before)throw Error('Theme inspection must not write records');
   return{navFits,titleClear:target.querySelector('.biz-title').getBoundingClientRect().top>=bar.bottom,targetStyles,referenceStyles,targetButton,baselineButton,background:getComputedStyle(document.body).backgroundColor,nav:nav.backgroundColor,selected:selected.backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth};
  },pageId);
- for(const key of ['page','title','th','table']){assert.match(styles.targetStyles[key].fontFamily,/Arial/);delete styles.targetStyles[key].fontFamily;delete styles.referenceStyles[key].fontFamily;}
+ for(const key of ['page','title','th','table']){assert.equal(styles.targetStyles[key].fontFamily,styles.referenceStyles[key].fontFamily);}
  assert.deepEqual(styles.targetStyles,styles.referenceStyles,pageId+' must share 見積履歴 typography and containers');
  for(const button of [...styles.targetButton,...styles.baselineButton])delete button.fontFamily;
  assert.deepEqual(styles.targetButton,styles.baselineButton,pageId+' ordinary and gold primary buttons');
