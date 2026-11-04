@@ -1,0 +1,539 @@
+{
+  "base": "60cdcbfcb19aef91839f74656e033b047a2bfc60",
+  "widths": [
+    390,
+    1280
+  ],
+  "configurations": 46,
+  "computedStyleAndVisibleDomEqual": 46,
+  "pixelIdentical": 42,
+  "differences": "42/46 screenshot pairs are pixel-identical. Four contain only 56 differing pixels at rounded container edges, with equal visible DOM/bounds/computed styles. No masking was used. Raw difference counts and channel deltas are recorded below; a rasterization difference is an inference from this evidence, not an application behavior change.",
+  "cases": [
+    {
+      "case": "dashboard",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "33ea43fa80ff9d561c56fc64f601fb6b0f3909f54ba9384ae77a4027890e9973",
+      "afterSHA256": "33ea43fa80ff9d561c56fc64f601fb6b0f3909f54ba9384ae77a4027890e9973",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "calendar",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": false,
+      "pixelDiffBox": [
+        10,
+        177,
+        13,
+        436
+      ],
+      "beforeSHA256": "52e4771551d802b76fc281d196a29a5523468599216eefcc0979866771c811e8",
+      "afterSHA256": "92e1753b1e4cd5430415eb909fbc961b84f604daf8ee9d1a0bd92b7988aa02fc",
+      "differentPixels": 29,
+      "maxChannelDelta": 1
+    },
+    {
+      "case": "estimates",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": false,
+      "pixelDiffBox": [
+        377,
+        213,
+        380,
+        393
+      ],
+      "beforeSHA256": "49920a3189bdf08b54329eb9246d485477e736da18e3de9409bee7dbd27d750e",
+      "afterSHA256": "3408184de142ec3ab824b25260bf4b3402a08a345df4984553fa09653836506e",
+      "differentPixels": 19,
+      "maxChannelDelta": 1
+    },
+    {
+      "case": "chohyo",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "d28671ee7ec8bcf82e335f7422811f7805e419edc4cd7738c6fb0786221b7b41",
+      "afterSHA256": "d28671ee7ec8bcf82e335f7422811f7805e419edc4cd7738c6fb0786221b7b41",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "savedDocs",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "c58f74061e0fa3ad0776992401244414938eefdc2458dec2ed26f91c8193b6cb",
+      "afterSHA256": "c58f74061e0fa3ad0776992401244414938eefdc2458dec2ed26f91c8193b6cb",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "sales",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "34ac588867d8b3d17e27c4e617542c837e6badcd50b5006434982b19dde32f80",
+      "afterSHA256": "34ac588867d8b3d17e27c4e617542c837e6badcd50b5006434982b19dde32f80",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "expenses",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "814ff9b2b1da639ca92b1c38d51aba57333456b3668714840c41d36b1df49d88",
+      "afterSHA256": "814ff9b2b1da639ca92b1c38d51aba57333456b3668714840c41d36b1df49d88",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "bank",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "4f44f55fe0605fafdb01890f85f0b297576a6dbbd22c8a5094be32fd65102cfc",
+      "afterSHA256": "4f44f55fe0605fafdb01890f85f0b297576a6dbbd22c8a5094be32fd65102cfc",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "settings",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "f6c39b8c5570af5984f04b0551ed0f7fc4ad167277294892809d60d4024c72ca",
+      "afterSHA256": "f6c39b8c5570af5984f04b0551ed0f7fc4ad167277294892809d60d4024c72ca",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "invoice-2-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "7af1c38e0a9c7b80cc023259baf41e48d8b3c33099dc1cc5b9a8a59efadd5b30",
+      "afterSHA256": "7af1c38e0a9c7b80cc023259baf41e48d8b3c33099dc1cc5b9a8a59efadd5b30",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "invoice-2-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "fd80f15df5d310415e97317be976f39ae4a60f92b79e4e12f1c7f04a6dc0a4db",
+      "afterSHA256": "fd80f15df5d310415e97317be976f39ae4a60f92b79e4e12f1c7f04a6dc0a4db",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "estimate-2-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": false,
+      "pixelDiffBox": [
+        288,
+        14,
+        291,
+        48
+      ],
+      "beforeSHA256": "23971a64ff9d00769cc01efcfa4484e9974f6e065ebb293f1766130638d287bb",
+      "afterSHA256": "9e7586cd0a6f9e2ada7fbbdbe9698032caf64f63d31f861f633d4492e807b1d3",
+      "differentPixels": 4,
+      "maxChannelDelta": 5
+    },
+    {
+      "case": "estimate-2-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "69a546cc2126004a72c3eb506c56052059457cc2d29c020f265d5db41f87b4c0",
+      "afterSHA256": "69a546cc2126004a72c3eb506c56052059457cc2d29c020f265d5db41f87b4c0",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "receipt-2-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "d43761bd184669bf19298058600c1625bcecf23478833e4f43ab5249b1e410b6",
+      "afterSHA256": "d43761bd184669bf19298058600c1625bcecf23478833e4f43ab5249b1e410b6",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "receipt-2-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "c98a862bf418671373880ff9101fe9a71fd3cc0512ac7af488832146f8fb6e0f",
+      "afterSHA256": "c98a862bf418671373880ff9101fe9a71fd3cc0512ac7af488832146f8fb6e0f",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-1-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "78260a8089eb2ad0a91b6e3f849bb3959e2923d9c6516ac7743fbaaa27d0cad0",
+      "afterSHA256": "78260a8089eb2ad0a91b6e3f849bb3959e2923d9c6516ac7743fbaaa27d0cad0",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-1-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "fd021ef5940d5c0f5c16c7e97cdff1f27838bcdffcc5ba7cbcfdf41129b63e98",
+      "afterSHA256": "fd021ef5940d5c0f5c16c7e97cdff1f27838bcdffcc5ba7cbcfdf41129b63e98",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-16-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": false,
+      "pixelDiffBox": [
+        288,
+        14,
+        291,
+        48
+      ],
+      "beforeSHA256": "8479addde1e344a1c3f41d9330747972eda70982251ca4c2b74455dcea31a0e5",
+      "afterSHA256": "52e54f4fa50f9c41004bbaba62c9c369832f6f4433f1d8f3b2be16b0ea07191a",
+      "differentPixels": 4,
+      "maxChannelDelta": 5
+    },
+    {
+      "case": "onoda-16-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "a3f152f4a775e534960d51098f20470046f089ed0c25abb9252d65d3b8bbe3bd",
+      "afterSHA256": "a3f152f4a775e534960d51098f20470046f089ed0c25abb9252d65d3b8bbe3bd",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-17-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "7bf524305625fef3399ff15ed291e8ee6577df63a29e1210a5f12862736b3cee",
+      "afterSHA256": "7bf524305625fef3399ff15ed291e8ee6577df63a29e1210a5f12862736b3cee",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-17-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "c0db7116de389e7b7eb29c571d41abfd230896d40cc39f2642f000d5718a6789",
+      "afterSHA256": "c0db7116de389e7b7eb29c571d41abfd230896d40cc39f2642f000d5718a6789",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-35-screen",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "80466f5fffd3d5f2d95df85ed809ee73de8d8040fa449ff800338d71ca02c5f9",
+      "afterSHA256": "80466f5fffd3d5f2d95df85ed809ee73de8d8040fa449ff800338d71ca02c5f9",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-35-print",
+      "width": 390,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "c3ad2a6737a59590f34809193349daf74998e1402d258cbeda58131a501224fe",
+      "afterSHA256": "c3ad2a6737a59590f34809193349daf74998e1402d258cbeda58131a501224fe",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "dashboard",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "5daef31f09949eb7c81d1a309c16bf7e2aa1c0be3944dc6389a78f0af377b242",
+      "afterSHA256": "5daef31f09949eb7c81d1a309c16bf7e2aa1c0be3944dc6389a78f0af377b242",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "calendar",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "ad6dc739d30e18a735080f345bbb7553100a4643f04b70c44a4e83cd1813f339",
+      "afterSHA256": "ad6dc739d30e18a735080f345bbb7553100a4643f04b70c44a4e83cd1813f339",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "estimates",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "71c17ccd5fe45a491e6033aadbd27dac3252dc2eede8dab672e149e233381970",
+      "afterSHA256": "71c17ccd5fe45a491e6033aadbd27dac3252dc2eede8dab672e149e233381970",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "chohyo",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "a9e95e6c9ff3170843e0f689c658e0c12abdcd0f5ddc72d8712ac699c03c1306",
+      "afterSHA256": "a9e95e6c9ff3170843e0f689c658e0c12abdcd0f5ddc72d8712ac699c03c1306",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "savedDocs",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "6eb30babddafca610a8063addbdcdf6aaa07279478c5dada3f187d5ce142b004",
+      "afterSHA256": "6eb30babddafca610a8063addbdcdf6aaa07279478c5dada3f187d5ce142b004",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "sales",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "fb39a9de743bea57a8647629a0e4eff050f9158a625f6100cef2415b878aa9fb",
+      "afterSHA256": "fb39a9de743bea57a8647629a0e4eff050f9158a625f6100cef2415b878aa9fb",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "expenses",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "84b24788845f939e99c81d56fe31c6fae49bc395d4597008f2c7518163a3d15a",
+      "afterSHA256": "84b24788845f939e99c81d56fe31c6fae49bc395d4597008f2c7518163a3d15a",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "bank",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "1ae49cdba32dd9429720e5cf8a8fc1a875a6f2f4a6c0f35ba9bce462482cefde",
+      "afterSHA256": "1ae49cdba32dd9429720e5cf8a8fc1a875a6f2f4a6c0f35ba9bce462482cefde",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "settings",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "56853f9751a2003f2ad72780bcbd4e0a3e0eb50b03e82af525a324564078045c",
+      "afterSHA256": "56853f9751a2003f2ad72780bcbd4e0a3e0eb50b03e82af525a324564078045c",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "invoice-2-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "a2705d8a375fdab2262eb23019dad04d9b5f60c2e435897ca45503ceefc5486c",
+      "afterSHA256": "a2705d8a375fdab2262eb23019dad04d9b5f60c2e435897ca45503ceefc5486c",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "invoice-2-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "e971c1eca017be830b40e24f2dabef0f1eecfb4ccff2902b964feec9b505bc17",
+      "afterSHA256": "e971c1eca017be830b40e24f2dabef0f1eecfb4ccff2902b964feec9b505bc17",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "estimate-2-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "e7eec9dfb05d46416f69dc2e4a7c886333e6103fddc27e4876f56bd9690c27f2",
+      "afterSHA256": "e7eec9dfb05d46416f69dc2e4a7c886333e6103fddc27e4876f56bd9690c27f2",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "estimate-2-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "d4f1c83902857b5a7914484e96ad104d520812b9bd951abb2b59600a6dfff186",
+      "afterSHA256": "d4f1c83902857b5a7914484e96ad104d520812b9bd951abb2b59600a6dfff186",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "receipt-2-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "10fedb560f036e750fe5483ebd026311d6cafe4b154fef9e3e0df843a5459194",
+      "afterSHA256": "10fedb560f036e750fe5483ebd026311d6cafe4b154fef9e3e0df843a5459194",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "receipt-2-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "5d33e11e3c999222ff5d03034d8f2a5b0a05c9004643e3f89c27eef4da4803d3",
+      "afterSHA256": "5d33e11e3c999222ff5d03034d8f2a5b0a05c9004643e3f89c27eef4da4803d3",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-1-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "732e502f0f0ba5fe10d965dd2f0ac251813ec90e9c0cd4b5a37a10482dd5eb17",
+      "afterSHA256": "732e502f0f0ba5fe10d965dd2f0ac251813ec90e9c0cd4b5a37a10482dd5eb17",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-1-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "61e3fe35bab25125657a00a97b9a4d5e531c7d0cf1c5be38d11b5c1f413a2bfe",
+      "afterSHA256": "61e3fe35bab25125657a00a97b9a4d5e531c7d0cf1c5be38d11b5c1f413a2bfe",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-16-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "d486b0cdb5ba34a42511026253e15498dfbd28d3b26d2713ed905dcd0f81d7bc",
+      "afterSHA256": "d486b0cdb5ba34a42511026253e15498dfbd28d3b26d2713ed905dcd0f81d7bc",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-16-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "7ec9eacadf7cb37a8fdb7434bafe3e3a30997fdb616c013f9a1ec07f9aebbf7f",
+      "afterSHA256": "7ec9eacadf7cb37a8fdb7434bafe3e3a30997fdb616c013f9a1ec07f9aebbf7f",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-17-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "84ee191ea01ff2bc5f9d995ee3b971d20c3e218c9774a82159476396ec2c81fe",
+      "afterSHA256": "84ee191ea01ff2bc5f9d995ee3b971d20c3e218c9774a82159476396ec2c81fe",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-17-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "4d802954e3de62f32e234039e8138df68440798b34dd5695010bee3adfccd85c",
+      "afterSHA256": "4d802954e3de62f32e234039e8138df68440798b34dd5695010bee3adfccd85c",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-35-screen",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "511a076459b3d034ff42e1cca44b54764e08db087448044c341ff94e5d2755bf",
+      "afterSHA256": "511a076459b3d034ff42e1cca44b54764e08db087448044c341ff94e5d2755bf",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    },
+    {
+      "case": "onoda-35-print",
+      "width": 1280,
+      "styleEqual": true,
+      "pixelsEqual": true,
+      "pixelDiffBox": null,
+      "beforeSHA256": "404f73286b288306b3bdd824cf8dc18465fc0d5b54122964a5993db4d1e3a509",
+      "afterSHA256": "404f73286b288306b3bdd824cf8dc18465fc0d5b54122964a5993db4d1e3a509",
+      "differentPixels": 0,
+      "maxChannelDelta": 0
+    }
+  ]
+}

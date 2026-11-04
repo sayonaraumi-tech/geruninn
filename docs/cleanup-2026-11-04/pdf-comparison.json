@@ -1,0 +1,515 @@
+{
+  "base": "60cdcbfcb19aef91839f74656e033b047a2bfc60",
+  "renderer": "html2pdf.js 0.10.1 / jsPDF 2.3.1; Poppler 72 DPI",
+  "cases": [
+    {
+      "case": "estimate-2-1280",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "estimate-2-390",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "invoice-2-1280",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "invoice-2-390",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-1-1280",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-1-390",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-16-1280",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-16-390",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-17-1280",
+      "beforePages": 2,
+      "afterPages": 2,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        },
+        {
+          "page": 2,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-17-390",
+      "beforePages": 2,
+      "afterPages": 2,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        },
+        {
+          "page": 2,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-35-1280",
+      "beforePages": 3,
+      "afterPages": 3,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        },
+        {
+          "page": 2,
+          "pixelsEqual": true,
+          "diffBox": null
+        },
+        {
+          "page": 3,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "onoda-35-390",
+      "beforePages": 3,
+      "afterPages": 3,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ],
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        },
+        {
+          "page": 2,
+          "pixelsEqual": true,
+          "diffBox": null
+        },
+        {
+          "page": 3,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "receipt-2-1280",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    },
+    {
+      "case": "receipt-2-390",
+      "beforePages": 1,
+      "afterPages": 1,
+      "pageSizesEqual": [
+        [
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ],
+          [
+            0,
+            0,
+            595.28,
+            841.89
+          ]
+        ]
+      ],
+      "pages": [
+        {
+          "page": 1,
+          "pixelsEqual": true,
+          "diffBox": null
+        }
+      ]
+    }
+  ],
+  "filesPerVersion": 14,
+  "pagesPerVersion": 20,
+  "allEqual": true
+}
