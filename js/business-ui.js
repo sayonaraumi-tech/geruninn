@@ -45,6 +45,9 @@ root.bizConfirmCalendarSale=async function(event){
  catch(e){el('eventSaleMessage').textContent=e.message;}
  finally{calendarSaleSaving=false;el('eventSaleConfirm').disabled=false;refreshCalendarSale();}
 };
+root.bizEstimateDocuments=()=>enabled?(rows.documents||[]).map(r=>({...r.payload,documentId:r.id})):original.loadConfirmedHistory().map(d=>({...d,confirmed:true}));
+// Include lifecycle history: a cancelled sale remains reliable identity evidence.
+root.bizEstimateSales=()=>enabled?[...(rows.sales||[]),...(rows.receivables||[])].map(r=>({...r.payload,id:r.id})):bizState.sales;
 function hydrate(value){
  rows=value;root.TsukinowaAccountingUI?.hydrate(value);applying=true;
  try{
@@ -115,14 +118,15 @@ root.importBackup=function(){if(!enabled)return original.importBackup();alert('�
 root.bizEstimateFromHistory=function(id){return original.bizEstimateFromHistory(id);};
 root.bizPersist=function(){if(!enabled)return original.bizPersist();};
 root.bizAudit=function(a,d){if(!enabled)return original.bizAudit(a,d);};
-root.bizAcceptEstimate=function(id,invoice=false){if(!enabled)return original.bizAcceptEstimate(id,invoice);if(!ready())return;const estimate=bizState.estimates.find(e=>e.id===id);let workDate=estimate?.workDate||estimate?.snapshot?.workDate||'';if(estimate?.status?.startsWith('受注')&&!invoice){workDate=prompt('施工日 YYYY-MM-DD（未定なら空欄）',workDate);if(workDate===null)return;}try{if(workDate.trim())root.TsukinowaAccounting.date(workDate.trim());}catch(e){return alert(e.message);}command({type:'acceptEstimate',estimateId:id,workDate:workDate.trim(),expectedRevision:sync.getRevision('estimates',id),openInvoice:invoice});};
+root.bizAcceptEstimate=function(id,invoice=false){if(bizEstimateIssuedNotice(id))return;if(!enabled)return original.bizAcceptEstimate(id,invoice);if(!ready())return;const estimate=bizState.estimates.find(e=>e.id===id);let workDate=estimate?.workDate||estimate?.snapshot?.workDate||'';if(estimate?.status?.startsWith('受注')&&!invoice){workDate=prompt('施工日 YYYY-MM-DD（未定なら空欄）',workDate);if(workDate===null)return;}try{if(workDate.trim())root.TsukinowaAccounting.date(workDate.trim());}catch(e){return alert(e.message);}command({type:'acceptEstimate',estimateId:id,workDate:workDate.trim(),expectedRevision:sync.getRevision('estimates',id),openInvoice:invoice});};
 root.bizConvertEstimateRecordToInvoice=function(id){
+ if(bizEstimateIssuedNotice(id))return;
  if(!enabled)return original.bizConvertEstimateRecordToInvoice(id);if(!ready())return;
  const estimate=bizState.estimates.find(x=>x.id===id);if(!estimate)return;
  if(!estimate.status?.startsWith('受注'))return bizAcceptEstimate(id,true);
  const existing=bizState.sales.find(s=>s.estimateId===id||(estimate.calendarEventId&&s.calendarEventId===estimate.calendarEventId));
- const saved=existing?.documentId&&history.find(h=>h.documentId===existing.documentId);
- if(saved){applyFormState(saved,saved.docType);bizSwitchPage('chohyo');return;}
+ // A shared calendar can block duplicate creation but cannot establish estimate identity.
+ if(existing)return alert('関連する売上が既にあります。保存帳票・売上台帳で関連を確認してください。ここから売上を重複作成しません。');
  const source=history.find(h=>h.historyId===estimate.historyId||h.documentId===estimate.documentId);if(!source)return alert('元の見積を読み込み直してください。');
  const draft={...copy(source),docType:'invoice',documentId:'invoice_'+id,historyId:'',cloudRevision:0,invoiceNo:'',numberingMinute:undefined,numberingSequence:undefined,invoiceDate:todayISO(),salesDate:estimate.workDate||'',calendarEventId:estimate.calendarEventId||'',estimateId:id,projectId:estimate.projectId||''};
  applyFormState(draft,'invoice');bizSwitchPage('chohyo');

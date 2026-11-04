@@ -26,6 +26,13 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  const estimateId=await desktop.evaluate(()=>bizState.estimates[0].id);await desktop.evaluate(id=>bizAcceptEstimate(id,false),estimateId);await phone.waitForFunction(()=>bizState.estimates[0]?.status==='受注');await desktop.waitForFunction(()=>bizState.estimates[0]?.status==='受注');
  await desktop.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimateId);await desktop.evaluate(()=>saveConfirmedHistory());await phone.waitForFunction(()=>bizState.sales.length===1);
  const invoiceId=await phone.evaluate(()=>bizState.sales[0].documentId);
+ for(const page of [phone,desktop]){
+  await page.waitForFunction(id=>bizEstimateInvoices(id).length===1,estimateId);
+  assert.equal(await page.evaluate(()=>{renderEstimates();return document.querySelectorAll('#estimateRows button').length}),0);
+  assert.equal(await page.evaluate(id=>bizState.estimates.some(e=>e.id===id),estimateId),true);
+  assert.equal(await page.evaluate(()=>{document.getElementById('estimateShowIssued').checked=true;renderEstimates();return document.querySelectorAll('#estimateRows button').length}),2);
+  await page.evaluate(()=>{document.getElementById('estimateShowIssued').checked=false;renderEstimates();});
+ }
  await desktop.waitForFunction(id=>loadConfirmedHistory().some(h=>h.documentId===id)&&TsukinowaBusinessUI.getSync().getQueue().length===0,invoiceId);
  await desktop.evaluate(()=>{window.pdfSaves=0;window.html2pdf=()=>{const canvas=document.createElement('canvas');canvas.width=210;canvas.height=297;const pdf={internal:{getNumberOfPages:()=>1},deletePage(){},addPage(){},addImage(){},save(){window.pdfSaves++}};const worker={set(){return worker},from(){return worker},toCanvas(){return worker},toPdf(){return worker},get:key=>Promise.resolve(key==='canvas'?canvas:pdf)};return worker;};window.mockPdfRenderer=window.html2pdf;});
  for(let i=0;i<3;i++){await desktop.evaluate(id=>redownloadSavedDoc(loadConfirmedHistory().findIndex(s=>s.documentId===id)),invoiceId);await desktop.waitForFunction(n=>window.pdfSaves===n,i+1);await desktop.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);}
