@@ -43,4 +43,16 @@ module.exports=async(page)=>{
  await page.locator('#estimateShowIssued').check();
  assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),3);
  await page.locator('#estimateShowIssued').uncheck();
+ await page.evaluate(async id=>{
+  const sale=bizState.sales.find(s=>s.estimateId===id);
+  const doc=testRecords.get('companies/tsukinowa/documents/'+sale.documentId).payload;
+  // Legacy cancelled invoice: only its exact sale carries estimate identity.
+  delete doc.estimateId;delete doc.snapshot.estimateId;doc.status='void';
+  testRecords.get('companies/tsukinowa/sales/'+sale.id).payload.documentStatus='void';
+  await TsukinowaBusinessUI.getSync().reload();renderEstimates();
+ },id);
+ assert.equal(await page.evaluate(id=>bizState.sales.some(s=>s.estimateId===id),id),false);
+ assert.equal(await page.evaluate(id=>bizEstimateInvoices(id).length,id),1);
+ assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),2);
+ console.log('PASS issued estimate history: unpaid/partial/paid, equal-amount jobs, missing references, original read-only, stale actions, reload and cancelled legacy sale identity');
 };

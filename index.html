@@ -3373,7 +3373,7 @@ function bizConvertEstimateRecordToInvoice(id){
 }
 function bizEstimateInvoices(id){
  const docs=window.bizEstimateDocuments?window.bizEstimateDocuments():loadConfirmedHistory().map(d=>({...d,confirmed:true}));
- return TsukinowaBusiness.estimateInvoices(id,docs,bizState.sales);
+ return TsukinowaBusiness.estimateInvoices(id,docs,window.bizEstimateSales?window.bizEstimateSales():bizState.sales);
 }
 function bizEstimateIssuedNotice(id){if(!bizEstimateInvoices(id).length)return false;alert('正式請求書は保存帳票、入金確認は売上・入金台帳から行ってください。取消・訂正も保存帳票で確認してください。');bizSwitchPage('savedDocs');return true;}
 function bizRegisterEstimatePayment(id){bizEstimateIssuedNotice(id)||alert('対象請求書を正式保存してから売上・入金台帳で入金を登録してください。見積だけでは売上を作成しません。');}

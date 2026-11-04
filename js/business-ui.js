@@ -46,6 +46,8 @@ root.bizConfirmCalendarSale=async function(event){
  finally{calendarSaleSaving=false;el('eventSaleConfirm').disabled=false;refreshCalendarSale();}
 };
 root.bizEstimateDocuments=()=>enabled?(rows.documents||[]).map(r=>({...r.payload,documentId:r.id})):original.loadConfirmedHistory().map(d=>({...d,confirmed:true}));
+// Include lifecycle history: a cancelled sale remains reliable identity evidence.
+root.bizEstimateSales=()=>enabled?[...(rows.sales||[]),...(rows.receivables||[])].map(r=>({...r.payload,id:r.id})):bizState.sales;
 function hydrate(value){
  rows=value;root.TsukinowaAccountingUI?.hydrate(value);applying=true;
  try{
