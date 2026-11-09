@@ -23,6 +23,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
 
  const desktop=await device('admin',1280);
  const idle=async()=>{try{await desktop.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0&&document.getElementById('coreSyncStatus').textContent==='クラウド同期済');}catch(e){console.error(await desktop.evaluate(()=>({queue:TsukinowaBusinessUI.getSync().getQueue(),status:document.getElementById('coreSyncStatus').textContent,message:document.getElementById('accountingMessage').textContent})));throw e;}};
+ const waitForBankMatch=externalId=>desktop.waitForFunction(id=>TsukinowaAccountingUI.getData().bankTransactions.some(row=>row.externalId===id&&row.status==='照合済'),externalId);
  const snapshot=()=>desktop.evaluate(()=>({expenses:TsukinowaAccountingUI.getData().expenses,cash:TsukinowaAccountingUI.getData().cashLedger,bank:TsukinowaAccountingUI.getData().bankTransactions}));
  await desktop.evaluate(()=>{bizSwitchPage('expenses');expDate.value='2026-10-02';expCategory.value='旅費交通費';expMethod.value='現金';expAmount.value=100;expVendor.value='手工';expMemo.value='現金';return addExpense();});await idle();
  assert.equal((await snapshot()).cash.length,1);
@@ -34,19 +35,20 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>bizSwitchPage('bank'));
  const bankCsv='日付,摘要,入金,出金,取引ID\n2026-10-04,電話会社,,1000,high\n2026-10-04,不明摘要,,3000,candidate\n2026-10-04,未登録,,4000,unmatched\n2026-10-04,VISA カード利用代金,,6060,card';
  await desktop.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(bankCsv)});await desktop.evaluate(()=>importBankCsv());await idle();
+ await desktop.waitForFunction(()=>['high','candidate','unmatched','card'].every(id=>TsukinowaAccountingUI.getData().bankTransactions.some(row=>row.externalId===id)));
  assert.equal((await snapshot()).expenses.length,6);assert.match(await desktop.locator('#bankRows').innerText(),/要確認/);assert.match(await desktop.locator('#bankRows').innerText(),/候補/);assert.match(await desktop.locator('#bankRows').innerText(),/未一致/);
  await desktop.evaluate(()=>{accountingBankView('all');document.querySelectorAll('#bankRows details').forEach(e=>e.open=true);});
- const high=desktop.locator('#bankRows tr').filter({hasText:'電話会社'});await high.locator('select').selectOption({index:1});await high.getByRole('button',{name:'照合確定'}).click();await idle();assert.match(await high.innerText(),/照合済/);assert.equal((await snapshot()).expenses.length,6);
+ const high=desktop.locator('#bankRows tr').filter({hasText:'電話会社'});await high.locator('select').selectOption({index:1});await high.getByRole('button',{name:'照合確定'}).click();await idle();await waitForBankMatch('high');assert.match(await high.innerText(),/照合済/);assert.equal((await snapshot()).expenses.length,6);
  const candidate=desktop.locator('#bankRows tr').filter({hasText:'不明摘要'});const candidateId=(await snapshot()).bank.find(b=>b.externalId==='candidate').id;assert.equal((await snapshot()).bank.find(b=>b.id===candidateId).status,'未照合');
  await candidate.locator('select').selectOption({index:1});
  desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.dismiss());await candidate.getByRole('button',{name:'照合確定'}).click();await idle();assert.equal((await snapshot()).bank.find(b=>b.id===candidateId).status,'未照合');
- desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.type()==='confirm'?d.accept():d.dismiss());await candidate.getByRole('button',{name:'照合確定'}).click();await idle();assert.equal((await snapshot()).bank.find(b=>b.id===candidateId).status,'照合済');assert.equal((await snapshot()).expenses.length,6);
+ desktop.removeAllListeners('dialog');desktop.on('dialog',d=>d.type()==='confirm'?d.accept():d.dismiss());await candidate.getByRole('button',{name:'照合確定'}).click();await idle();await waitForBankMatch('candidate');assert.equal((await snapshot()).bank.find(b=>b.id===candidateId).status,'照合済');assert.equal((await snapshot()).expenses.length,6);
  const card=desktop.locator('#bankRows tr').filter({hasText:'VISA カード利用代金'});
  await card.locator('details').evaluate(detail=>{detail.open=true;});
  assert.match(await card.innerText(),/カード識別名・明細を確認/);assert.equal(await card.locator('select').count(),0);assert.equal(await card.getByRole('button',{name:'選択支出の引落照合'}).count(),1);
  const unmatched=desktop.locator('#bankRows tr').filter({hasText:'未登録'});
  await unmatched.locator('details').evaluate(detail=>{detail.open=true;});
- await unmatched.getByRole('button',{name:'この銀行明細から支出登録'}).click();assert(await desktop.locator('#pageBank').isVisible());assert(await desktop.locator('#bankExpenseDialog').isVisible());assert.equal((await snapshot()).expenses.length,6);assert.equal(await desktop.locator('#bankExpenseForm [name=amount]').inputValue(),'4000');await desktop.locator('#bankExpenseForm [name=vendor]').fill('試験店舗');await desktop.getByRole('button',{name:'支出登録・照合確認',exact:true}).click();await idle();assert.equal((await snapshot()).bank.find(b=>b.description==='未登録').status,'照合済');assert.equal((await snapshot()).expenses.length,7);assert.equal((await snapshot()).cash.length,1);
+ await unmatched.getByRole('button',{name:'この銀行明細から支出登録'}).click();assert(await desktop.locator('#pageBank').isVisible());assert(await desktop.locator('#bankExpenseDialog').isVisible());assert.equal((await snapshot()).expenses.length,6);assert.equal(await desktop.locator('#bankExpenseForm [name=amount]').inputValue(),'4000');await desktop.locator('#bankExpenseForm [name=vendor]').fill('試験店舗');await desktop.getByRole('button',{name:'支出登録・照合確認',exact:true}).click();await idle();await waitForBankMatch('unmatched');assert.equal((await snapshot()).bank.find(b=>b.description==='未登録').status,'照合済');assert.equal((await snapshot()).expenses.length,7);assert.equal((await snapshot()).cash.length,1);
  await desktop.evaluate(()=>bizSwitchPage('expenses'));
  // Invalid preview disables commit and cannot enqueue a partial batch.
  await desktop.locator('#expenseFile').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('日付,科目,支払方法,金額,取引先,内容・備考\n2026-02-30,その他,現金,1,A,B')});await desktop.evaluate(()=>accountingPreviewExpenses());assert(await desktop.locator('#expenseImportCommit').isDisabled());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/エラー 1件/);
