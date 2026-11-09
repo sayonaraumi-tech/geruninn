@@ -1,6 +1,6 @@
 # 見積履歴: formal issuance handoff
 
-Base: `9554270db8c3f930140c797245650491a5bca8ca` (main, PR #32).
+Base: `fe958a197b3e2d75df1dcf610e80a16f0da9d195` (main after PR #34).
 
 ## Root cause and references
 
@@ -32,7 +32,7 @@ Only estimate list copy, a history checkbox, issuance selection and estimate act
 - Full unit/static/service-worker suite: 207 unit tests passed, including issuance, legacy exact references, conflicts, same-amount jobs, lifecycle history and read-only behavior.
 - Firestore rules suite: 46 tests passed against `demo-tsukinowa` only.
 - Desktop/mobile browser integration: formal save, hidden pending row, history/original read-only open, stale action protection, reload, partial/final payments and separate equal-amount estimates.
-- All 13 local and all 8 emulator browser suites passed across the release runner and isolated reruns, covering PDF output, calendars, HOME, bank reconciliation, cash, suppliers, auth and queue retry. The combined emulator runner initially timed out at expense-bank (180-second limit); that suite and the remaining three passed in an isolated run with a 300-second limit and diagnostic checkpoints. No application or existing test logic was changed to bypass the timeout.
+- All 13 local and all 8 emulator browser suites passed together against the published PR #34 baseline. The combined run covered A4 output, calendar resync, HOME, bank reconciliation, cash, suppliers, auth, queue replay and duplicate-payment prevention.
 - Final targeted desktop/mobile rerun additionally verifies cancelled legacy sale identity after the live sales view filters it out; issuance resolution uses raw sales/receivables lifecycle history.
 
 Test dependencies reuse the existing installed repository dependency versions (Firebase 12.19.0, Playwright 1.62.1) and a local Java 21 runtime. Production Firebase is never used. See PR validation results for final counts and any limitations.
