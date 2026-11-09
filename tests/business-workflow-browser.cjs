@@ -11,6 +11,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   const records=new Map(),listeners=[];let cb;const driver={initialize:async()=>{},observeAuth:f=>(cb=f,()=>{}),claims:async u=>u.claims,timestamp:()=>({seconds:1}),digest:async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join(''),list:async p=>[...records].filter(([k])=>k.startsWith(p+'/')).map(([k,v])=>({id:k.split('/').at(-1),...v})),listen:(p,many,next)=>{const l={p,next};listeners.push(l);setTimeout(async()=>next(await driver.list(p),{fromCache:false}),0);return()=>listeners.splice(listeners.indexOf(l),1);},transaction:async f=>{for(;;){const reads=new Map(),writes=[];const result=await f({get:async p=>{const old=records.get(p)||null;reads.set(p,old);return old;},set:(p,v)=>writes.push([p,v])});if([...reads].some(([p,v])=>(records.get(p)||null)!==v))continue;for(const [p,v]of writes)records.set(p,v);for(const l of listeners)setTimeout(async()=>l.next(await driver.list(l.p),{fromCache:false}),0);return result;}}};
   const client=TsukinowaCloudCore.createClient(driver);await client.start({enabled:true,companyId:'tsukinowa',firebase:{apiKey:'x',authDomain:'x',projectId:'test',appId:'x'}});await cb({uid:'test',claims:{role:'admin',companyId:'tsukinowa'}});TsukinowaBusinessUI.configure(true);TsukinowaBusinessUI.auth(client.getState(),client);
   window.testRecords=records;window.testClient=client;window.testService=TsukinowaBusiness.createService(client);bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;bizGoogleGrantedScopes=TSUKINOWA_GOOGLE_SCOPE;bizGoogleCalendarId='shared';bizGoogleCalendarsLoaded=true;
+  window.emitCachedRows=(collection,rows)=>listeners.filter(l=>l.p.endsWith('/'+collection)).forEach(l=>l.next(rows,{fromCache:true}));
  });
 
  const alerts=[];let confirmConversion=false;page.on('dialog',async d=>{alerts.push(d.message());if(confirmConversion&&d.type()==='confirm')await d.accept();else await d.dismiss();});
@@ -96,7 +97,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(async()=>{await testClient.put('calendarLinks','manual-bank',{id:'manual-bank',date:'2026-10-19',title:'クロス張り替え、14000、km'},{operationId:'seed-bank',expectedRevision:0});});await page.waitForFunction(()=>bizState.calendar.some(e=>e.id==='manual-bank'));await page.evaluate(()=>openEventModal('manual-bank'));await page.locator('#eventSaleButton').click();assert.equal(await page.locator('#eventSaleCustomer').inputValue(),'現金客');assert.equal(await page.locator('#eventSaleMethod').inputValue(),'銀行振込');await page.locator('#eventSaleConfirm').click();await page.waitForFunction(()=>document.getElementById('eventSaleStatus').textContent.includes('登録済'));assert.match(await page.locator('#eventSaleStatus').innerText(),/未収.*14,000/);assert.equal(await page.evaluate(()=>bizState.payments.filter(p=>p.saleId==='calendar_cash_manual-bank').length),0);
  await page.evaluate(id=>openEventModal(bizState.sales.find(s=>s.googleEventId===id).calendarEventId),'browser-unnamed');
  assert.equal(await page.locator('#eventSaleButton').isDisabled(),true);
- await page.evaluate(async()=>{const link=await testService.execute({type:'calendar',operationId:crypto.randomUUID(),event:{id:'formal-existing',date:'2026-10-19',title:'工事'}});await testService.execute({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot:{documentId:'formal-existing',docType:'invoice',calendarEventId:link.id,customerName:'正式顧客',invoiceDate:'2026-10-19',items:[{content:'工事',qty:1,price:1000}]}});window.formalEventId=link.id;});
+ await page.evaluate(async()=>{const link=await testService.execute({type:'calendar',operationId:crypto.randomUUID(),event:{id:'formal-existing',googleEventId:'formal-existing',googleCalendarId:'shared',date:'2026-10-19',title:'工事'}});await testService.execute({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot:{documentId:'formal-existing',docType:'invoice',calendarEventId:link.id,customerName:'正式顧客',invoiceDate:'2026-10-19',items:[{content:'工事',qty:1,price:1000}]}});window.formalEventId=link.id;});
  await page.waitForFunction(()=>bizState.sales.some(s=>s.documentId==='formal-existing'));await page.evaluate(()=>openEventModal(formalEventId));assert.equal(await page.locator('#eventSaleButton').isDisabled(),true);assert.match(await page.locator('#eventSaleStatus').innerText(),/登録済/);
  await page.evaluate(()=>{window.actualGetState=testClient.getState;testClient.getState=()=>({...actualGetState(),role:'staff'});openEventModal('manual-bank');});assert.equal(await page.locator('#eventSaleButton').isVisible(),false);await page.evaluate(()=>{bizOpenCalendarSale();testClient.getState=actualGetState;});assert.equal(await page.locator('#eventSaleForm').isVisible(),false);
  await page.evaluate(()=>closeEventModal());
@@ -145,14 +146,30 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  assert.deepEqual(await page.evaluate(()=>[docType,collectFormState().documentId]),['estimate',nextDraft]);
 
  // The usual list hides inactive links even if their Google title is still stale.
+ const staleRows=await page.evaluate(async()=>Promise.all(['calendarLinks','documents'].map(name=>testClient.listRecords(name))));
  await page.evaluate(async()=>{
   const revision=TsukinowaBusinessUI.getSync().getRevision('documents','formal-existing');
   await testService.execute({type:'documentStatus',documentId:'formal-existing',expectedRevision:revision,status:'void',reason:'匿名回帰',operationId:'void-calendar-test'});
   const e=bizState.calendar.find(e=>e.id===formalEventId);
-  await testService.execute({type:'calendar',operationId:'stale-calendar-test',event:{id:e.id,date:e.date,title:'旧Googleタイトル',googleStatus:'confirmed'}});
+  await testService.execute({type:'calendar',operationId:'stale-calendar-test',event:{id:e.id,googleEventId:e.googleEventId,googleCalendarId:e.googleCalendarId,date:e.date,title:'旧Googleタイトル',googleStatus:'confirmed'}});
   bizSwitchPage('calendar');document.getElementById('calendarMonth').value='2026-10';renderCalendarEvents();
  });
- await page.waitForFunction(()=>loadConfirmedHistory().find(h=>h.documentId==='formal-existing')?.documentStatus==='void');
+ await page.waitForFunction(()=>loadConfirmedHistory().find(h=>h.documentId==='formal-existing')?.documentStatus==='void'&&bizState.calendar.find(e=>e.id===formalEventId)?.googleLatestTitle==='旧Googleタイトル');
+ await page.evaluate(([links,docs])=>{emitCachedRows('calendarLinks',links);emitCachedRows('documents',docs);},staleRows);
+ assert.deepEqual(await page.evaluate(()=>{
+  const matches=bizState.calendar.filter(e=>e.googleEventId==='formal-existing');
+  return [matches.length,matches[0]?.documentStatus,matches[0]?.googleStatus];
+ }),[1,'void','confirmed']);
+ assert.deepEqual(await page.evaluate(()=>{
+  const documents=new Map([['cancelled','cancelled'],['duplicate','duplicate'],['superseded','revised'],['replacement','active']]);
+  const cases=[
+   {documentId:'cancelled'}, {documentId:'duplicate'}, {documentId:'superseded'},
+   {documentId:'replacement',linkedInvoiceId:'superseded'},
+   {documentId:'replacement',documentStatus:'void'}, {status:'無効'},
+   {googleStatus:'cancelled'}, {title:'無効',googleStatus:'confirmed'}
+  ];
+  return cases.map(event=>bizCalendarReviewReason(event,documents));
+ }),['取消','重複','訂正済','','帳票状態を要確認','帳票状態を要確認','Google日程取消','']);
  const formalEventId=await page.evaluate(()=>window.formalEventId);
  const calendarRow=page.locator('#calendarRows tr').filter({has:page.locator(`button[onclick*="${formalEventId}"]`)});
  assert.equal(await calendarRow.count(),0);
