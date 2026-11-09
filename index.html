@@ -1092,7 +1092,7 @@ dialog h2{font-size:15px}
   </div>
   <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
  </div>
- <div class="biz-section"><div class="biz-section-head"><h2>同期済み日程</h2><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
+ <div class="biz-section"><div class="biz-section-head"><h2>同期済み日程</h2><label><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
 </div>
 
 
@@ -1188,9 +1188,9 @@ dialog h2{font-size:15px}
    <div class="biz-actions"><button id="eventSaleConfirm" class="biz-btn primary" type="submit">確認して登録</button><button class="biz-btn" type="button" onclick="document.getElementById('eventSaleForm').classList.add('biz-hidden')">キャンセル</button></div>
   </form>
   <div class="biz-actions" style="margin-top:16px">
-   <button class="biz-btn" onclick="bizCreateDocFromCurrentEvent('estimate')">見積書作成</button>
-   <button class="biz-btn primary" onclick="bizCreateDocFromCurrentEvent('invoice')">請求書作成</button>
-   <button class="biz-btn" onclick="bizCreateDocFromCurrentEvent('receipt')">領収書作成</button>
+   <button class="biz-btn" data-calendar-document onclick="bizCreateDocFromCurrentEvent('estimate')">見積書作成</button>
+   <button class="biz-btn primary" data-calendar-document onclick="bizCreateDocFromCurrentEvent('invoice')">請求書作成</button>
+   <button class="biz-btn" data-calendar-document onclick="bizCreateDocFromCurrentEvent('receipt')">領収書作成</button>
    <button id="eventSaleButton" class="biz-btn primary" hidden onclick="bizOpenCalendarSale()">売上登録</button>
   </div>
  </div>
@@ -1291,7 +1291,7 @@ dialog h2{font-size:15px}
     <button class="btn-preview" onclick="togglePreview()">👁 预览</button>
     <button class="btn-print" onclick="doPrint()">📄 PDFをダウンロード（保存）</button>
     <div id="estimateConvertWrap" style="display:none; margin-top:10px;">
-      <button class="btn-download" type="button" onclick="convertEstimateToInvoice()">見積書を請求書に変換</button>
+      <button class="btn-download" type="button" onclick="requestEstimateInvoice()">見積書を請求書に変換</button>
     </div>
     <div class="tip">
       💡 このPDFボタンで実際にダウンロードした帳票だけ、下の「保存履歴」に残ります。
@@ -2135,8 +2135,7 @@ function recalc() {
 // 帐票の実コンテンツ高さを測り、A4 一枚に収まるよう密度(--dens)を微調整する。
 // これにより「お振込先」の最終行が 2 ページ目にこぼれる現象を防ぐ。
 // 領収書は元々固定単ページなので対象外。項目が極端に多い場合のみ複数ページを許容。
-function fitInvoiceToOnePage() {
-  const inv = document.querySelector('.invoice');
+function fitInvoiceToOnePage(inv = document.querySelector('.invoice'), type = docType) {
   if (!inv) return;
 
   const clearModes = () => {
@@ -2146,11 +2145,11 @@ function fitInvoiceToOnePage() {
   clearModes();
   inv.style.setProperty('--dens', '1');
 
-  if (typeof docType !== 'undefined' && docType === 'receipt') return;
+  if (type === 'receipt') return;
   if (inv.offsetParent === null || inv.offsetHeight === 0) return;
 
   const PX_PER_MM = 96 / 25.4;
-  const isOnodaMonthly = (typeof docType !== 'undefined' && docType === 'onoda');
+  const isOnodaMonthly = type === 'onoda';
   const targetPx = 289 * PX_PER_MM;
 
   const measure = () => {
@@ -2168,7 +2167,7 @@ function fitInvoiceToOnePage() {
   };
 
   if (isOnodaMonthly) {
-    const rows = Array.from(document.querySelectorAll('#invItems tr'))
+    const rows = Array.from(inv.querySelectorAll('#invItems tr'))
       .filter(tr => !tr.classList.contains('empty') && tr.children.length).length;
 
     // 16行以内：完全正常比例，一页。
@@ -2208,6 +2207,7 @@ function buildPrintFilename() {
 
 function systemPrint() {
   try {
+    const {documentId, docType: type} = collectFormState();
     const area = document.getElementById('previewArea');
     const wasHidden = !area.classList.contains('show');
     if (wasHidden) area.classList.add('show');
@@ -2218,7 +2218,8 @@ function systemPrint() {
 
     setTimeout(() => {
       try {
-        window.print();
+        const current = collectFormState();
+        if(current.documentId===documentId&&current.docType===type)window.print();
       } catch (err) {
         alert('打印失败：' + err.message);
       }
@@ -2230,189 +2231,160 @@ function systemPrint() {
   }
 }
 
-function doPrint() {
-  const confirmedSnapshot = collectFormState();
+async function doPrint() {
+  const btn = document.querySelector('.btn-print');
+  const originalText = btn?.textContent;
+  const sourceInvoice = document.querySelector('#previewArea .invoice')?.cloneNode(true);
+  if (!sourceInvoice) return alert('帳票が見つかりません。');
+  const type = docType;
+  const filename = buildPrintFilename() + '.pdf';
+  const widthMm = 210, heightMm = 297;
+  const widthPx = Math.round(widthMm * 96 / 25.4);
+  const rowCount = sourceInvoice.querySelectorAll('#invItems tr:not(.empty)').length;
+  const allowMultiPage = type !== 'receipt' && (type !== 'onoda' || rowCount > 16);
+  const stage = document.createElement('div');
+  stage.setAttribute('aria-hidden', 'true');
+  stage.style.cssText = 'position:absolute;left:-10000px;top:0;width:210mm;pointer-events:none';
+  sourceInvoice.style.cssText += ';width:210mm;margin:0;box-shadow:none;transform:none;text-size-adjust:none;-webkit-text-size-adjust:none';
+  stage.append(sourceInvoice);
   try {
-    const sourceInvoice = document.querySelector('.invoice');
-    if (!sourceInvoice) {
-      alert('未找到打印内容');
-      return;
+    if (btn) btn.textContent = 'PDF生成中...';
+    document.body.append(stage);
+    // Resolve the captured document's assets before measuring it at the export width.
+    sourceInvoice.getBoundingClientRect();
+    await Promise.all([document.fonts?.ready, ...Array.from(sourceInvoice.querySelectorAll('img'), img => img.decode())]);
+    fitInvoiceToOnePage(sourceInvoice, type);
+    const opt = {
+      margin: 0,
+      filename: filename,
+      image: { type: 'jpeg', quality: 0.98 },
+      html2canvas: {
+        scale: 2,
+        useCORS: true,
+        letterRendering: true,
+        backgroundColor: '#ffffff',
+        windowWidth: widthPx,
+        scrollX: 0,
+        scrollY: 0,
+        x: 0,
+        y: 0,
+        // ===== 核心修复 =====
+        // html2pdf 内部建容器时用了 position:absolute + margin:auto + left:0;right:0,
+        // 在手机窄视口下会把 210mm(=794px) 宽的容器水平居中——
+        // 结果容器左侧坐标变成负数（如 -197px），左半边内容被推出屏幕外,
+        // html2canvas 抓的 canvas 就是"半截"。
+        // 这里在 onclone 阶段（document 已克隆但 canvas 还没开始绘制）把
+        // 容器强制贴到 (0,0)，并显式 fix 住 invoice 元素的尺寸/样式。
+        onclone: function(clonedDoc) {
+          const container = clonedDoc.querySelector('.html2pdf__container');
+          if (container) {
+            container.style.position = 'absolute';
+            container.style.left = '0';
+            container.style.right = 'auto';
+            container.style.top = '0';
+            container.style.margin = '0';
+            container.style.width = widthMm + 'mm';
+          }
+          const overlay = clonedDoc.querySelector('.html2pdf__overlay');
+          if (overlay) {
+            overlay.style.position = 'absolute';
+            overlay.style.top = '0';
+            overlay.style.left = '0';
+            overlay.style.right = 'auto';
+            overlay.style.bottom = 'auto';
+            overlay.style.width = widthMm + 'mm';
+            overlay.style.overflow = 'visible';
+          }
+          const clonedInvoice = container?.querySelector('.invoice');
+          if (clonedInvoice) {
+            clonedInvoice.style.width = widthMm + 'mm';
+            clonedInvoice.style.margin = '0';
+            clonedInvoice.style.boxShadow = 'none';
+            clonedInvoice.style.transform = 'none';
+            if (type === 'receipt') {
+              clonedInvoice.style.height = heightMm + 'mm';
+              clonedInvoice.style.minHeight = heightMm + 'mm';
+              clonedInvoice.style.maxHeight = heightMm + 'mm';
+              clonedInvoice.style.overflow = 'hidden';
+            } else if (allowMultiPage) {
+              clonedInvoice.style.minHeight = heightMm + 'mm';
+              clonedInvoice.style.height = 'auto';
+              clonedInvoice.style.maxHeight = 'none';
+              clonedInvoice.style.overflow = 'visible';
+            }
+          }
+          if (clonedDoc.body) {
+            clonedDoc.body.style.margin = '0';
+            clonedDoc.body.style.padding = '0';
+            clonedDoc.body.style.background = '#fff';
+          }
+        }
+      },
+      jsPDF: {
+        unit: 'mm',
+        format: 'a4',
+        orientation: 'portrait',
+        compress: true
+      }
+    };
+    const worker = html2pdf().set(opt).from(sourceInvoice);
+    const canvas = await worker.toCanvas().get('canvas');
+    const pdf = await worker.toPdf().get('pdf');
+    // 清空 html2pdf 已经加好的所有页
+    const initPages = pdf.internal.getNumberOfPages();
+    for (let i = initPages; i >= 1; i--) {
+      pdf.deletePage(i);
+    }
+    pdf.addPage(opt.jsPDF.format, opt.jsPDF.orientation);
+
+    const pdfWidthMm = widthMm;
+    const pdfHeightMm = heightMm;
+
+    const canvasPxPerMm = canvas.width / pdfWidthMm;
+    const pagePxHeight = pdfHeightMm * canvasPxPerMm;
+
+    if (!allowMultiPage) {
+      // 単页：整个 canvas 填满 A4
+      const imgData = canvas.toDataURL('image/jpeg', 0.98);
+      pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
+    } else {
+      // 多页：先判断是否真要多页
+      // 容差：内容超出最后一页不到 10mm 视为单页（吸收亚像素溢出）
+      const tolerancePx = 10 * canvasPxPerMm;
+      let effectiveHeight = canvas.height;
+      if (type !== 'onoda' && effectiveHeight - pagePxHeight < tolerancePx && effectiveHeight > pagePxHeight) {
+        effectiveHeight = pagePxHeight;  // 强制收回到一页
+      }
+      const pageCount = Math.max(1, Math.ceil(effectiveHeight / pagePxHeight));
+
+      for (let p = 0; p < pageCount; p++) {
+        if (p > 0) pdf.addPage(opt.jsPDF.format, opt.jsPDF.orientation);
+
+        const sourceY = p * pagePxHeight;
+        const sourceH = Math.min(pagePxHeight, effectiveHeight - sourceY);
+
+        // 切片到独立 canvas
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sourceH;
+        const ctx = pageCanvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceH, 0, 0, canvas.width, sourceH);
+
+        const imgData = pageCanvas.toDataURL('image/jpeg', 0.98);
+        const outputHeightMm = (sourceH / canvasPxPerMm);
+        // 最后一页：按实际内容高度（不强制拉满），中间页：填满
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidthMm, outputHeightMm, undefined, 'FAST');
+      }
     }
 
-    // 显示预览区，确保 invoice 元素被正确渲染
-    const area = document.getElementById('previewArea');
-    const wasHidden = !area.classList.contains('show');
-    if (wasHidden) area.classList.add('show');
-    fitInvoiceToOnePage(); // PDF 出力前に単ページへ自動フィット
-
-    const filename = buildPrintFilename() + '.pdf';
-
-    // 領収書 A5 横向, 其他 A4 纵向
-    const isReceipt = docType === 'receipt';
-    // 小野田月次請求は16行以内A4一页、17行以上は正常比例のまま自動分页
-    // 領収書は単页；小野田は16行以内単页・17行以上自動分页；通常の請求書/見積書も内容に応じて分页
-    const onodaRowCount = Array.from(document.querySelectorAll('#invItems tr')).filter(tr => !tr.classList.contains('empty') && tr.children.length).length;
-    const allowMultiPage = (docType !== 'receipt' && (docType !== 'onoda' || onodaRowCount > 16));
-    const widthMm = 210;
-    const heightMm = 297;
-    const widthPx = Math.round(widthMm * 3.7795); // 1mm ≈ 3.7795px @ 96dpi
-    const heightPx = Math.round(heightMm * 3.7795);
-
-    // 显示加载提示
-    const btn = document.querySelector('.btn-print');
-    const originalText = btn ? btn.textContent : '';
-    if (btn) btn.textContent = 'PDF生成中...';
-
-    const cleanup = function() {
-      if (btn) btn.textContent = originalText;
-      if (wasHidden) area.classList.remove('show');
-    };
-
-    setTimeout(function() {
-      const opt = {
-        margin: 0,
-        filename: filename,
-        image: { type: 'jpeg', quality: 0.98 },
-        html2canvas: {
-          scale: 2,
-          useCORS: true,
-          letterRendering: true,
-          backgroundColor: '#ffffff',
-          windowWidth: widthPx,
-          scrollX: 0,
-          scrollY: 0,
-          x: 0,
-          y: 0,
-          // ===== 核心修复 =====
-          // html2pdf 内部建容器时用了 position:absolute + margin:auto + left:0;right:0,
-          // 在手机窄视口下会把 210mm(=794px) 宽的容器水平居中——
-          // 结果容器左侧坐标变成负数（如 -197px），左半边内容被推出屏幕外,
-          // html2canvas 抓的 canvas 就是"半截"。
-          // 这里在 onclone 阶段（document 已克隆但 canvas 还没开始绘制）把
-          // 容器强制贴到 (0,0)，并显式 fix 住 invoice 元素的尺寸/样式。
-          onclone: function(clonedDoc) {
-            const container = clonedDoc.querySelector('.html2pdf__container');
-            if (container) {
-              container.style.position = 'absolute';
-              container.style.left = '0';
-              container.style.right = 'auto';
-              container.style.top = '0';
-              container.style.margin = '0';
-              container.style.width = widthMm + 'mm';
-            }
-            const overlay = clonedDoc.querySelector('.html2pdf__overlay');
-            if (overlay) {
-              overlay.style.position = 'absolute';
-              overlay.style.top = '0';
-              overlay.style.left = '0';
-              overlay.style.right = 'auto';
-              overlay.style.bottom = 'auto';
-              overlay.style.width = widthMm + 'mm';
-              overlay.style.overflow = 'visible';
-            }
-            const clonedInvoice = clonedDoc.querySelector('.invoice');
-            if (clonedInvoice) {
-              clonedInvoice.style.width = widthMm + 'mm';
-              clonedInvoice.style.margin = '0';
-              clonedInvoice.style.boxShadow = 'none';
-              clonedInvoice.style.transform = 'none';
-              if (!allowMultiPage) {
-                // 領収書 / 小野田：A4固定单页高度
-                clonedInvoice.style.height = heightMm + 'mm';
-                clonedInvoice.style.minHeight = heightMm + 'mm';
-                clonedInvoice.style.maxHeight = heightMm + 'mm';
-                clonedInvoice.style.overflow = 'hidden';
-              } else {
-                // 請求書/見積書/小野田：内容高度撑满 A4
-                clonedInvoice.style.minHeight = heightMm + 'mm';
-                clonedInvoice.style.height = 'auto';
-                clonedInvoice.style.maxHeight = 'none';
-                clonedInvoice.style.overflow = 'visible';
-              }
-            }
-            if (clonedDoc.body) {
-              clonedDoc.body.style.margin = '0';
-              clonedDoc.body.style.padding = '0';
-              clonedDoc.body.style.background = '#fff';
-            }
-          }
-        },
-        jsPDF: {
-          unit: 'mm',
-          format: 'a4',
-          orientation: 'portrait',
-          compress: true
-        }
-      };
-
-      // 不走 html2pdf 的 toPdf() 内置 autoPaging（会因为亚像素溢出多出空白页或切掉 footer），
-      // 改成：自己 toCanvas() 拿 canvas → 切片 → 手动 addImage 到 jsPDF
-      // 这样 PDF 内容能精确填满 A4，无上下白边
-
-      const worker = html2pdf().set(opt).from(sourceInvoice);
-
-      worker.toCanvas().get('canvas').then(function(canvas) {
-        // 拿一个空的 jsPDF 实例（不再让 html2pdf 自动 addImage 分页）
-        return worker.toPdf().get('pdf').then(function(pdf) {
-          // 清空 html2pdf 已经加好的所有页
-          const initPages = pdf.internal.getNumberOfPages();
-          for (let i = initPages; i >= 1; i--) {
-            pdf.deletePage(i);
-          }
-          pdf.addPage(opt.jsPDF.format, opt.jsPDF.orientation);
-
-          const pdfWidthMm = isReceipt ? 210 : 210;
-          const pdfHeightMm = heightMm;
-
-          const canvasPxPerMm = canvas.width / pdfWidthMm;
-          const pagePxHeight = pdfHeightMm * canvasPxPerMm;
-
-          if (!allowMultiPage) {
-            // 単页：整个 canvas 填满 A4
-            const imgData = canvas.toDataURL('image/jpeg', 0.98);
-            pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidthMm, pdfHeightMm, undefined, 'FAST');
-          } else {
-            // 多页：先判断是否真要多页
-            // 容差：内容超出最后一页不到 10mm 视为单页（吸收亚像素溢出）
-            const tolerancePx = 10 * canvasPxPerMm;
-            let effectiveHeight = canvas.height;
-            if (docType !== 'onoda' && effectiveHeight - pagePxHeight < tolerancePx && effectiveHeight > pagePxHeight) {
-              effectiveHeight = pagePxHeight;  // 强制收回到一页
-            }
-            const pageCount = Math.max(1, Math.ceil(effectiveHeight / pagePxHeight));
-
-            for (let p = 0; p < pageCount; p++) {
-              if (p > 0) pdf.addPage(opt.jsPDF.format, opt.jsPDF.orientation);
-
-              const sourceY = p * pagePxHeight;
-              const sourceH = Math.min(pagePxHeight, effectiveHeight - sourceY);
-
-              // 切片到独立 canvas
-              const pageCanvas = document.createElement('canvas');
-              pageCanvas.width = canvas.width;
-              pageCanvas.height = sourceH;
-              const ctx = pageCanvas.getContext('2d');
-              ctx.fillStyle = '#ffffff';
-              ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
-              ctx.drawImage(canvas, 0, sourceY, canvas.width, sourceH, 0, 0, canvas.width, sourceH);
-
-              const imgData = pageCanvas.toDataURL('image/jpeg', 0.98);
-              const outputHeightMm = (sourceH / canvasPxPerMm);
-              // 最后一页：按实际内容高度（不强制拉满），中间页：填满
-              pdf.addImage(imgData, 'JPEG', 0, 0, pdfWidthMm, outputHeightMm, undefined, 'FAST');
-            }
-          }
-
-          pdf.save(filename);
-          cleanup();
-        });
-      }).catch(function(err) {
-        cleanup();
-        alert('PDF 生成失败：' + (err && err.message ? err.message : err) + '\n\n请尝试用 Chrome 浏览器打开本网页');
-      });
-    }, 400);
-  } catch (e) {
-    alert('错误：' + e.message);
+    pdf.save(filename);
+  } catch (error) {
+    alert('PDF生成に失敗しました：' + error.message);
+  } finally {
+    stage.remove();
+    if (btn) btn.textContent = originalText;
   }
 }
 
@@ -2520,6 +2492,15 @@ function deleteConfirmedHistory(index) {
   writeConfirmedHistory(rows);
   renderConfirmedHistory();
 }
+function requestEstimateInvoice(id) {
+  if (!confirm('この見積書から請求書を作成しますか？')) return;
+  if (id) {
+    const estimate = bizState.estimates.find(row => row.id === id);
+    if (!estimate) return;
+    return /^(受注|請求書へ変換済)/.test(estimate.status) ? bizConvertEstimateRecordToInvoice(id) : bizAcceptEstimate(id, true);
+  }
+  return convertEstimateToInvoice();
+}
 function convertEstimateToInvoice() {
   if (docType !== 'estimate') return;
   const oldDate = document.getElementById('invoiceDate').value || todayISO();
@@ -2588,7 +2569,7 @@ function applyFormState(state, forceType) {
   if (!state) return;
   _simpleRestoring = true;
   try {
-    const targetType = forceType || state.docType || 'invoice';
+    const targetType = state.docType || forceType || 'invoice';
     if (docType !== targetType) setDocType(targetType);
     bizRestoreDocumentLinks(state);
     const setv = (id, value) => {
@@ -3322,15 +3303,19 @@ function bizReverseUpdateCalendar(eventId,info){
 function openEventModal(id){
   bizEnsureV5State(); const e=bizState.calendar.find(x=>x.id===id); if(!e)return;
   bizCurrentCalendarId=id;
+  const review=bizCalendarReviewReason(e,bizCalendarDocumentStates());
+  for(const button of document.querySelectorAll('[data-calendar-document]'))button.disabled=!!review;
   const p=bizParseShortTitle(e.title||e.originalTitle||'');
   document.getElementById('eventModalTitle').textContent=`${bizFmtDate(e.date)} ${e.title||''}`;
-  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(e.paymentMethod||p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
+  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(review||bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(e.paymentMethod||p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
   document.getElementById('bizEventModal').classList.remove('biz-hidden');
 }
 function closeEventModal(){document.getElementById('bizEventModal')?.classList.add('biz-hidden')}
 function bizLoadDocFromEvent(e,type){
+  if(bizCalendarReviewReason(e,bizCalendarDocumentStates()))return false;
   const linkedId=type==='invoice'?e.linkedInvoiceId:type==='receipt'?e.linkedReceiptId:bizState.estimates?.find(x=>x.id===e.linkedEstimateId)?.historyId;
   const saved=linkedId&&loadConfirmedHistory().find(x=>x.historyId===linkedId);
+  if(saved&&saved.docType!==type){alert('関連帳票の種類が一致しません。保存済み帳票を確認してください。');return false;}
   if(saved){applyFormState(saved,type);bizCurrentCalendarId=e.id;bizSwitchPage('chohyo');closeEventModal();return;}
   const p=bizParseShortTitle(e.title||e.originalTitle||'');
   bizSwitchPage('chohyo');setDocType(type);
@@ -3348,23 +3333,36 @@ function bizLoadDocFromEvent(e,type){
 function bizCreateDocFromCurrentEvent(type){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e)bizLoadDocFromEvent(e,type)}
 function bizEstimateFromHistory(id){
   bizEnsureV5State();const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
+  const h=loadConfirmedHistory().find(x=>x.historyId===r.historyId);
+  if(!h||h.docType!=='estimate')return alert('関連する見積書を確認してください。');
   bizCurrentEstimateId=id;bizCurrentCalendarId=r.calendarEventId||'';bizCurrentProjectId=r.projectId||'';
-  const h=loadConfirmedHistory().find(x=>x.historyId===r.historyId);if(h){applyFormState(h,'estimate');bizSwitchPage('chohyo');const b=document.getElementById('bizLinkedSource');if(b){b.style.display='block';b.textContent='見積履歴から呼び出し中：'+(r.customer||'')}}
+  applyFormState(h,'estimate');bizSwitchPage('chohyo');const b=document.getElementById('bizLinkedSource');if(b){b.style.display='block';b.textContent='見積履歴から呼び出し中：'+(r.customer||'')}
 }
 async function bizAcceptEstimate(id,makeInvoice=false){
   if(bizEstimateIssuedNotice(id))return;
   bizEnsureV5State();const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
+  const editor=makeInvoice?collectFormState():null;
+  const page=document.querySelector('#bizNav button.active')?.dataset.page;
   let input=r.workDate||r.snapshot?.workDate||'';if(String(r.status||'').startsWith('受注')&&!makeInvoice){input=prompt('施工日 YYYY-MM-DD（未定なら空欄）',input);if(input===null)return;}
   const date=input.trim()||r.workDate||'';try{if(date)TsukinowaAccounting.date(date);}catch(e){return alert(e.message);}
   let p=bizState.projects.find(x=>x.estimateId===id);if(!p){p={id:'project_'+id,estimateId:id,customer:r.customer,content:r.content,amount:r.amount};bizState.projects.push(p);}
   r.projectId=p.id;r.status=p.status=date?'受注':'受注・日程未定';r.workDate=p.workDate=date;
   if(date){const calendarEventId=r.calendarEventId||p.calendarEventId||'cal_'+id;const hash=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(p.id));const googleEventId='e'+Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('').slice(0,48);const old=bizState.calendar.find(x=>x.id===calendarEventId);const event=TsukinowaBusiness.schedule(r,p,old||{},{calendarEventId,googleEventId},date);if(old)Object.assign(old,event);else bizState.calendar.push(event);r.calendarEventId=p.calendarEventId=calendarEventId;bizGooglePatchEvent(event);}
-  bizCurrentEstimateId=id;bizCurrentProjectId=p.id;bizCurrentCalendarId=r.calendarEventId||'';if(date)document.getElementById('calendarMonth').value=date.slice(0,7);
-  bizPersist();bizRefreshAll();if(makeInvoice)bizConvertEstimateRecordToInvoice(id);
+  const sameEditor=!editor||page===document.querySelector('#bizNav button.active')?.dataset.page&&TsukinowaCloudCore.canonical(editor)===TsukinowaCloudCore.canonical(collectFormState());
+  if(sameEditor){bizCurrentEstimateId=id;bizCurrentProjectId=p.id;bizCurrentCalendarId=r.calendarEventId||'';}if(date)document.getElementById('calendarMonth').value=date.slice(0,7);
+  bizPersist();bizRefreshAll();if(makeInvoice&&sameEditor)bizConvertEstimateRecordToInvoice(id);
 }
 function bizConvertEstimateRecordToInvoice(id){
   if(bizEstimateIssuedNotice(id))return;
-  const r=bizState.estimates.find(x=>x.id===id);if(!r)return;const h=loadConfirmedHistory().find(x=>x.historyId===r.historyId);if(!h)return alert('元の見積履歴が見つかりません。');
+  const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
+  const history=loadConfirmedHistory(),h=history.find(x=>x.historyId===r.historyId&&x.docType==='estimate');
+  if(!h)return alert('元の見積履歴が見つかりません。');
+  const sale=bizState.sales.find(x=>x.estimateId===id&&x.docType==='invoice');
+  if(sale){
+    const existing=history.findIndex(x=>x.historyId===sale.sourceId&&x.docType==='invoice');
+    if(existing<0)return alert('関連する正式請求書を確認してください。');
+    return openSavedDoc(existing);
+  }
   bizCurrentEstimateId=id;bizCurrentProjectId=r.projectId||'';bizCurrentCalendarId=r.calendarEventId||'';applyFormState(h,'estimate');
   const links=[bizCurrentCalendarId,bizCurrentEstimateId,bizCurrentProjectId];
   _legacyConvertEstimateToInvoiceV5();
@@ -3389,12 +3387,13 @@ function renderEstimates(){
   document.getElementById('estimateDateHeader')?.setAttribute('aria-sort',bizEstimateDateDescending?'descending':'ascending');
   const direction=document.getElementById('estimateDateDirection');if(direction)direction.textContent=bizEstimateDateDescending?'▼':'▲';
   const el=document.getElementById('estimateRows');if(!el)return;
-  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${r.invoiceIssued?'請求書発行済':bizEsc(r.status||'見積済')}</span></td><td>${bizEsc(r.workDate||'—')}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${!r.invoiceIssued&&String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!r.invoiceIssued&&!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''} ${r.invoiceIssued?`<button class="biz-btn" onclick="bizSwitchPage('savedDocs')">保存帳票</button>`:`<button class="biz-btn primary" onclick="${String(r.status||'').includes('受注')?`bizConvertEstimateRecordToInvoice('${r.id}')`:`bizAcceptEstimate('${r.id}',true)`}">請求書へ</button>`}</div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
+  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${r.invoiceIssued?'請求書発行済':bizEsc(r.status||'見積済')}</span></td><td>${bizEsc(r.workDate||'—')}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${!r.invoiceIssued&&String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!r.invoiceIssued&&!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''} ${r.invoiceIssued?`<button class="biz-btn" onclick="bizSwitchPage('savedDocs')">保存帳票</button>`:`<button class="biz-btn primary" onclick="requestEstimateInvoice('${r.id}')">請求書へ</button>`}</div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
 }
 const _legacyConvertEstimateToInvoiceV5=convertEstimateToInvoice;
 convertEstimateToInvoice=function(){
   if(docType!=='estimate')return _legacyConvertEstimateToInvoiceV5();
   if(bizCurrentEstimateId&&bizEstimateIssuedNotice(bizCurrentEstimateId))return;
+  if(bizCurrentEstimateId&&bizState.sales.some(x=>x.estimateId===bizCurrentEstimateId&&x.docType==='invoice'))return bizConvertEstimateRecordToInvoice(bizCurrentEstimateId);
   // 今の見積が履歴にある場合は受注化してリンクを維持
   if(bizCurrentEstimateId){const r=bizState.estimates?.find(x=>x.id===bizCurrentEstimateId);if(r&&r.status!=='受注')bizAcceptEstimate(r.id,false)}
   const links=[bizCurrentCalendarId,bizCurrentEstimateId,bizCurrentProjectId];
@@ -3451,14 +3450,32 @@ function bizRestoreDocumentLinks(state){
   bizCurrentProjectId=state.projectId||e?.projectId||estimate?.projectId||'';
 }
 function openSavedDoc(index){const rows=loadConfirmedHistory();const state=rows[index];if(!state)return;applyFormState(state,state.docType||'invoice');saveActiveTab(state.docType||'invoice');bizSwitchPage('chohyo');window.scrollTo({top:0,behavior:'smooth'});}
-function redownloadSavedDoc(index){const rows=loadConfirmedHistory();const state=rows[index];if(!state)return;applyFormState(state,state.docType||'invoice');saveActiveTab(state.docType||'invoice');bizSwitchPage('chohyo');setTimeout(()=>{doPrint();},120);}
+function redownloadSavedDoc(index){if(!loadConfirmedHistory()[index])return;openSavedDoc(index);return doPrint();}
 
 const _oldRefreshV5=bizRefreshAll;
 bizRefreshAll=function(){bizEnsureV5State();_oldRefreshV5();renderEstimates();renderAllSavedDocs()};
 // 日程列表增强：点开即可进入系统
+function bizCalendarDocumentStates(){
+  const documents=TsukinowaBusinessUI.isEnabled()?TsukinowaBusinessUI.calendarDocumentStates():new Map(loadConfirmedHistory().flatMap(h=>[h.documentId,h.historyId].filter(Boolean).map(id=>[id,h.documentStatus||'active'])));
+  for(const e of bizState.estimates)documents.set('estimate:'+e.id,documents.get(e.documentId||e.historyId)||e.documentStatus);
+  return documents;
+}
+function bizCalendarReviewReason(e, documents){
+  if(e.googleStatus==='cancelled')return 'Google日程取消';
+  const inactive={void:'無効',cancelled:'取消',duplicate:'重複',revised:'訂正済'};
+  // documentId points to the current document. Older links can name more than one document.
+  const ids=[...new Set([e.linkedInvoiceId,e.linkedReceiptId].filter(Boolean))];
+  const documentStatus=documents.get(e.documentId||(ids.length===1?ids[0]:!ids.length?'estimate:'+e.linkedEstimateId:''));
+  if(Object.hasOwn(inactive,documentStatus))return inactive[documentStatus];
+  if(!e.documentId&&ids.length>1&&ids.some(id=>Object.hasOwn(inactive,documents.get(id))))return '帳票状態を要確認';
+  if(Object.hasOwn(inactive,e.documentStatus)||Object.values(inactive).includes(e.status)){
+    return documentStatus==='active'||!e.documentId&&ids.length!==1?'帳票状態を要確認':inactive[e.documentStatus]||e.status;
+  }
+  return '';
+}
 function renderCalendarEvents(){
-  bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const rows=bizState.calendar.filter(e=>!e.deletedAt&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
-  tbody.innerHTML=rows.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${bizEventStatus(e)==='予定'?'':'ok'}">${bizEsc(bizEventStatus(e))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">対象月の日程はまだ取り込まれていません。</td></tr>';
+  bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=document.getElementById('calendarReview').checked,documents=bizCalendarDocumentStates();const rows=bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
+  tbody.innerHTML=rows.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">対象月の日程はまだ取り込まれていません。</td></tr>';
 }
 // 新規帳票へ移った時は必要に応じてリンクを解除するヘルパー
 function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCurrentProjectId='';const b=document.getElementById('bizLinkedSource');if(b)b.style.display='none'}
