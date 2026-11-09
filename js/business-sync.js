@@ -17,7 +17,8 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
    if(stopped||reloading)return;
    if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
-   else if(value.length){rows[name]=value;onData(rows);}
+   // The app cache contains the last server-confirmed lifecycle state for these rows.
+   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||storage.getItem(prefix+name)!==null))){rows[name]=value;onData(rows);}
    status();
  },e=>{if(!stopped){if(name==='receivables'&&String(e.code||'').includes('permission-denied')){rows[name]=[];serverSeen.add(name);onData(rows);status();return;}error=e.message;status();}}));status();flush();}
  async function reload(){

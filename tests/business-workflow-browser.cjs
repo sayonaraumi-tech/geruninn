@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{for(const width of [390,1280]){
- const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:'block'}),errors=[],remote=new Map(),posts=[],patches=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await browser.newPage({viewport:{width,height:900},hasTouch:width===390,serviceWorkers:'block'}),errors=[],remote=new Map(),posts=[],patches=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false,companyId:'tsukinowa',firebase:{}}}));await page.route('https://cdnjs.cloudflare.com/**',r=>r.fulfill({body:''}));await page.route('https://accounts.google.com/**',r=>r.fulfill({body:''}));
  await page.route('https://www.googleapis.com/**',async r=>{const req=r.request(),url=new URL(req.url()),id=url.pathname.split('/').at(-1);if(req.method()==='POST'){const body=req.postDataJSON();posts.push(body);if(remote.has(body.id))return r.fulfill({status:409,json:{error:{message:'duplicate'}}});remote.set(body.id,{...body,etag:'"1"'});return r.fulfill({json:remote.get(body.id)});}if(req.method()==='PATCH'){const body=req.postDataJSON();patches.push(body);remote.set(id,{...remote.get(id),...body});return r.fulfill({json:remote.get(id)});}return r.fulfill({json:remote.get(id)||{error:{message:'missing'}}});});
  // Keep the October fixture in its intended dashboard month, independent of today's date.
@@ -13,7 +13,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   window.testRecords=records;window.testClient=client;window.testService=TsukinowaBusiness.createService(client);bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;bizGoogleGrantedScopes=TSUKINOWA_GOOGLE_SCOPE;bizGoogleCalendarId='shared';bizGoogleCalendarsLoaded=true;
  });
 
- const alerts=[];page.on('dialog',async d=>{alerts.push(d.message());await d.dismiss();});
+ const alerts=[];let confirmConversion=false;page.on('dialog',async d=>{alerts.push(d.message());if(confirmConversion&&d.type()==='confirm')await d.accept();else await d.dismiss();});
  await page.evaluate(()=>{
   window.pdfSaves=0;window.pdfNames=[];window.html2pdf=()=>{const canvas=document.createElement('canvas');canvas.width=794;canvas.height=1123;const pdf={internal:{getNumberOfPages:()=>1},deletePage(){},addPage(){},addImage(){},save(name){pdfSaves++;pdfNames.push(name)}};const worker={set(){return worker},from(){return worker},toCanvas(){return worker},toPdf(){return worker},get:key=>Promise.resolve(key==='canvas'?canvas:pdf)};return worker;};
  });
@@ -99,6 +99,68 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(async()=>{const link=await testService.execute({type:'calendar',operationId:crypto.randomUUID(),event:{id:'formal-existing',date:'2026-10-19',title:'工事'}});await testService.execute({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot:{documentId:'formal-existing',docType:'invoice',calendarEventId:link.id,customerName:'正式顧客',invoiceDate:'2026-10-19',items:[{content:'工事',qty:1,price:1000}]}});window.formalEventId=link.id;});
  await page.waitForFunction(()=>bizState.sales.some(s=>s.documentId==='formal-existing'));await page.evaluate(()=>openEventModal(formalEventId));assert.equal(await page.locator('#eventSaleButton').isDisabled(),true);assert.match(await page.locator('#eventSaleStatus').innerText(),/登録済/);
  await page.evaluate(()=>{window.actualGetState=testClient.getState;testClient.getState=()=>({...actualGetState(),role:'staff'});openEventModal('manual-bank');});assert.equal(await page.locator('#eventSaleButton').isVisible(),false);await page.evaluate(()=>{bizOpenCalendarSale();testClient.getState=actualGetState;});assert.equal(await page.locator('#eventSaleForm').isVisible(),false);
+ await page.evaluate(()=>closeEventModal());
+ // Reproduce a stale conversion command from the previous release and a fresh touch conversion.
+ await page.evaluate(()=>{bizSwitchPage('chohyo');setDocType('estimate');});
+ await page.evaluate(()=>{TsukinowaBusinessUI.configure(false);TsukinowaBusinessUI.configure(true);TsukinowaBusinessUI.auth(testClient.getState(),testClient);});
+ await page.waitForFunction(()=>TsukinowaBusinessUI.getSync()?.getRevision('documents','formal-existing'));
+ assert.deepEqual(await page.evaluate(()=>[collectFormState().docType,document.querySelector('.tab.active').dataset.type,document.getElementById('titleClassic').textContent.replace(/ /g,'')]),['estimate','estimate','見積書']);
+ const draft=await page.evaluate(async()=>{
+  document.getElementById('customerName').value='匿名回帰';
+  items=[{content:'試験施工',qty:1,price:188660,taxable:true}];recalc();
+  const s=collectFormState();await Promise.all([doPrint(),doPrint()]);
+  return {id:s.documentId,type:s.docType};
+ });
+ await page.waitForFunction(id=>bizState.estimates.some(e=>e.documentId===id),draft.id);
+ const newEstimate=await page.evaluate(id=>bizState.estimates.find(e=>e.documentId===id).id,draft.id);
+ assert.equal(draft.type,'estimate');
+ assert.deepEqual(await page.evaluate(id=>{const h=loadConfirmedHistory().find(h=>h.documentId===id);return [h.docType,h.documentStatus,TsukinowaBusiness.total(h),bizState.sales.some(s=>s.documentId===id)];},draft.id),['estimate','active',207526,false]);
+ assert.match(await page.evaluate(()=>pdfNames.at(-1)),/見積書\.pdf$/);
+ const convert=page.locator('#estimateConvertWrap button');
+ const press=locator=>width===390?locator.tap():locator.click();
+ await press(convert);
+ assert.equal(await page.evaluate(()=>docType),'estimate');
+ assert.match(alerts.at(-1),/見積書から請求書/);
+
+ await page.context().setOffline(true);
+ confirmConversion=true;
+ await press(convert);
+ confirmConversion=false;
+ await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().some(x=>x.command.type==='acceptEstimate'));
+ const nextDraft=await page.evaluate(()=>{setDocType('estimate');return collectFormState().documentId;});
+ await page.context().setOffline(false);
+ await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());
+ await page.waitForFunction(id=>bizState.estimates.find(e=>e.id===id)?.status.startsWith('受注'),newEstimate);
+ assert.deepEqual(await page.evaluate(()=>[docType,collectFormState().documentId]),['estimate',nextDraft]);
+
+ await page.context().setOffline(true);
+ await page.evaluate(id=>{
+  const sync=TsukinowaBusinessUI.getSync();
+  sync.enqueue({type:'acceptEstimate',estimateId:id,expectedRevision:sync.getRevision('estimates',id),operationId:'legacy-conversion',openInvoice:true,workDate:''});
+  TsukinowaBusinessUI.auth(testClient.getState(),testClient);
+ },newEstimate);
+ await page.context().setOffline(false);
+ await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());
+ await page.waitForFunction(()=>!TsukinowaBusinessUI.getSync().getQueue().length);
+ assert.deepEqual(await page.evaluate(()=>[docType,collectFormState().documentId]),['estimate',nextDraft]);
+
+ // The usual list hides inactive links even if their Google title is still stale.
+ await page.evaluate(async()=>{
+  const revision=TsukinowaBusinessUI.getSync().getRevision('documents','formal-existing');
+  await testService.execute({type:'documentStatus',documentId:'formal-existing',expectedRevision:revision,status:'void',reason:'匿名回帰',operationId:'void-calendar-test'});
+  const e=bizState.calendar.find(e=>e.id===formalEventId);
+  await testService.execute({type:'calendar',operationId:'stale-calendar-test',event:{id:e.id,date:e.date,title:'旧Googleタイトル',googleStatus:'confirmed'}});
+  bizSwitchPage('calendar');document.getElementById('calendarMonth').value='2026-10';renderCalendarEvents();
+ });
+ await page.waitForFunction(()=>loadConfirmedHistory().find(h=>h.documentId==='formal-existing')?.documentStatus==='void');
+ const formalEventId=await page.evaluate(()=>window.formalEventId);
+ const calendarRow=page.locator('#calendarRows tr').filter({has:page.locator(`button[onclick*="${formalEventId}"]`)});
+ assert.equal(await calendarRow.count(),0);
+ await page.locator('#calendarReview').check();
+ assert.match(await calendarRow.innerText(),/無効/);
+ await calendarRow.getByRole('button',{name:'開く'}).click();
+ assert.equal(await page.locator('[data-calendar-document]').first().isDisabled(),true);
+ assert.equal(await page.locator('#eventSaleButton').isVisible(),false);
  await page.evaluate(()=>closeEventModal());
  assert.deepEqual(errors,[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  console.log(`PASS ${width}px: four new formal documents/PDF without Google; original open/redownload/bottom PDF zero save calls and zero database/number/accounting/Calendar writes; readonly controls; sales button/payment form/balance dialog confirmed bank payments, partial/final balances, double-click one payment, identical real second deposit accepted, no PDF/document/number writes; modified content rejected; saved workDate acceptance without prompt; pending Google visible`);await page.close();
