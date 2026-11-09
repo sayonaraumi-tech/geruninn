@@ -4,6 +4,19 @@ const COLLECTIONS=['estimates','projects','documents','sales','receivables','pay
 const H=typeof module==='object'&&module.exports?require('./historical-import.js'):globalThis.TsukinowaHistorical;
 const anchorCollection=id=>String(id).startsWith('receivable_')?'receivables':'sales';
 const clone=x=>JSON.parse(JSON.stringify(x));
+// Issuance is independent of payments and cancellation. Never infer identity
+// from customer, amount, project or calendar coincidence.
+function estimateInvoices(estimateId,documents=[],sales=[]){
+ if(!estimateId)return [];
+ return documents.filter(d=>{
+  if(!['invoice','onoda'].includes(d.docType)||d.confirmed!==true||d.deletedAt)return false;
+  const documentId=d.documentId||d.id;
+  const refs=[d.estimateId,d.snapshot?.estimateId,...sales.filter(s=>
+   documentId&&(s.documentId||s.sourceId)===documentId||d.saleId&&s.id===d.saleId
+  ).map(s=>s.estimateId)].filter(Boolean);
+  return refs.length>0&&refs.every(id=>id===estimateId);
+ });
+}
 function cleanSnapshot(s){const out=core.normalizeDates(s);for(const k of ['savedAt','scrollY','cloudRevision','historyId','version','_cloudIdentity','documentStatus','statusReason','revisedFromDocumentId','duplicateOfDocumentId','revisedToDocumentId'])delete out[k];for(const k of ['customerCompany','customerAddress'])if(!out[k])delete out[k];return out;}
 function onodaCarryoverLabel(value){
  const month=String(value||'').trim();
@@ -537,5 +550,5 @@ function formalDocumentNeedsRepair(row,rows){
  if(!A.live(p)||!formalType(p.docType)||!p.saleId||!s.customerName?.trim()||!(p.amount>0)||!formalDate(s))return false;
  return !current||!current.googleEventId||current.linkedInvoiceId!==row.id;
 }
-return {formalDocumentNeedsRepair,formalCalendarTitle,receiptAccountingNeedsRepair,calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,onodaTotals,cleanSnapshot,summary};
+return {estimateInvoices,formalDocumentNeedsRepair,formalCalendarTitle,receiptAccountingNeedsRepair,calendarTime,canDeleteMisregistration,CATEGORY_RULES,rawContent,projectCategory,filenameProject,onodaFilename,documentFilename,estimateFilename,parseCalendar,schedule,numberingMinute,createService,COLLECTIONS,total,onodaTotals,cleanSnapshot,summary};
 });

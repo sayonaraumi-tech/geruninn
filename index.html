@@ -1097,8 +1097,8 @@ dialog h2{font-size:15px}
 
 
 <div id="pageEstimates" class="biz-page app-page">
- <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">見積だけで終わったお客様もここには残します。未成約の見積は正式案件・売上には入りません。</div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>保存済み見積</h2><div class="biz-actions"><input id="estimateSearch" placeholder="客户名・地区・金额" oninput="renderEstimates()"></div></div>
+ <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">正式請求書の発行前はここで管理します。発行後の入金確認は売上・入金台帳へ。元の見積書・取消／訂正帳票は保存帳票から確認できます。</div></div></div>
+ <div class="biz-section"><div class="biz-section-head"><h2>保存済み見積</h2><div class="biz-actions"><label><input type="checkbox" id="estimateShowIssued" onchange="renderEstimates()"> 請求書発行済みの履歴も表示</label><input id="estimateSearch" placeholder="客户名・地区・金额" oninput="renderEstimates()"></div></div>
   <div class="biz-table-wrap"><table class="biz-table estimate-history"><thead><tr><th aria-sort="descending" id="estimateDateHeader"><button class="biz-sort" onclick="bizToggleEstimateDateSort()">見積日 <span id="estimateDateDirection">▼</span></button></th><th>客户</th><th>項目分類 / 内容摘要</th><th class="biz-money">金额</th><th>状态</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
  </div>
 </div>
@@ -3339,6 +3339,7 @@ function bizEstimateFromHistory(id){
   applyFormState(h,'estimate');bizSwitchPage('chohyo');const b=document.getElementById('bizLinkedSource');if(b){b.style.display='block';b.textContent='見積履歴から呼び出し中：'+(r.customer||'')}
 }
 async function bizAcceptEstimate(id,makeInvoice=false){
+  if(bizEstimateIssuedNotice(id))return;
   bizEnsureV5State();const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
   const editor=makeInvoice?collectFormState():null;
   const page=document.querySelector('#bizNav button.active')?.dataset.page;
@@ -3352,6 +3353,7 @@ async function bizAcceptEstimate(id,makeInvoice=false){
   bizPersist();bizRefreshAll();if(makeInvoice&&sameEditor)bizConvertEstimateRecordToInvoice(id);
 }
 function bizConvertEstimateRecordToInvoice(id){
+  if(bizEstimateIssuedNotice(id))return;
   const r=bizState.estimates.find(x=>x.id===id);if(!r)return;
   const history=loadConfirmedHistory(),h=history.find(x=>x.historyId===r.historyId&&x.docType==='estimate');
   if(!h)return alert('元の見積履歴が見つかりません。');
@@ -3367,7 +3369,12 @@ function bizConvertEstimateRecordToInvoice(id){
   [bizCurrentCalendarId,bizCurrentEstimateId,bizCurrentProjectId]=links;bizSwitchPage('chohyo');
   const b=document.getElementById('bizLinkedSource');if(b){b.style.display='block';b.textContent='見積履歴から請求書へ変換中：'+r.customer}
 }
-function bizRegisterEstimatePayment(id){const sale=bizState.sales.find(s=>s.estimateId===id);if(sale)return selectSaleForPayment(sale.id);alert('対象請求書を正式保存してから入金を登録してください。見積だけでは売上を作成しません。');}
+function bizEstimateInvoices(id){
+ const docs=window.bizEstimateDocuments?window.bizEstimateDocuments():loadConfirmedHistory().map(d=>({...d,confirmed:true}));
+ return TsukinowaBusiness.estimateInvoices(id,docs,window.bizEstimateSales?window.bizEstimateSales():bizState.sales);
+}
+function bizEstimateIssuedNotice(id){if(!bizEstimateInvoices(id).length)return false;alert('正式請求書は保存帳票、入金確認は売上・入金台帳から行ってください。取消・訂正も保存帳票で確認してください。');bizSwitchPage('savedDocs');return true;}
+function bizRegisterEstimatePayment(id){bizEstimateIssuedNotice(id)||alert('対象請求書を正式保存してから売上・入金台帳で入金を登録してください。見積だけでは売上を作成しません。');}
 
 let bizEstimateDateDescending=true;
 function bizToggleEstimateDateSort(){bizEstimateDateDescending=!bizEstimateDateDescending;renderEstimates()}
@@ -3376,15 +3383,16 @@ function bizEstimateCreatedTime(value){
   const time=Date.parse(value||'');return Number.isFinite(time)?BigInt(time)*1000000n:0n;
 }
 function renderEstimates(){
-  bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.map(r=>{const snapshot=r.snapshot||loadConfirmedHistory().find(h=>h.historyId===r.historyId);return {...r,content:TsukinowaBusiness.rawContent(snapshot||r),projectCategory:TsukinowaBusiness.projectCategory({...r,snapshot}),historyCreatedAt:snapshot?.savedAt};}).filter(r=>!q||[r.customer,r.projectCategory,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q)).sort((a,b)=>(bizEstimateDateDescending?-1:1)*String(a.date||'').localeCompare(String(b.date||''))||Number(bizEstimateCreatedTime(b.displayCreatedAt||b.createdAt||b.historyCreatedAt)-bizEstimateCreatedTime(a.displayCreatedAt||a.createdAt||a.historyCreatedAt))||String(a.id||'').localeCompare(String(b.id||'')));
+  bizEnsureV5State();const q=(document.getElementById('estimateSearch')?.value||'').toLowerCase();const rows=bizState.estimates.map(r=>({...r,invoiceIssued:bizEstimateInvoices(r.id).length>0})).filter(r=>document.getElementById('estimateShowIssued')?.checked||!r.invoiceIssued).map(r=>{const snapshot=r.snapshot||loadConfirmedHistory().find(h=>h.historyId===r.historyId);return {...r,content:TsukinowaBusiness.rawContent(snapshot||r),projectCategory:TsukinowaBusiness.projectCategory({...r,snapshot}),historyCreatedAt:snapshot?.savedAt};}).filter(r=>!q||[r.customer,r.projectCategory,r.content,r.area,String(r.amount)].join(' ').toLowerCase().includes(q)).sort((a,b)=>(bizEstimateDateDescending?-1:1)*String(a.date||'').localeCompare(String(b.date||''))||Number(bizEstimateCreatedTime(b.displayCreatedAt||b.createdAt||b.historyCreatedAt)-bizEstimateCreatedTime(a.displayCreatedAt||a.createdAt||a.historyCreatedAt))||String(a.id||'').localeCompare(String(b.id||'')));
   document.getElementById('estimateDateHeader')?.setAttribute('aria-sort',bizEstimateDateDescending?'descending':'ascending');
   const direction=document.getElementById('estimateDateDirection');if(direction)direction.textContent=bizEstimateDateDescending?'▼':'▲';
   const el=document.getElementById('estimateRows');if(!el)return;
-  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${bizEsc(r.status||'見積済')}</span></td><td>${bizEsc(r.workDate||'—')}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''}<button class="biz-btn" onclick="bizRegisterEstimatePayment('${r.id}')">入金</button><button class="biz-btn primary" onclick="requestEstimateInvoice('${r.id}')">請求書へ</button></div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
+  el.innerHTML=rows.map(r=>`<tr><td>${bizEsc(r.date||'')}</td><td>${bizEsc(r.customer||'')}</td><td>${bizEsc(r.projectCategory)}<br><small>${bizEsc(r.content||'')}</small></td><td class="biz-money">${bizMoney(r.amount)}</td><td><span class="biz-badge ${r.status==='受注'?'ok':'warn'}">${r.invoiceIssued?'請求書発行済':bizEsc(r.status||'見積済')}</span></td><td>${bizEsc(r.workDate||'—')}</td><td><div class="biz-actions"><button class="biz-btn" onclick="bizEstimateFromHistory('${r.id}')">開く</button>${!r.invoiceIssued&&String(r.status||'').includes('受注')?`<button class="biz-btn" onclick="bizAcceptEstimate('${r.id}',false)">施工日を設定</button>`:''}${!r.invoiceIssued&&!String(r.status||'').includes('受注')?`<button class="biz-btn ok" onclick="bizAcceptEstimate('${r.id}',false)">受注</button>`:''} ${r.invoiceIssued?`<button class="biz-btn" onclick="bizSwitchPage('savedDocs')">保存帳票</button>`:`<button class="biz-btn primary" onclick="requestEstimateInvoice('${r.id}')">請求書へ</button>`}</div></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">見積履歴はまだありません。</td></tr>';
 }
 const _legacyConvertEstimateToInvoiceV5=convertEstimateToInvoice;
 convertEstimateToInvoice=function(){
   if(docType!=='estimate')return _legacyConvertEstimateToInvoiceV5();
+  if(bizCurrentEstimateId&&bizEstimateIssuedNotice(bizCurrentEstimateId))return;
   if(bizCurrentEstimateId&&bizState.sales.some(x=>x.estimateId===bizCurrentEstimateId&&x.docType==='invoice'))return bizConvertEstimateRecordToInvoice(bizCurrentEstimateId);
   // 今の見積が履歴にある場合は受注化してリンクを維持
   if(bizCurrentEstimateId){const r=bizState.estimates?.find(x=>x.id===bizCurrentEstimateId);if(r&&r.status!=='受注')bizAcceptEstimate(r.id,false)}

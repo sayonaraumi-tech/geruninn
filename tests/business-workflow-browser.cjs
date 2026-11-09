@@ -63,6 +63,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(()=>TsukinowaBusinessUI.patchPending());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);
  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);const beforeOriginal=await page.evaluate(()=>JSON.stringify([...testRecords]));const saves=await page.evaluate(()=>pdfSaves);await page.evaluate(()=>doPrint());await page.waitForFunction(n=>pdfSaves===n,saves+1);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimate.id);assert.equal(await page.locator('#customerName').isDisabled(),false);assert.equal(await page.evaluate(()=>collectFormState().calendarEventId),await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).id));assert.equal(await page.evaluate(()=>collectFormState().salesDate),'2026-10-20');
+ await require('./estimate-issued-history-browser.cjs')(page);
  // Independent browser regression: imported cash without a customer appears in the actual sales table.
  const cashResult=await page.evaluate(async()=>{
   const event={googleEventId:'browser-unnamed',googleCalendarId:'shared',date:'2026-10-05',start:'2026-10-05T09:00:00+09:00',end:'2026-10-05T10:00:00+09:00',location:'文京区',title:'クロス張り替え、14000、文京区、km、現金'};
