@@ -3603,7 +3603,7 @@ function renderCalendarEvents(){
   if(cards)cards.innerHTML=shown.map(e=>{
     const type=tsukiCalendarKindOf(e),label={work:'工事',estimate:'見積',survey:'調査',other:'その他'}[type];
     const title=bizEsc(e.customerName||e.title||'(無題)'),loc=bizEsc(e.location||e.area||''),time=bizEsc(TsukinowaBusiness.calendarTime(e.start)||'時刻未設定');
-    return '<article class="tsuki-cal-event tsuki-kind-'+type+'"><div class="tsuki-cal-event-time">'+time+'</div><div class="tsuki-cal-event-main"><span class="tsuki-cal-kind">'+label+'</span><strong>'+title+'</strong><div class="tsuki-cal-location">'+loc+'</div><small>'+bizEsc(e.description||bizEventStatus(e))+'</small></div><div class="tsuki-cal-event-actions"><button type="button" class="biz-btn" data-tsuki-open="'+bizEsc(e.id)+'">詳細・編集</button></div></article>';
+    return '<article class="tsuki-cal-event"><div class="tsuki-cal-event-time">'+time+'</div><div class="tsuki-cal-event-main"><span class="tsuki-cal-kind tsuki-kind-'+type+'">'+label+'</span><strong>'+title+'</strong><div class="tsuki-cal-location">'+loc+'</div><small>'+bizEsc(e.description||bizEventStatus(e))+'</small></div><div class="tsuki-cal-event-actions"><button type="button" class="biz-btn" data-tsuki-open="'+bizEsc(e.id)+'">詳細・編集</button></div></article>';
   }).join('')||'<p class="biz-muted">この条件の予定はありません。</p>';
   if(cards)cards.querySelectorAll('[data-tsuki-open]').forEach(b=>b.addEventListener('click',()=>tsukiShowCalendarDetail(b.dataset.tsukiOpen,true)));
   const recent=document.getElementById('tsukiCalendarRecentRows');
