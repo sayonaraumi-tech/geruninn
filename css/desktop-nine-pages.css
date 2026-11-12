@@ -199,3 +199,42 @@
  body.tsuki-ui #pageChohyo .editor-card .form-group{min-width:0;}
  body.tsuki-ui #pageChohyo .editor-card :is(input,select){max-width:100%;}
 }
+
+/* Bank reconciliation: original live CSV rows, actual candidate selector and
+   existing confirmation buttons in three distinct desktop work zones. */
+@media screen and (min-width:801px) {
+ body.tsuki-ui #pageBank.active {
+   display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,.85fr);
+   gap:10px;align-items:start;
+ }
+ body.tsuki-ui #pageBank>.biz-title,
+ body.tsuki-ui #pageBank>.bank-import {grid-column:1/-1;margin:0;}
+ body.tsuki-ui #pageBank>.tsuki-bank-transactions {grid-column:1;grid-row:3;}
+ body.tsuki-ui #pageBank>.tsuki-bank-candidates {grid-column:2;grid-row:3;}
+ body.tsuki-ui #pageBank>.tsuki-bank-operations {grid-column:3;grid-row:3;}
+ body.tsuki-ui #pageBank>.biz-section:not(.bank-import):not(.tsuki-bank-transactions):not(.tsuki-bank-candidates):not(.tsuki-bank-operations) {
+   grid-column:1/-1;
+ }
+ body.tsuki-ui #pageBank>.tsuki-bank-transactions,
+ body.tsuki-ui #pageBank>.tsuki-bank-candidates,
+ body.tsuki-ui #pageBank>.tsuki-bank-operations {
+   min-width:0;min-height:250px;padding:12px;margin:0;border-radius:8px;
+ }
+ body.tsuki-ui #pageBank .tsuki-bank-transactions .biz-table-wrap {
+   overflow:auto;max-height:430px;
+ }
+ body.tsuki-ui #pageBank .tsuki-bank-transactions .biz-table {min-width:700px;}
+ body.tsuki-ui #pageBank #bankRows tr {cursor:pointer;}
+ body.tsuki-ui #pageBank #bankRows tr.tsuki-bank-selected {background:#fff6df;}
+ body.tsuki-ui #tsukiBankCandidateMirror,
+ body.tsuki-ui #tsukiBankOperationMirror {display:grid;gap:9px;max-height:430px;overflow:auto;}
+ body.tsuki-ui #tsukiBankCandidateMirror select {width:100%;max-width:100%;min-height:38px;}
+ body.tsuki-ui #tsukiBankCandidateMirror label {display:flex;gap:6px;align-items:start;font-size:12px;}
+ body.tsuki-ui #tsukiBankOperationMirror .biz-btn {width:100%;min-height:38px;text-align:center;}
+ body.tsuki-ui #pageBank .tsuki-bank-candidates .biz-muted,
+ body.tsuki-ui #pageBank .tsuki-bank-operations .biz-muted {overflow-wrap:anywhere;font-size:12px;margin:0 0 10px;}
+}
+@media screen and (max-width:800px) {
+ body.tsuki-ui #pageBank .tsuki-bank-candidates,
+ body.tsuki-ui #pageBank .tsuki-bank-operations {display:none;}
+}
