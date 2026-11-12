@@ -3755,21 +3755,22 @@ document.addEventListener('DOMContentLoaded',()=>{
  if(!register||!imports||!ledger||!cash)return;
  page.classList.add('tsuki-expense-desktop');
  const title=page.querySelector('.biz-title'),desc=title.querySelector('.biz-muted');
- if(desc)desc.textContent='会社カード支出と現金支出を管理します。';
+ if(desc)desc.textContent='会社カード明細と現金支出を取り込み、経費を管理します。';
+ const titleHeading=title.querySelector('h1');if(titleHeading)titleHeading.classList.add('tsuki-exp-heading');
  const get=id=>document.getElementById(id);
  const period=document.createElement('div');period.className='tsuki-exp-period';
- period.innerHTML='<label for="expenseMonth">期間</label><button type="button" id="tsukiExpPrev" class="biz-btn" aria-label="前の月">‹</button><span id="tsukiExpCaption"></span><button type="button" id="tsukiExpNext" class="biz-btn" aria-label="次の月">›</button><span class="tsuki-exp-monthly">月次</span>';
+ period.innerHTML='<label for="expenseMonth">期間</label><span id="tsukiExpCaption"></span><button type="button" id="tsukiExpPrev" class="biz-btn" aria-label="前の月">‹</button><button type="button" id="tsukiExpNext" class="biz-btn" aria-label="次の月">›</button><span class="tsuki-exp-monthly">月次</span>';
  title.append(period);
  const mInput=get('expenseMonth');period.querySelector('label').after(mInput);
  const kpis=document.createElement('div');kpis.className='tsuki-exp-kpis';
  kpis.innerHTML=[['支出合計','tsukiExpTotal'],['会社カード支出','tsukiExpCard'],['現金支出','tsukiExpCash'],['現金残高','tsukiExpBalance']].map(([label,id],i)=>'<div class="tsuki-exp-kpi'+(i===0?' selected':'')+'"><div class="tsuki-exp-kpi-label">'+label+'</div><strong id="'+id+'">—</strong><small id="'+id+'Count"></small></div>').join('');
  const shell=document.createElement('div');shell.className='tsuki-exp-workspace';
  const side=document.createElement('aside');side.className='tsuki-exp-sidebar biz-section';
- side.innerHTML='<h2>取込（CSV）</h2><button type="button" class="biz-btn" id="tsukiExpCardImport">会社カード支出CSVを取込</button><button type="button" class="biz-btn" id="tsukiExpCashImport">現金支出CSVを取込</button><hr><h2>登録・管理</h2><button type="button" class="biz-btn" id="tsukiExpManual">＋ 支出を手入力で登録</button><button type="button" class="biz-btn" id="tsukiExpShowExpenses">支出一覧</button><button type="button" class="biz-btn" id="tsukiExpShowCash">現金帳（出納）</button><hr><h2>絞り込み</h2><label>支払方法<select id="tsukiExpMethod"><option value="">すべて</option></select></label><label>カテゴリ<select id="tsukiExpCategory"><option value="">すべて</option></select></label><label>取込元<select id="tsukiExpSource"><option value="">すべて</option><option value="csv">CSV</option><option value="other">その他・不明</option></select></label>';
+ side.innerHTML='<h2>取込（CSV）</h2><button type="button" class="biz-btn" id="tsukiExpCardImport">会社カード明細を取込</button><button type="button" class="biz-btn" id="tsukiExpCashImport">現金支出（領収書）を取込</button><hr><h2>登録・管理</h2><button type="button" class="biz-btn" id="tsukiExpManual">＋ 支出を手入力で登録</button><button type="button" class="biz-btn" id="tsukiExpShowExpenses">支出一覧</button><button type="button" class="biz-btn" id="tsukiExpShowCash">現金帳（出納）</button><hr><h2>絞り込み</h2><label>支払方法<select id="tsukiExpMethod"><option value="">すべて</option></select></label><label>カテゴリ<select id="tsukiExpCategory"><option value="">すべて</option></select></label><label>取込元<select id="tsukiExpSource"><option value="">すべて</option><option value="csv">CSV</option><option value="other">その他・不明</option></select></label>';
  const main=document.createElement('div');main.className='tsuki-exp-main';
  const tabs=document.createElement('div');tabs.className='tsuki-exp-tabs';tabs.innerHTML='<button type="button" id="tsukiExpTabExpenses" class="active">支出一覧</button><button type="button" id="tsukiExpTabCash">現金帳（出納）</button>';
- const toolbar=document.createElement('div');toolbar.className='tsuki-exp-table-toolbar';toolbar.innerHTML='<input id="tsukiExpSearch" type="search" placeholder="取引日・摘要・取引先で検索"><label>表示件数 <select id="tsukiExpPageSize"><option value="10">10件</option><option value="20">20件</option><option value="50">50件</option></select></label>';
- const pager=document.createElement('div');pager.className='tsuki-exp-pager';pager.innerHTML='<span id="tsukiExpPagerLabel"></span><div><button type="button" class="biz-btn" id="tsukiExpPagePrev">‹</button><span id="tsukiExpPageNumber"></span><button type="button" class="biz-btn" id="tsukiExpPageNext">›</button></div>';
+ const toolbar=document.createElement('div');toolbar.className='tsuki-exp-table-toolbar';toolbar.innerHTML='<input id="tsukiExpSearch" type="search" placeholder="取引日・摘要・取引先で検索"><div class="tsuki-exp-top-filters"><label>支払方法：<select data-exp-mirror="tsukiExpMethod"><option>すべて</option></select></label><label>カテゴリ：<select data-exp-mirror="tsukiExpCategory"><option>すべて</option></select></label><label>取込元：<select data-exp-mirror="tsukiExpSource"><option>すべて</option></select></label></div>';
+ const pager=document.createElement('div');pager.className='tsuki-exp-pager';pager.innerHTML='<span id="tsukiExpPagerLabel"></span><div class="tsuki-exp-page-buttons"><button type="button" class="biz-btn" id="tsukiExpPagePrev">‹</button><span id="tsukiExpPageNumber"></span><button type="button" class="biz-btn" id="tsukiExpPageNext">›</button></div><label class="tsuki-exp-page-size">表示件数： <select id="tsukiExpPageSize"><option value="10">10件</option><option value="20">20件</option><option value="50">50件</option></select></label>';
  const heading=ledger.querySelector('.biz-section-head');if(heading){const csvButton=heading.querySelector('#expenseCsvExport');if(csvButton)toolbar.append(csvButton);heading.hidden=true;}
  main.append(tabs,toolbar,ledger,pager);
  const cashPanel=document.createElement('div');cashPanel.className='tsuki-exp-cash-panel';cashPanel.hidden=true;cashPanel.append(cash);if(adjust)cashPanel.append(adjust);main.append(cashPanel);
@@ -3779,7 +3780,9 @@ document.addEventListener('DOMContentLoaded',()=>{
  reveal.append(importDisclosure,manualDisclosure);
  if(rules){const d=document.createElement('details');d.innerHTML='<summary>科目の学習ルール</summary>';d.append(rules);reveal.append(d);}
  main.append(reveal);shell.append(side,main);title.after(kpis,shell);
- const state={tab:'expenses',page:0};const records=()=>{if(window.TsukinowaBusinessUI?.isEnabled?.())return window.TsukinowaAccountingUI?.getData?.()||{};return {expenses:(window.bizState?.expenses||[]).map(e=>({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description||e.memo})),cashLedger:window.bizState?.cashLedger||[]};};
+ const state={tab:'expenses',page:0};
+ const mirror=()=>document.querySelectorAll('#pageExpenses [data-exp-mirror]').forEach(select=>{const original=get(select.dataset.expMirror),selected=original.value;select.replaceChildren(...[...original.options].map(option=>new Option(option.text,option.value)));select.value=selected;});
+ document.querySelectorAll('#pageExpenses [data-exp-mirror]').forEach(select=>select.addEventListener('change',()=>{const original=get(select.dataset.expMirror);original.value=select.value;original.dispatchEvent(new Event('input',{bubbles:true}));}));const records=()=>{if(window.TsukinowaBusinessUI?.isEnabled?.())return window.TsukinowaAccountingUI?.getData?.()||{};return {expenses:(window.bizState?.expenses||[]).map(e=>({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description||e.memo})),cashLedger:window.bizState?.cashLedger||[]};};
  const month=()=>mInput.value||bizNowMonth(),yen=n=>'¥'+Math.round(Number(n)||0).toLocaleString('ja-JP');
  const method=e=>String(e.paymentMethod||e.method||'');
  const source=e=>/csv/i.test(String(e.sourceType||e.importSource||e.source||e.importFile||''))?'csv':'other';
@@ -3795,6 +3798,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   for(const [id,values]of [['tsukiExpMethod',[...new Set(items.map(method).filter(Boolean))]],['tsukiExpCategory',[...new Set(items.map(e=>e.category).filter(Boolean))]]]){
    const el=get(id),selection=el.value;el.replaceChildren(new Option('すべて',''),...values.map(v=>new Option(v,v)));el.value=selection;
   }
+  mirror();
   const q=get('tsukiExpSearch').value.toLowerCase(),mFilter=get('tsukiExpMethod').value,cFilter=get('tsukiExpCategory').value,sourceFilter=get('tsukiExpSource').value;
   const trs=[...get('expenseRows').querySelectorAll('tr')];
   const tableHead=ledger.querySelector('thead tr');
