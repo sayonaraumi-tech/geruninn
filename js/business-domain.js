@@ -313,6 +313,45 @@ function createService(client,{now=()=>new Date()}={}){
     await write('calendarLinks',calendarId,{...link.payload,cashSaleId:'',receiptSaleId:p.saleId,documentId:p.documentId,linkedReceiptId:p.documentId,customerName:p.customerName,officialAmount:amount,status:'領収済',title:formalCalendarTitle({...s,customerName:p.customerName},amount),googlePatchPending:true},'status change');
     return {documentId:p.documentId,reconciled:true};
   }
+  if(cmd.type==='resolveDuplicateCalendarCash'){
+    if(who.role!=='admin')throw Error('重複現金記録の整理は管理者のみです。');
+    if(cmd.confirmedDuplicate!==true||!String(cmd.reason||'').trim())throw Error('重複と判定した根拠を指定してください。');
+    const oldId=String(cmd.calendarSaleId||''),docId=String(cmd.documentId||'');
+    if(!oldId.startsWith('calendar_cash_')||!docId)throw Error('整理対象のIDが不正です。');
+    const old=await read('sales',oldId),doc=await read('documents',docId);
+    if(!old||!doc)throw Error('元の記録がありません。');
+    const a=old.payload,p=doc.payload;
+    if(a.deletedAt&&a.duplicateOfSaleId===p.saleId)return {skipped:true,alreadyResolved:true};
+    if(old.revision!==cmd.expectedSaleRevision||doc.revision!==cmd.expectedDocumentRevision)throw Error('記録が更新されました。画面を更新してください。');
+    if(!A.live(a)||!A.live(p)||p.docType!=='receipt'||p.confirmed!==true||p.snapshot?.paymentMethod!=='現金'||!p.saleId||!p.paymentId)throw Error('正式な現金領収書との照合に失敗しました。');
+    const calendarId=a.calendarEventId,link=calendarId?await read('calendarLinks',calendarId):null;
+    const oldPaymentId='pay_'+oldId,oldPayment=await read('payments',oldPaymentId),oldCash=await read('cashLedger','cash_'+oldPaymentId);
+    const official=await read('sales',p.saleId),officialPayment=await read('payments',p.paymentId),officialCash=await read('cashLedger','cash_'+p.paymentId);
+    if(!link||!oldPayment||!oldCash||!official||!officialPayment||!officialCash)throw Error('関連データが不足しています。元帳は変更しません。');
+    const b=oldPayment.payload,r=official.payload,v=officialPayment.payload,c=oldCash.payload,oc=officialCash.payload;
+    const amount=total(p.snapshot||{}),date=p.snapshot?.paymentDate||p.paymentDate||p.snapshot?.invoiceDate;
+    if(!amount||a.sourceType!=='calendar-cash'||a.documentId||a.sourceId!==calendarId||oldId!=='calendar_cash_'+calendarId||
+       !['',oldId].includes(link.payload.cashSaleId||'')||
+       b.sourceType!=='calendar-cash'||b.saleId!==oldId||b.documentId||b.bankTxnId||b.confirmation!=='cash-received'||b.method!=='現金'||b.deletedAt||
+       c.linkedPaymentId!==oldPaymentId||c.type!=='income'||c.deletedAt||
+       r.sourceType!=='receipt-cash'||r.documentId!==docId||r.id!==p.saleId||r.deletedAt||
+       v.saleId!==p.saleId||v.documentId!==docId||v.method!=='現金'||v.confirmation!=='cash-received'||v.bankTxnId||v.deletedAt||
+       oc.linkedPaymentId!==p.paymentId||oc.deletedAt||oc.type!=='income'||
+       a.amount!==amount||b.amount!==amount||r.amount!==amount||v.amount!==amount||c.amount!==amount||oc.amount!==amount||
+       a.salesDate!==p.snapshot?.invoiceDate||b.paymentDate!==date||v.paymentDate!==date||
+       A.classificationKey(a.customer)!==A.classificationKey(p.customerName)||
+       (a.paymentIds||[]).some(id=>id!==oldPaymentId)||
+       (link.payload.linkedReceiptId&&link.payload.linkedReceiptId!==docId)||
+       (link.payload.receiptSaleId&&link.payload.receiptSaleId!==p.saleId))
+      throw Error('売上・入金・現金台帳・帳票の照合が一致しません。元帳は変更しません。');
+    const at=now().toISOString(),why='正式現金領収書との重複／'+String(cmd.reason).trim();
+    // Soft-void all three accounting projections atomically. Payment write also
+    // tombstones cashLedger through the existing mirror and preserves audit history.
+    await write('sales',oldId,{...a,deletedAt:at,documentStatus:'duplicate',duplicateOfSaleId:p.saleId,deleteReason:why},'status change',old.revision);
+    await write('payments',oldPaymentId,{...b,deletedAt:at,duplicateOfPaymentId:p.paymentId,deleteReason:why},'adjustment',oldPayment.revision);
+    await write('calendarLinks',calendarId,{...link.payload,cashSaleId:'',duplicateCashSaleId:oldId,duplicateOfSaleId:p.saleId,accountingReviewRequired:false},'status change',link.revision);
+    return {resolved:true,calendarSaleId:oldId,retainedSaleId:p.saleId,amount};
+  }
   if(cmd.type==='archiveDocument'){
     if(who.role!=='admin')throw Error('履歴削除は管理者のみです。');
     const row=await read('documents',cmd.documentId);
