@@ -75,6 +75,39 @@ async function test() {
       await page.close();
       console.log(`PASS ${width}px opt-in UI styles, print isolation, and keyboard focus`);
     }
+    // Mobile three-page selectors must never change A4 preview geometry or print.
+    const mobile = await browser.newPage({viewport:{width:390,height:844}});
+    await mobile.setContent(`
+      <div id="pageCalendar" class="biz-page"><div class="biz-title"><h1>日程</h1></div>
+        <div class="biz-section"><div class="biz-form-grid">
+          <div class="biz-field"><input type="month" id="calendarMonth"></div>
+          <div class="biz-field"><button class="biz-btn">Google日程を同期</button></div></div>
+          <div class="biz-table-wrap"><table class="biz-table"><tbody><tr><td>2026-11-09</td><td>現場</td><td>10:00</td><td>予定</td><td>開く</td></tr></tbody></table></div>
+        </div>
+      </div>
+      <div id="pageSavedDocs" class="biz-page"><div class="biz-section"><div id="allSavedDocsList"><div>
+        <div>領収書</div><div class="biz-actions"><button class="biz-btn">開く</button><button class="biz-btn">再ダウンロード</button></div>
+      </div></div></div></div>
+      <div id="pageChohyo" class="editor"><div class="editor-card"><div class="tabs">
+        <button class="tab">請求書</button><button class="tab">見積書</button><button class="tab">領収書</button><button class="tab">小野田請求</button>
+      </div><input id="customerName"></div>
+      <div id="previewArea" class="invoice-wrapper"><div class="invoice">A4 PDF</div></div></div>`);
+    await mobile.addStyleTag({path:path.join(cssDir,'design-tokens.css')});
+    await mobile.addStyleTag({path:path.join(cssDir,'mobile-three-pages.css')});
+    assert.deepEqual(await style(mobile,'#pageCalendar .biz-table-wrap','overflow-x'),['auto']);
+    assert.deepEqual(await style(mobile,'#pageCalendar .biz-table','min-width'),['620px']);
+    const cols=(await style(mobile,'#pageChohyo > .editor-card .tabs','grid-template-columns'))[0].split(' ').map(Number.parseFloat);
+    assert.equal(cols.length,2);
+    assert(Math.abs(cols[0]-cols[1])<1);
+    assert.deepEqual(await style(mobile,'#pageChohyo > .editor-card input','min-height','font-size'),['44px','16px']);
+    assert.deepEqual(await style(mobile,'#pageSavedDocs #allSavedDocsList .biz-btn:first-child','min-height'),['44px']);
+    assert.deepEqual(await style(mobile,'#previewArea','min-height'),['0px']);
+    const previewScreen=await style(mobile,'#previewArea .invoice','width','height','font-size');
+    await mobile.emulateMedia({media:'print'});
+    assert.deepEqual(await style(mobile,'#previewArea .invoice','width','height','font-size'),previewScreen);
+    await mobile.close();
+    console.log('PASS 390px mobile three-page layout and preview/print isolation');
+
   } finally {
     await browser.close();
   }
