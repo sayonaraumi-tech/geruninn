@@ -177,3 +177,11 @@
     font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif) !important;
   }
 }
+
+/* The 帳票 editor uses .editor.app-page instead of .biz-page. Apply only to
+ * edit controls; the A4 .invoice preview retains its original Mincho design. */
+@media screen {
+  body.tsuki-ui #pageChohyo :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+    font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif) !important;
+  }
+}
