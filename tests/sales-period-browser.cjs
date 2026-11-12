@@ -55,15 +55,15 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        assert(await page.locator('#tsukiSavedDocDetail').getByText('請求書に変換').count()===1);
        assert(await page.locator('#tsukiSavedDocDetail').getByText('領収書に変換').count()===1);
        await page.screenshot({path:path.join(dir,'savedDocs-detail-'+width+'.png'),fullPage:true});
-       const before=await page.evaluate(()=>JSON.stringify(window.__visualDemoHistory));
+       const before=await page.evaluate(()=>JSON.stringify(loadConfirmedHistory()));
        await page.evaluate(()=>{
          window.confirm=()=>true;
          window.alert=()=>{};
-         tsukiEstimateReceiptDraft(0);
+         tsukiEstimateReceiptDraft(loadConfirmedHistory().findIndex(d=>d.docType==='estimate'));
        });
-       assert.equal(await page.locator('#receiptTotal').inputValue(),String(await page.evaluate(()=>bizCalcDocumentTotal(window.__visualDemoHistory[0]))));
+       assert.equal(await page.locator('#receiptTotal').inputValue(),String(await page.evaluate(()=>bizCalcDocumentTotal(loadConfirmedHistory().find(d=>d.docType==='estimate')))));
        assert.equal(await page.locator('#paymentMethod').inputValue(),'銀行振込');
-       assert.equal(await page.evaluate(()=>JSON.stringify(window.__visualDemoHistory)),before,'conversion preview must not change source estimate');
+       assert.equal(await page.evaluate(()=>JSON.stringify(loadConfirmedHistory())),before,'conversion preview must not change source estimate');
        assert.equal(await page.evaluate(()=>JSON.stringify([...window.testRecords])),recordsBeforeVisualDraft,'draft conversion must not create or update Firestore records');
        await page.evaluate(()=>{document.getElementById('tsukiSavedDocType').value='';renderAllSavedDocs();bizSwitchPage('savedDocs');});
      }
