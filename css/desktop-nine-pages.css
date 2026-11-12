@@ -98,3 +98,34 @@
   /* Document editor: only its business-page chrome, NEVER invoice/preview/PDF DOM. */
   #pageChohyo .biz-title { margin-bottom: 10px; }
 }
+
+/* V1.0 desktop operations: keep live ledger and registration side-by-side.
+ * Only grid placement changes; IDs, payment flow and accounting remain intact. */
+@media screen and (min-width: 801px) {
+  body.tsuki-ui #pageSales, body.tsuki-ui #pageExpenses {
+    display: none; grid-template-columns: minmax(0, 1.75fr) minmax(320px, .85fr);
+    align-items: start; column-gap: 12px; row-gap: 10px;
+  }
+  body.tsuki-ui #pageSales.active, body.tsuki-ui #pageExpenses.active { display: grid; }
+  body.tsuki-ui #pageSales > .biz-title, body.tsuki-ui #pageExpenses > .biz-title {
+    grid-column: 1 / -1; margin-bottom: 0;
+  }
+  body.tsuki-ui #pageSales > .sales-register {
+    grid-column: 1; grid-row: 2; min-width: 0;
+  }
+  body.tsuki-ui #pageSales > #paymentRegistrationForm {
+    grid-column: 2; grid-row: 2; min-width: 0;
+  }
+  body.tsuki-ui #pageExpenses > .biz-section:first-of-type {
+    grid-column: 2; grid-row: 2; min-width: 0;
+  }
+  body.tsuki-ui #pageExpenses > .biz-section:nth-of-type(2) {
+    grid-column: 1; grid-row: 2; min-width: 0;
+  }
+  body.tsuki-ui #pageExpenses > .biz-section:nth-of-type(n+3) {
+    grid-column: 1 / -1; min-width: 0;
+  }
+  body.tsuki-ui #pageSales :is(.biz-table-wrap,#salesRegisterTable),
+  body.tsuki-ui #pageExpenses .biz-table-wrap { max-width: 100%; overflow-x: auto; }
+  body.tsuki-ui #paymentRegistrationForm .biz-form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
