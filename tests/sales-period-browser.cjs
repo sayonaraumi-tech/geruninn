@@ -62,6 +62,29 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        });
      }
 
+     if(route==='bank'&&width>=801){
+       await page.evaluate(()=>{
+         const current=TsukinowaAccountingUI.getData(),snapshot={};
+         for(const [kind,records]of Object.entries(current))snapshot[kind]=(records||[]).map(record=>({id:record.id,payload:{...record}}));
+         const examples=[
+          ['2026-11-12','シンケン（カ）',0,117645,'未照合'],
+          ['2026-11-10','ツカイドウサン（カ）',0,112376,'照合済'],
+          ['2026-11-08','アメニティ（カ）',0,198000,'照合済'],
+          ['2026-11-07','ダイナスト（カ）',0,1594900,'未照合'],
+          ['2026-11-05','ナガタケシンカンリブ',79500,0,'照合済'],
+          ['2026-11-04','ライフアップヨコー（カ）',0,286000,'未照合'],
+          ['2026-11-03','オカベショウジ（カ）',0,240000,'照合済'],
+          ['2026-11-02','GMO振込手数料',0,145,'未照合']
+         ];
+         snapshot.bankTransactions=examples.map(([date,description,incoming,outgoing,status],i)=>{
+          const id='bank-screen-demo-'+i;
+          return {id,payload:{id,bankTxnId:id,bankTransactionDate:date,description,incoming,outgoing,amount:incoming||outgoing,bankAccount:'GMOあおぞら銀行',status,matchType:status==='照合済'?'expense':'',matchId:status==='照合済'?'sample-exp-'+i:'',source:'visual-only',revision:1}};
+         });
+         TsukinowaAccountingUI.hydrate(snapshot);
+         accountingBankView('todo');
+       });
+     }
+
      await page.evaluate(r=>bizSwitchPage(r),route);
      await page.evaluate(()=>scrollTo(0,0));
      assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
