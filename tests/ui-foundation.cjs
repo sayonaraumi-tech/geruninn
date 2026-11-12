@@ -100,7 +100,7 @@ async function test() {
     assert.equal(cols.length,2);
     assert(Math.abs(cols[0]-cols[1])<1);
     assert.deepEqual(await style(mobile,'#pageChohyo > .editor-card input','min-height','font-size'),['44px','16px']);
-    assert.deepEqual(await style(mobile,'#pageSavedDocs #allSavedDocsList .biz-btn','min-height'),['44px']);
+    assert.deepEqual(await style(mobile,'#pageSavedDocs #allSavedDocsList .biz-btn:first-child','min-height'),['44px']);
     assert.deepEqual(await style(mobile,'#previewArea','min-height'),['0px']);
     const previewScreen=await style(mobile,'#previewArea','width','height','font-size');
     await mobile.emulateMedia({media:'print'});
