@@ -3885,7 +3885,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   if(!invoice)return;
   const naturalWidth=invoice.offsetWidth||794;
   const available=Math.max(240,preview.clientWidth-30);
-  const auto=Math.min(0.9,available/naturalWidth);
+  const naturalHeight=invoice.offsetHeight||1080;
+  const viewportHeight=Math.max(410,innerHeight-235);
+  const auto=Math.min(0.83,available/naturalWidth,viewportHeight/naturalHeight);
   const scale=zoom.value==='auto'?auto:Number(zoom.value);
   preview.style.setProperty('--tsuki-doc-preview-scale',String(scale));
  }
