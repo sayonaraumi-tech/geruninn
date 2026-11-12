@@ -530,7 +530,7 @@
   color:#ad7b10;font-weight:800;border:none;background:transparent;font-size:13px;padding:5px 0;
  }
  body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table th{
-  background:#f4f4f4;color:#171717;font-size:13px;font-weight:800;white-space:nowrap;
+  background:#f4f4f4;color:#171717;font-size:13px;font-weight:600;white-space:nowrap;
  }
  body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table td{font-size:13px;font-weight:600;color:#111;}
  body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table th,
