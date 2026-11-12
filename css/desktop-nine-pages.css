@@ -564,9 +564,9 @@
 /* HOME screenshot reference alignment, visible content only. */
 @media screen and (min-width:801px){
  body.tsuki-ui #pageDashboard.active #dashPeriod{display:none;}
- body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{min-height:145px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{min-height:140px;}
  body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-kpi::before{content:"¥";margin-right:1px;}
- body.tsuki-ui #pageDashboard>.tsuki-home-visuals>.biz-section{min-height:310px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals>.biz-section{min-height:299px;}
  body.tsuki-ui #pageDashboard .tsuki-chart-axis{position:relative;}
  body.tsuki-ui #pageDashboard .tsuki-chart-axis::before{
   content:"（万円）";position:absolute;top:-21px;left:-2px;font-size:12px;white-space:nowrap;color:#333;
@@ -585,3 +585,5 @@
  body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{gap:5px;font-size:12px;}
  body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button svg{width:21px;height:21px;}
 }
+
+@media screen and (min-width:801px){body.tsuki-ui #pageDashboard.active{padding-top:10px;}}
