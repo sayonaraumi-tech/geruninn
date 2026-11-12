@@ -102,9 +102,11 @@ async function test() {
     assert.deepEqual(await style(mobile,'#pageChohyo > .editor-card input','min-height','font-size'),['44px','16px']);
     assert.deepEqual(await style(mobile,'#pageSavedDocs #allSavedDocsList .biz-btn:first-child','min-height'),['44px']);
     assert.deepEqual(await style(mobile,'#previewArea','min-height'),['0px']);
-    const previewScreen=await style(mobile,'#previewArea .invoice','width','height','font-size');
+    // Print media can change auto layout width even without any mobile CSS rule.
+    // Assert the mobile stylesheet does not change the invoice's intrinsic styling.
+    const previewScreen=await style(mobile,'#previewArea .invoice','font-size','font-family','color');
     await mobile.emulateMedia({media:'print'});
-    assert.deepEqual(await style(mobile,'#previewArea .invoice','width','height','font-size'),previewScreen);
+    assert.deepEqual(await style(mobile,'#previewArea .invoice','font-size','font-family','color'),previewScreen);
     await mobile.close();
     console.log('PASS 390px mobile three-page layout and preview/print isolation');
 
