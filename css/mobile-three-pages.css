@@ -282,3 +282,29 @@
  body.tsuki-ui #pageChohyo .form-group input,
  body.tsuki-ui #pageChohyo .form-group select {min-height:44px;}
 }
+
+/* Saved-document history/detail: reuse the same official records and PDF
+ * functions; show estimate conversion only on an estimate detail. */
+@media screen {
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-type-label {display:flex;gap:6px;align-items:center;font-size:12px;white-space:nowrap;}
+ body.tsuki-ui #pageSavedDocs #tsukiSavedDocType {min-height:38px;max-width:145px;}
+ body.tsuki-ui #pageSavedDocs #savedDocSearch {flex:1 1 180px;min-width:140px;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail {
+   border:1px solid #e8e7e3;border-radius:8px;padding:14px;margin-top:12px;
+   background:#fff;scroll-margin-top:85px;
+ }
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail[hidden]{display:none;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail-heading {display:flex;justify-content:space-between;align-items:center;gap:8px;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail-heading h3 {font-size:15px;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail p {margin:8px 0;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail-amount {font-size:23px;font-weight:700;font-variant-numeric:tabular-nums;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail-actions {display:grid;gap:8px;margin-top:12px;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-detail-actions button {min-height:42px;}
+}
+@media screen and (max-width:800px) {
+ body.tsuki-ui #pageSavedDocs .biz-section-head .biz-actions {display:flex;gap:7px;flex-wrap:wrap;}
+ body.tsuki-ui #pageSavedDocs .tsuki-saved-type-label {flex:0 0 auto;}
+ body.tsuki-ui #pageSavedDocs #savedDocSearch {flex:1 1 100%;}
+ body.tsuki-ui #pageSavedDocs #allSavedDocsList>div .biz-actions {width:100%;gap:7px;}
+ body.tsuki-ui #pageSavedDocs #allSavedDocsList>div .biz-actions button {flex:1 1 auto;min-height:44px;}
+}
