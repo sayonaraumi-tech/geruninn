@@ -203,3 +203,41 @@ test('calendar text 現金 is schedule-only; formal cash receipt is sole new acc
  assert.equal(h.list('payments').length,1,'calendar replay must not create another payment');
  assert.equal(h.list('cashLedger').length,1,'calendar replay must not duplicate cash');
 });
+
+test('confirmed duplicate Google cash may be soft-voided exactly once while keeping official receipt and audit data',async()=>{
+ const h=await harness('admin'),run=cmd=>h.service.execute({...cmd,operationId:crypto.randomUUID()});
+ const receipt=await run(save({documentId:'official-takei',docType:'receipt',customerName:'武井千春',receiptTotal:22000,invoiceDate:'2026-11-09',paymentMethod:'現金',tadashi:'クロス張替代'}));
+ const doc=h.list('documents').find(d=>d.id==='official-takei'),payment=h.list('payments')[0];
+ const link=await run({type:'calendar',event:{googleEventId:'legacy-google-takei',googleCalendarId:'shared',title:'武井千春、別の工事、22000円、現金',date:'2026-11-09'}});
+ const oldId='calendar_cash_'+link.id,oldPayId='pay_'+oldId,root='companies/tsukinowa/';
+ const add=(n,id,payload)=>h.rows.set(root+n+'/'+id,{revision:1,payload});
+ add('sales',oldId,{id:oldId,sourceType:'calendar-cash',sourceId:link.id,calendarEventId:link.id,documentId:'',customer:'武井千春',content:'クロス張替',amount:22000,salesDate:'2026-11-09',paymentMethod:'現金',paymentIds:[oldPayId]});
+ add('payments',oldPayId,{id:oldPayId,paymentId:oldPayId,sourceType:'calendar-cash',sourceId:link.id,saleId:oldId,documentId:'',amount:22000,paymentDate:'2026-11-09',method:'現金',confirmation:'cash-received'});
+ add('cashLedger','cash_'+oldPayId,{cashTxnId:'cash_'+oldPayId,date:'2026-11-09',type:'income',category:'現金入金',description:'Google現場現金入金',amount:22000,linkedPaymentId:oldPayId,deletedAt:null});
+ const oldLink=h.rows.get(root+'calendarLinks/'+link.id);
+ h.rows.set(root+'calendarLinks/'+link.id,{...oldLink,payload:{...oldLink.payload,cashSaleId:oldId}});
+ const cmd={type:'resolveDuplicateCalendarCash',calendarSaleId:oldId,documentId:doc.id,confirmedDuplicate:true,reason:'管理者確認済みの重複',expectedSaleRevision:1,expectedDocumentRevision:doc.revision};
+ const beforeOfficial=JSON.stringify(h.rows.get(root+'sales/'+receipt.saleId).payload);
+ const beforeDoc=JSON.stringify(h.rows.get(root+'documents/'+doc.id).payload);
+ const result=await run(cmd);
+ assert.equal(result.resolved,true);assert.equal(result.amount,22000);
+ assert.equal(require('../js/accounting').ledger(h.list('sales').map(v=>v.payload),h.list('payments').map(v=>v.payload)).sales.length,1);
+ assert.equal(h.list('sales').filter(v=>require('../js/accounting').live(v.payload)).length,1);
+ assert.equal(h.list('payments').filter(v=>require('../js/accounting').live(v.payload)).length,1);
+ assert.equal(h.list('cashLedger').filter(v=>require('../js/accounting').live(v.payload)).length,1);
+ assert(h.rows.get(root+'sales/'+oldId).payload.deletedAt);
+ assert(h.rows.get(root+'payments/'+oldPayId).payload.deletedAt);
+ assert(h.rows.get(root+'cashLedger/cash_'+oldPayId).payload.deletedAt);
+ assert.equal(JSON.stringify(h.rows.get(root+'sales/'+receipt.saleId).payload),beforeOfficial);
+ assert.equal(JSON.stringify(h.rows.get(root+'documents/'+doc.id).payload),beforeDoc);
+ const frozen=JSON.stringify([...h.rows]);
+ assert((await run(cmd)).alreadyResolved);
+ assert.equal(JSON.stringify([...h.rows]),frozen);
+});
+test('duplicate Google cash exclusion refuses unrelated receipts and missing admin decision',async()=>{
+ const h=await harness('admin'),doc=await h.service.execute(save({...receipt,documentId:'safe-receipt'}));
+ const sale=h.list('sales')[0],d=h.list('documents')[0];
+ await assert.rejects(h.service.execute({type:'resolveDuplicateCalendarCash',operationId:crypto.randomUUID(),calendarSaleId:'calendar_cash_notlinked',documentId:d.id,confirmedDuplicate:true,reason:'same amount',expectedSaleRevision:0,expectedDocumentRevision:d.revision}),/元の記録/);
+ await assert.rejects(h.service.execute({type:'resolveDuplicateCalendarCash',operationId:crypto.randomUUID(),calendarSaleId:'calendar_cash_notlinked',documentId:d.id,reason:'same amount'}),/重複/);
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);
+});

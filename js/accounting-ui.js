@@ -20,7 +20,34 @@ root.addExpense=guard(async()=>{if(!enabled())return alert('支出登録はク�
 root.accountingEditExpense=function(id){if(!isAdmin())return;const e=data.expenses.find(x=>x.id===id);if(!e)return;expenseBank=null;expenseEdit={id,revision:rev('expenses',id)};el('expenseLearnCategory').checked=false;for(const [input,key] of [['expDate','expenseDate'],['expCategory','category'],['expMethod','paymentMethod'],['expVendor','vendor'],['expMemo','description'],['expAmount','amount'],['expBankAccount','bankAccount'],['expAttachment','receiptAttachmentRef']])el(input).value=e[key]||'';el('expAmount').scrollIntoView({behavior:'smooth'});};
 root.deleteExpense=function(id){if(!enabled())return old.deleteExpense(id);if(!isAdmin())return;const reason=prompt('支出の取消理由（記録は保持されます）');if(reason)send({type:'deleteExpense',expenseId:id,reason,expectedRevision:rev('expenses',id)});};
 root.renderExpenses=function(){if(!enabled())return old.renderExpenses();const m=value('expenseMonth')||bizNowMonth();el('expenseMonth').value=m;el('expenseRows').innerHTML=A.expenseRegister(data.expenses||[],m).map(e=>'<tr>'+[e.expenseDate,e.category,e.vendor,e.description,e.paymentMethod+' / '+A.expenseStatus(e),money(e.amount)].map(cell).join('')+`<td><button class="biz-btn" onclick="accountingEditExpense('${esc(e.id)}')">訂正</button><button class="biz-btn danger" onclick="deleteExpense('${esc(e.id)}')">取消</button></td></tr>`).join('');renderCash();};
-function renderCash(){if(!el('cashRows'))return;const m=value('expenseMonth'),rows=A.cashRows(data.cashLedger||[]);el('cashBalance').textContent=money(rows.at(-1)?.runningBalance||0);el('cashRows').innerHTML=table(['日付','区分','分類','摘要','金額','残高'],rows.filter(r=>!m||r.date.startsWith(m)).map(r=>'<tr>'+[r.date,r.type==='income'?'収入':'支出',r.category,r.description,money(r.amount),money(r.runningBalance)].map(cell).join('')+'</tr>').join(''));}
+function googleCashDuplicateCandidates(cash){
+ const oldPayment=(data.payments||[]).find(p=>p.id===cash.linkedPaymentId&&A.live(p)&&p.sourceType==='calendar-cash'&&p.confirmation==='cash-received');
+ const oldSale=oldPayment&&(data.sales||[]).find(s=>s.id===oldPayment.saleId&&A.live(s)&&s.sourceType==='calendar-cash'&&s.documentId==='');
+ if(!oldSale||oldSale.id!=='calendar_cash_'+oldSale.calendarEventId||cash.type!=='income'||oldPayment.amount!==cash.amount)return [];
+ return (data.documents||[]).filter(d=>A.live(d)&&d.confirmed===true&&d.docType==='receipt'&&d.snapshot?.paymentMethod==='現金'&&d.saleId&&d.paymentId&&d.amount===cash.amount&&d.snapshot?.invoiceDate===oldSale.salesDate&&A.classificationKey(d.customerName)===A.classificationKey(oldSale.customer)).filter(d=>(data.sales||[]).some(s=>A.live(s)&&s.id===d.saleId&&s.sourceType==='receipt-cash'&&s.documentId===d.id)&&(data.payments||[]).some(p=>A.live(p)&&p.id===d.paymentId&&p.saleId===d.saleId&&p.confirmation==='cash-received'));
+}
+function renderCash(){
+ if(!el('cashRows'))return;
+ const m=value('expenseMonth'),rows=A.cashRows(data.cashLedger||[]);
+ el('cashBalance').textContent=money(rows.at(-1)?.runningBalance||0);
+ el('cashRows').innerHTML=table(['日付','区分','分類','摘要','金額','残高','操作'],rows.filter(r=>!m||r.date.startsWith(m)).map(r=>{
+  const choices=googleCashDuplicateCandidates(r);
+  const action=choices.length===1&&B().getClient()?.getState().role==='admin'?'<button class="biz-btn" data-google-duplicate-cash="'+esc(r.cashTxnId)+'">重複したGoogle現金記録を除外</button>':choices.length>1?'正式領収書が複数あります。要確認':'';
+  return '<tr>'+[r.date,r.type==='income'?'収入':'支出',r.category,r.description,money(r.amount),money(r.runningBalance)].map(cell).join('')+'<td>'+action+'</td></tr>';
+ }).join(''));
+}
+root.accountingExcludeGoogleCash=guard(async cashId=>{
+ if(!isAdmin())return;
+ const cash=(data.cashLedger||[]).find(c=>c.cashTxnId===cashId&&A.live(c));
+ const matches=cash?googleCashDuplicateCandidates(cash):[];
+ if(matches.length!==1)throw Error('対象の正式現金領収書が一意に確認できません。');
+ const doc=matches[0],oldPay=data.payments.find(p=>p.id===cash.linkedPaymentId),oldSale=data.sales.find(s=>s.id===oldPay?.saleId);
+ if(!doc||!oldSale||!oldPay)throw Error('元の現金記録がありません。');
+ const reason='管理者が同一工事の重複自動計上であることを確認';
+ if(!send({type:'resolveDuplicateCalendarCash',operationId:uid(),calendarSaleId:oldSale.id,documentId:doc.id,confirmedDuplicate:true,reason,expectedSaleRevision:rev('sales',oldSale.id),expectedDocumentRevision:rev('documents',doc.id)}))return;
+ notice('重複Google現金記録の除外処理を同期キューに登録しました。同期完了後に売上・HOME・現金帳を再確認してください。');
+});
+
 root.accountingCashAdjustment=guard(()=>{const cashTxnId='adjust_'+uid();if(send({type:'cashAdjustment',cashTxnId,date:value('cashAdjustDate'),direction:value('cashAdjustType'),amount:A.money(value('cashAdjustAmount')),description:value('cashAdjustReason')})){el('cashAdjustAmount').value='';el('cashAdjustReason').value='';}});
 root.importBankCsv=guard(async()=>{if(!enabled())return alert('銀行CSV取込はクラウドにログインしてご利用ください。');if(!isAdmin()||importing)return;const file=el('bankFile').files[0];if(!file)throw Error('CSVを選択してください。');importing=true;try{const bytes=await file.arrayBuffer();let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch(_){text=new TextDecoder('shift_jis',{fatal:true}).decode(bytes);}const records=await A.parseBank(text,value('bankAccountName'),B().getClient().digest);let count=0;for(const bank of records){if(!send({type:'importBank',bank}))throw Error('端末に同期キューを保存できませんでした。元CSVを保持して再試行してください。');count++;}el('bankImportStatus').textContent=count+'件を確認しました。重複を除いて同期します。';}finally{importing=false;}});
 root.autoSuggestBank=function(){};
@@ -243,6 +270,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  el('pageBank').append(section('歴史銀行明細の重複確認（管理者・1件ずつ）','<p>現在、正式庫は監査・バックアップのみ。取消・復元は無効です。同日同額は候補のみ。確認済み口座別名と強い取引証拠、関連なしでも、このリリースでは取消できません。GMO あおぞらの原記録は保持します。既存の取消済み記録も復元できません。</p><button class="biz-btn" onclick="accountingDuplicateBackup()">最新の全業務記録・監査履歴をバックアップ</button><p id="bankDuplicateStatus" role="status"></p><div id="bankDuplicateReview"></div>'));
  const bankOptions=document.createElement('div');bankOptions.className='biz-field span2';bankOptions.innerHTML=field('口座名（別名は確認済みルールで統一）','bankAccountName','text','value="メイン口座"')+'<p class="biz-muted">UTF-8 / Shift_JIS。日付・摘要・入金・出金の列が必要です。信頼済み名称・唯一の全額一致は取込時に自動照合。その他は要確認。手入力の入金日は銀行証拠ではありません。</p><p id="bankImportStatus" role="status"></p><button class="biz-btn" onclick="accountingExport(\'bank\')">銀行照合結果CSV</button>';el('bankFile').parentElement.before(bankOptions);
  el('cashAdjustDate').value=todayISO();
+ el('cashRows').addEventListener('click',e=>{const button=e.target.closest('[data-google-duplicate-cash]');if(button){button.disabled=true;root.accountingExcludeGoogleCash(button.dataset.googleDuplicateCash);}});
  el('salesRegisterTable').addEventListener('click',e=>{
   const payment=e.target.closest('[data-sale-payment]'),detail=e.target.closest('[data-sale-detail]');
   if(payment){const sale=registerView.sales[Number(payment.dataset.salePayment)];if(sale)root.selectSaleForPayment(sale.id);}
