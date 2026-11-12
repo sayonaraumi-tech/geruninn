@@ -3858,6 +3858,48 @@ document.addEventListener('DOMContentLoaded',()=>{
  refresh();
 });
 
+// Desktop 帳票 layout only. This code never edits document values,
+// the .invoice template, tax arithmetic, snapshots, or PDF export.
+document.addEventListener('DOMContentLoaded',()=>{
+ if(!matchMedia('(min-width:801px)').matches)return;
+ const page=document.getElementById('pageChohyo'),preview=document.getElementById('previewArea');
+ const customer=page?.querySelector('.tsuki-document-customer'),items=document.getElementById('itemsCard');
+ if(!page||!preview||!customer||!items||page.classList.contains('tsuki-doc-desktop'))return;
+ page.classList.add('tsuki-doc-desktop');
+ const header=document.createElement('div');header.className='tsuki-doc-page-heading';
+ header.innerHTML='<div class="tsuki-doc-heading-left"><h1>帳票（書類作成）</h1><span>見積書・請求書・領収書・小野田の書類を作成します</span></div><div class="tsuki-doc-heading-right"><label for="invoiceDate">作成日</label><button type="button" class="tsuki-doc-save" id="tsukiDocSaveTop">保存（PDF出力）</button></div>';
+ page.prepend(header);
+ const saveTop=header.querySelector('#tsukiDocSaveTop');
+ saveTop.addEventListener('click',()=>doPrint());
+ const select=page.querySelector('.tabs');
+ if(select){const label=document.createElement('span');label.className='tsuki-doc-type-label';label.textContent='書類種別';select.before(label);}
+ const controls=document.createElement('div');controls.className='tsuki-doc-preview-controls';
+ controls.innerHTML='<strong id="tsukiDocPreviewTitle">プレビュー</strong><div><label for="tsukiDocZoom">表示倍率</label><select id="tsukiDocZoom"><option value="auto">自動</option><option value="0.65">65%</option><option value="0.8">80%</option><option value="1">100%</option></select><button type="button" id="tsukiDocPrint">印刷</button><button type="button" id="tsukiDocExport">PDF出力</button></div>';
+ preview.prepend(controls);
+ controls.querySelector('#tsukiDocPrint').addEventListener('click',()=>systemPrint());
+ controls.querySelector('#tsukiDocExport').addEventListener('click',()=>doPrint());
+ const zoom=controls.querySelector('#tsukiDocZoom');
+ function sizePreview(){
+  if(!page.isConnected)return;
+  const invoice=preview.querySelector(':scope > .invoice');
+  if(!invoice)return;
+  const naturalWidth=invoice.offsetWidth||794;
+  const available=Math.max(240,preview.clientWidth-30);
+  const auto=Math.min(0.9,available/naturalWidth);
+  const scale=zoom.value==='auto'?auto:Number(zoom.value);
+  preview.style.setProperty('--tsuki-doc-preview-scale',String(scale));
+ }
+ zoom.addEventListener('change',sizePreview);
+ new ResizeObserver(sizePreview).observe(preview);
+ const updateTitle=()=>{
+  const active=page.querySelector('.tabs .tab.active');
+  const label=active?.textContent?.trim()||'帳票';
+  controls.querySelector('#tsukiDocPreviewTitle').textContent='プレビュー（'+label+'）';
+ };
+ new MutationObserver(updateTitle).observe(select||page,{attributes:true,subtree:!!select,attributeFilter:['class']});
+ updateTitle();requestAnimationFrame(sizePreview);
+});
+
 // Preview only on desktop. Original A4/PDF markup and rendering stay unchanged.
 document.addEventListener('DOMContentLoaded',()=>{
   if(matchMedia('(min-width: 801px)').matches)
