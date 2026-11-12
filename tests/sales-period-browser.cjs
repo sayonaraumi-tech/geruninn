@@ -36,7 +36,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
      assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
      if(route==='dashboard' && width===1280){
        assert.equal(await page.locator('#pageDashboard .tsuki-home-primary .biz-card').count(),4);
-       assert.equal(await page.locator('#tsukiHomeChart .tsuki-chart-month').count(),6);
+       assert.equal(await page.locator('#tsukiHomeChart .tsuki-chart-month').count(),11);
        assert(await page.locator('#tsukiHomeDonut .tsuki-donut-ring').count()===1);
      }
      if(route==='chohyo' && width===1280){
