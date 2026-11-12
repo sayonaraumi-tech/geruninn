@@ -32,7 +32,19 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
-      - run: pnpm test:release:${{ matrix.suite }}
+      - name: Prepare real UI screenshot directory
+        run: mkdir -p ui-preview
+      - name: Run browser and emulator regression with visual capture
+        env:
+          PREVIEW_DIR: ui-preview
+        run: pnpm test:release:${{ matrix.suite }}
+      - name: Preserve actual 9-page desktop and mobile screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-v1-screenshots-${{ matrix.suite }}
+          path: ui-preview
+          if-no-files-found: ignore
       - name: Collect failure diagnostics
         if: failure()
         run: |
