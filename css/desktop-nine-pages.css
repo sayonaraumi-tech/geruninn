@@ -372,13 +372,13 @@
  body.tsuki-ui #pageChohyo>.tsuki-document-customer{grid-column:1;grid-row:2;min-height:320px;}
  body.tsuki-ui #pageChohyo>#itemsCard{grid-column:1;grid-row:3;min-height:205px;}
  body.tsuki-ui #pageChohyo>.tsuki-document-extra{grid-column:1;grid-row:4;}
- body.tsuki-ui #pageChohyo>.tsuki-document-actions{grid-column:1;grid-row:5;}
- body.tsuki-ui #pageChohyo>#confirmedHistoryCard{grid-column:1;grid-row:6;}
+ body.tsuki-ui #pageChohyo>.tsuki-document-actions{grid-column:2;grid-row:5;}
+ body.tsuki-ui #pageChohyo>#confirmedHistoryCard{grid-column:1;grid-row:5/span 2;}
  body.tsuki-ui #pageChohyo>#previewArea.show{
-  grid-column:2;grid-row:2/span 5;display:flex;flex-direction:column;align-self:start;
+  grid-column:2;grid-row:2/span 3;display:flex;flex-direction:column;align-self:start;
   min-width:0;margin:0;padding:14px 16px 18px;border:1px solid #e5e5e5;
   border-radius:15px;background:#fff;box-shadow:0 3px 9px #0000000c;
-  max-height:none;overflow:visible;position:sticky;top:65px;
+  max-height:calc(100vh - 130px);overflow:auto;position:sticky;top:65px;
  }
  body.tsuki-ui #pageChohyo .tsuki-doc-preview-controls{
   display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:9px;
@@ -394,8 +394,8 @@
  }
  body.tsuki-ui #pageChohyo .tsuki-doc-preview-controls #tsukiDocExport{border-color:#c49b45;color:#9a6a0b;}
  body.tsuki-ui #pageChohyo>#previewArea .invoice{
-  flex:0 0 auto;transform:scale(var(--tsuki-doc-preview-scale,.78));
-  transform-origin:top left;margin:0;
+  flex:0 0 auto;zoom:var(--tsuki-doc-preview-scale,.60);
+  transform:none;transform-origin:top left;margin:0;
   box-shadow:0 1px 5px #0000001c;
  }
  body.tsuki-ui #pageChohyo .tsuki-document-customer>h2{
