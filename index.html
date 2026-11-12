@@ -1072,13 +1072,18 @@ dialog h2{font-size:15px}
  <div class="biz-field" id="homeStartField" hidden><label for="homeStart">開始日</label><input type="date" id="homeStart" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeEndField" hidden><label for="homeEnd">終了日</label><input type="date" id="homeEnd" onchange="renderDashboard()"></div>
  </div></div>
- <div class="biz-grid">
+ <div class="biz-grid tsuki-home-primary">
   <div class="biz-card"><h3>売上</h3><div class="biz-kpi" id="kpiSales">0</div></div>
-  <div class="biz-card"><h3>入金</h3><div class="biz-kpi" id="kpiPayments">0</div></div>
-  <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div></div>
-  <div class="biz-card"><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">0</div></div>
+  <div class="biz-card"><h3>入金額</h3><div class="biz-kpi" id="kpiPayments">0</div></div>
+  <div class="biz-card"><h3>支出合計</h3><div class="biz-kpi" id="kpiExpenses">0</div></div>
+  <div class="biz-card"><h3>収支差額（現金基準）</h3><div class="biz-kpi" id="kpiDifference">0</div></div>
  </div>
- <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="biz-grid home-secondary"><div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="tsuki-home-visuals" aria-label="期間内の収支と支出構成">
+   <section class="biz-section tsuki-home-trend"><h2>月別収支推移</h2><div id="tsukiHomeChart" class="tsuki-home-chart"></div></section>
+   <section class="biz-section tsuki-home-categories"><h2>支出内訳</h2><div id="tsukiHomeDonut" class="tsuki-home-donut"></div></section>
+   <section class="biz-section tsuki-home-reminders"><h2>確認事項</h2><div id="tsukiHomePreviewAlerts" class="tsuki-home-preview-alerts"></div></section>
+ </div>
  <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
@@ -3573,11 +3578,18 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
 <script src="./js/year-end-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
 <script>
+// Preview only on desktop. Original A4/PDF markup and rendering stay unchanged.
+document.addEventListener('DOMContentLoaded',()=>{
+  if(matchMedia('(min-width: 801px)').matches)
+    document.getElementById('previewArea')?.classList.add('show');
+});
 const switchDocumentRoute=bizSwitchPage;
 bizSwitchPage=function(page,fromHistory=false){
   const oldPage=document.querySelector('#bizNav button.active')?.dataset.page;
   if(page!==oldPage)document.getElementById('previewArea').classList.remove('show');
   const result=switchDocumentRoute(page);
+  if(page==='chohyo' && window.matchMedia('(min-width: 801px)').matches)
+    document.getElementById('previewArea')?.classList.add('show');
   const actual=document.querySelector('#bizNav button.active')?.dataset.page;
   if(!fromHistory&&actual&&actual!==oldPage){const url=new URL(location.href);url.searchParams.set('page',actual);history.pushState({page:actual},'',url);}
   return result;
