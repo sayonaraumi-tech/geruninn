@@ -160,3 +160,26 @@ test('explicit standalone calendar date conflict is atomic for new and historica
   await assert.rejects(legacy?repair(h):h.service.execute(save({...receipt,calendarEventId:'wrong-date'})),/要確認/);assert.equal(JSON.stringify([...h.rows]),before);
  }
 });
+
+test('formal cash receipt clears stale calendar review only after full reconciliation; bank review remains',async()=>{
+ const h=await harness('admin'),r=await h.service.execute(save({...receipt,documentId:'cash-review-20261109',customerName:'武井千春',receiptTotal:22000,invoiceDate:'2026-11-09'}));
+ const saleKey='companies/tsukinowa/sales/'+r.saleId,stored=h.rows.get(saleKey);
+ h.rows.set(saleKey,{...stored,payload:{...stored.payload,accountingReviewRequired:true,reviewRequired:true,reviewReason:'旧日程の変更'}});
+ let rows=Object.fromEntries(B.COLLECTIONS.map(n=>[n,h.list(n)]));
+ const doc=h.list('documents').find(d=>d.id==='cash-review-20261109');
+ assert.equal(B.receiptAccountingNeedsRepair(doc,rows),true);
+ assert.equal(require('../js/accounting').ledger(h.list('sales').map(v=>v.payload),h.list('payments').map(v=>v.payload)).sales[0].status,'要確認');
+ await h.service.execute({type:'repairReceipt',documentId:doc.id,operationId:crypto.randomUUID()});
+ const actual=h.rows.get(saleKey).payload;
+ assert.equal(actual.accountingReviewRequired,false);assert.equal(actual.reviewRequired,false);
+ assert.equal(require('../js/accounting').ledger(h.list('sales').map(v=>v.payload),h.list('payments').map(v=>v.payload)).sales[0].status,'入金済');
+ assert.equal(h.list('sales').length,1);assert.equal(h.list('payments').length,1);assert.equal(h.list('cashLedger').length,1);
+ const frozen=JSON.stringify([...h.rows]);
+ await h.service.execute({type:'repairReceipt',documentId:doc.id,operationId:crypto.randomUUID()});
+ assert.equal(JSON.stringify([...h.rows]),frozen);
+ const bank=await harness('admin'),b=await bank.service.execute(save({...receipt,documentId:'bank-review',paymentMethod:'銀行振込'}));
+ const key='companies/tsukinowa/sales/'+b.saleId,brow=bank.rows.get(key);
+ bank.rows.set(key,{...brow,payload:{...brow.payload,accountingReviewRequired:true,reviewReason:'既存入金要確認'}});
+ await bank.service.execute({type:'repairReceipt',documentId:'bank-review',operationId:crypto.randomUUID()});
+ assert.equal(bank.rows.get(key).payload.accountingReviewRequired,true);
+});

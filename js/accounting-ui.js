@@ -246,7 +246,17 @@ document.addEventListener('DOMContentLoaded',()=>{
  el('salesRegisterTable').addEventListener('click',e=>{
   const payment=e.target.closest('[data-sale-payment]'),detail=e.target.closest('[data-sale-detail]');
   if(payment){const sale=registerView.sales[Number(payment.dataset.salePayment)];if(sale)root.selectSaleForPayment(sale.id);}
-  if(detail){const sale=registerView.sales[Number(detail.dataset.saleDetail)];if(!sale)return;const ps=A.unique(registerData().payments||[]).filter(p=>A.live(p)&&p.saleId===sale.id);el('salesDetails').innerHTML='<h3>'+esc(sale.customer)+' / '+esc(sale.salesDate)+'</h3><p>'+esc(sale.content)+'</p>'+table(['入金日','入金額','確認状態'],ps.map(p=>'<tr>'+[p.paymentDate||p.date||'',money(p.amount),p.confirmation||''].map(cell).join('')+'</tr>').join(''))+'<button class="biz-btn" id="closeSalesDetails">閉じる</button>';el('salesDetails').hidden=false;el('closeSalesDetails').onclick=()=>el('salesDetails').hidden=true;}
+  if(detail){
+   const sale=registerView.sales[Number(detail.dataset.saleDetail)];if(!sale)return;
+   const source=registerData(),ps=A.unique(source.payments||[]).filter(p=>A.live(p)&&p.saleId===sale.id);
+   const receipt=(source.documents||[]).find(d=>A.live(d)&&(d.id===sale.documentId||d.documentId===sale.documentId)&&d.docType==='receipt'&&d.saleId===sale.id&&d.snapshot?.paymentMethod==='現金');
+   const review=(sale.accountingReviewRequired||sale.reviewRequired)?'<p role="alert">確認理由：'+esc(sale.reviewReason||'売上と正式帳票・入金の関連を再確認してください。')+'</p>':'';
+   const repairable=receipt&&sale.sourceType==='receipt-cash'&&sale.status==='要確認'&&B().getClient()?.getState().role==='admin';
+   el('salesDetails').innerHTML='<h3>'+esc(sale.customer)+' / '+esc(sale.salesDate)+'</h3><p>'+esc(sale.content)+'</p><p>売上ID：'+esc(sale.id)+' / 帳票ID：'+esc(sale.documentId||'未連携')+'</p>'+review+table(['入金日','入金額','確認状態'],ps.map(p=>'<tr>'+[p.paymentDate||p.date||'',money(p.amount),p.confirmation||''].map(cell).join('')+'</tr>').join(''))+(repairable?'<button class="biz-btn" id="reviewCashReceipt">現金領収書の整合性を再検証</button><p>正式帳票・入金・現金台帳と日程のIDを検証します。不一致なら変更せず要確認のままです。</p>':'')+'<button class="biz-btn" id="closeSalesDetails">閉じる</button>';
+   el('salesDetails').hidden=false;
+   el('closeSalesDetails').onclick=()=>el('salesDetails').hidden=true;
+   if(repairable)el('reviewCashReceipt').onclick=guard(async()=>{if(!isAdmin())return;el('reviewCashReceipt').disabled=true;try{await send({type:'repairReceipt',documentId:receipt.id||receipt.documentId,operationId:uid()});notice('領収書の整合性再検証を受け付けました。同期結果を確認してください。');}catch(e){el('reviewCashReceipt').disabled=false;throw e;}});
+  }
  });
  root.renderSales();
 });
