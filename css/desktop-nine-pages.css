@@ -63,12 +63,12 @@
     width: 100%; border-collapse: collapse; font-size: 14px;
   }
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table :is(th,td) {
-    padding: 9px 10px; height: 42px; border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
+    padding: 8px 10px; height: 40px; border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
     vertical-align: middle;
   }
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table th {
     background: var(--tsuki-canvas, #F2F3F5); color: var(--tsuki-muted, #666B73);
-    font-size: 13px; font-weight: 700;
+    font-size: 13px; font-weight: 600;
   }
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) :is(.biz-money,.tsuki-amount) {
     text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap;
