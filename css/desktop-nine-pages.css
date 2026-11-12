@@ -367,7 +367,7 @@
   grid-template-columns:minmax(210px,.95fr) minmax(260px,1.3fr) minmax(310px,1.25fr);
   grid-template-rows:auto auto auto auto auto;gap:10px;align-items:start;
  }
- body.tsuki-ui #pageChohyo>.editor-card{min-width:0;margin:0;padding:12px;border:1px solid #e8e7e3;border-radius:8px;box-shadow:none;}
+ body.tsuki-ui #pageChohyo>.editor-card{min-width:0;margin:0;padding:14px;border:1px solid #e6e6e6;border-radius:14px;background:#fff;box-shadow:0 3px 9px #0000000a;}
  body.tsuki-ui #pageChohyo>.tsuki-document-customer{grid-column:1;grid-row:1 / span 4;}
  body.tsuki-ui #pageChohyo>#itemsCard{grid-column:2;grid-row:1;}
  body.tsuki-ui #pageChohyo>.tsuki-document-extra{grid-column:2;grid-row:2;}
@@ -375,8 +375,8 @@
  body.tsuki-ui #pageChohyo>#confirmedHistoryCard{grid-column:1 / span 2;grid-row:5;}
  body.tsuki-ui #pageChohyo>#previewArea.show {
   grid-column:3;grid-row:1 / span 5;display:block;min-width:0;
-  margin:0;padding:12px;background:#f5f5f3;border:1px solid #e8e7e3;
-  border-radius:8px;overflow:auto;max-height:580px;position:sticky;top:12px;
+  margin:0;padding:14px;background:#f5f5f3;border:1px solid #e6e6e6;
+  border-radius:14px;overflow:auto;max-height:580px;position:sticky;top:12px;
  }
  body.tsuki-ui #pageChohyo>#previewArea .invoice{
   transform:scale(.39);transform-origin:top left;
