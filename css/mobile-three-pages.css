@@ -165,7 +165,7 @@
   }
   #pageChohyo > .editor-card .tabs {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0,1fr));
+    /* Active editor uses the final three-column layout below. */
     gap: 6px;
     margin: 10px 0;
   }
