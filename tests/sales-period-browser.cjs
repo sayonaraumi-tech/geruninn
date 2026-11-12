@@ -13,6 +13,18 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  if(process.env.UI_SCREENSHOT_ONLY==='1'){
    const dir=process.env.PREVIEW_DIR||'ui-preview';
    fs.mkdirSync(dir,{recursive:true});
+   // Representative in-memory fixtures for visual inspection only. Never use
+   // production Firestore, calendar data or sample financial totals.
+   await page.evaluate(()=>{
+     const rows=[
+       {historyId:'demo-est-001',docType:'estimate',customerName:'株式会社WOOC',invoiceDate:'2026-11-12',invoiceNo:'M-202611-0123',items:[{content:'内装クロス工事',qty:120,unit:'㎡',price:1400,taxable:true}],travelFee:0,remarks:'施工予定の見積り',savedAt:'2026-11-12T09:00:00Z'},
+       {historyId:'demo-inv-002',docType:'invoice',customerName:'シンケン株式会社',invoiceDate:'2026-11-08',invoiceNo:'I-202611-0088',items:[{content:'補修工事',qty:1,unit:'式',price:107860,taxable:true}],travelFee:0,savedAt:'2026-11-08T09:00:00Z'},
+       {historyId:'demo-rec-003',docType:'receipt',customerName:'山与商事',invoiceDate:'2026-11-05',invoiceNo:'R-202611-0066',receiptTotal:112376,paymentMethod:'現金',savedAt:'2026-11-05T09:00:00Z'}
+     ];
+     window.__visualDemoHistory=rows;
+     window.loadConfirmedHistory=()=>rows;
+     renderAllSavedDocs();
+   });
    const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
    const meta={width,pages:{},isDemo:true,changesToProduction:false};
    for(const [route,id]of Object.entries(routes)){
@@ -30,6 +42,27 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        const c=await page.locator('#previewArea').boundingBox();
        assert(a&&b&&c&&a.x<b.x&&b.x<c.x,'document must use three distinct edit/detail/preview columns; '+JSON.stringify({a,b,c,layout:await page.locator('#pageChohyo').evaluate(el=>({display:getComputedStyle(el).display,columns:getComputedStyle(el).gridTemplateColumns,classes:el.className}))}));
        assert(await page.locator('#previewArea').isVisible(),'actual original A4 preview must be visible');
+     }
+     if(route==='savedDocs'){
+       assert.equal(await page.locator('#allSavedDocsList .biz-actions').count(),3,'all three visual demo documents must be visible');
+       await page.locator('#tsukiSavedDocType').selectOption('estimate');
+       assert.equal(await page.locator('#allSavedDocsList .biz-actions').count(),1,'saved type filter keeps only estimates');
+       await page.locator('#allSavedDocsList button').filter({hasText:'詳細'}).click();
+       assert(await page.locator('#tsukiSavedDocDetail').isVisible());
+       assert(await page.locator('#tsukiSavedDocDetail').getByText('請求書に変換').count()===1);
+       assert(await page.locator('#tsukiSavedDocDetail').getByText('領収書に変換').count()===1);
+       await page.screenshot({path:path.join(dir,'savedDocs-detail-'+width+'.png'),fullPage:true});
+       const before=await page.evaluate(()=>JSON.stringify(window.__visualDemoHistory));
+       await page.evaluate(()=>{
+         window.confirm=()=>true;
+         window.alert=()=>{};
+         tsukiEstimateReceiptDraft(0);
+       });
+       assert.equal(await page.locator('#receiptTotal').inputValue(),String(await page.evaluate(()=>bizCalcDocumentTotal(window.__visualDemoHistory[0]))));
+       assert.equal(await page.locator('#paymentMethod').inputValue(),'銀行振込');
+       assert.equal(await page.evaluate(()=>JSON.stringify(window.__visualDemoHistory)),before,'conversion preview must not change source estimate');
+       assert.equal(await page.evaluate(()=>window.testRecords.size),0,'draft conversion must not create Firestore records');
+       await page.evaluate(()=>{document.getElementById('tsukiSavedDocType').value='';renderAllSavedDocs();bizSwitchPage('savedDocs');});
      }
      if(route==='calendar'){
        const dayCells=page.locator('#tsukiMonthDays button.tsuki-month-day');
