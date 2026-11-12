@@ -3770,7 +3770,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const tabs=document.createElement('div');tabs.className='tsuki-exp-tabs';tabs.innerHTML='<button type="button" id="tsukiExpTabExpenses" class="active">支出一覧</button><button type="button" id="tsukiExpTabCash">現金帳（出納）</button>';
  const toolbar=document.createElement('div');toolbar.className='tsuki-exp-table-toolbar';toolbar.innerHTML='<input id="tsukiExpSearch" type="search" placeholder="取引日・摘要・取引先で検索"><label>表示件数 <select id="tsukiExpPageSize"><option value="10">10件</option><option value="20">20件</option><option value="50">50件</option></select></label>';
  const pager=document.createElement('div');pager.className='tsuki-exp-pager';pager.innerHTML='<span id="tsukiExpPagerLabel"></span><div><button type="button" class="biz-btn" id="tsukiExpPagePrev">‹</button><span id="tsukiExpPageNumber"></span><button type="button" class="biz-btn" id="tsukiExpPageNext">›</button></div>';
- const heading=ledger.querySelector('.biz-section-head');if(heading)heading.hidden=true;
+ const heading=ledger.querySelector('.biz-section-head');if(heading){const csvButton=heading.querySelector('#expenseCsvExport');if(csvButton)toolbar.append(csvButton);heading.hidden=true;}
  main.append(tabs,toolbar,ledger,pager);
  const cashPanel=document.createElement('div');cashPanel.className='tsuki-exp-cash-panel';cashPanel.hidden=true;cashPanel.append(cash);if(adjust)cashPanel.append(adjust);main.append(cashPanel);
  const reveal=document.createElement('div');reveal.className='tsuki-exp-reveal';
@@ -3779,7 +3779,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  reveal.append(importDisclosure,manualDisclosure);
  if(rules){const d=document.createElement('details');d.innerHTML='<summary>科目の学習ルール</summary>';d.append(rules);reveal.append(d);}
  main.append(reveal);shell.append(side,main);title.after(kpis,shell);
- const state={tab:'expenses',page:0};const records=()=>window.TsukinowaAccountingUI?.getData?.()||{};
+ const state={tab:'expenses',page:0};const records=()=>{if(window.TsukinowaBusinessUI?.isEnabled?.())return window.TsukinowaAccountingUI?.getData?.()||{};return {expenses:(window.bizState?.expenses||[]).map(e=>({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description||e.memo})),cashLedger:window.bizState?.cashLedger||[]};};
  const month=()=>mInput.value||bizNowMonth(),yen=n=>'¥'+Math.round(Number(n)||0).toLocaleString('ja-JP');
  const method=e=>String(e.paymentMethod||e.method||'');
  const source=e=>/csv/i.test(String(e.sourceType||e.importSource||e.source||e.importFile||''))?'csv':'other';
