@@ -169,3 +169,11 @@
     font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif);
   }
 }
+
+/* Reuse the same JP typeface for form controls and tabular text, leaving the
+ * original A4 invoice/PDF elements outside the screen form styling. */
+@media screen {
+  body.tsuki-ui .biz-page :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+    font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif);
+  }
+}
