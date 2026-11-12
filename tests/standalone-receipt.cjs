@@ -183,3 +183,23 @@ test('formal cash receipt clears stale calendar review only after full reconcili
  await bank.service.execute({type:'repairReceipt',documentId:'bank-review',operationId:crypto.randomUUID()});
  assert.equal(bank.rows.get(key).payload.accountingReviewRequired,true);
 });
+
+test('calendar text 現金 is schedule-only; formal cash receipt is sole new accounting event',async()=>{
+ const h=await harness('admin'),run=cmd=>h.service.execute({...cmd,operationId:crypto.randomUUID()});
+ const event={id:'google-cash-date',googleEventId:'google-cash-date',googleCalendarId:'shared',date:'2026-11-09',title:'武井千春、クロス張替、22000円、現金'};
+ await run({type:'calendar',event});
+ assert.equal(h.list('sales').length,0,'Google title cannot create sales');
+ assert.equal(h.list('payments').length,0,'Google title cannot confirm cash');
+ assert.equal(h.list('cashLedger').length,0,'Google title cannot create cash ledger entries');
+ const receiptSave=await run(save({...receipt,documentId:'takei-cash',customerName:'武井千春',invoiceDate:'2026-11-09',receiptTotal:'22000'}));
+ assert(receiptSave.saleId);
+ assert.equal(h.list('sales').length,1);
+ assert.equal(h.list('payments').length,1);
+ assert.equal(h.list('cashLedger').length,1);
+ assert.equal(h.list('payments')[0].payload.confirmation,'cash-received');
+ assert.equal(require('../js/accounting').ledger(h.list('sales').map(x=>x.payload),h.list('payments').map(x=>x.payload)).sales[0].status,'入金済');
+ await run({type:'calendar',event});
+ assert.equal(h.list('sales').length,1,'calendar replay must not create another sale');
+ assert.equal(h.list('payments').length,1,'calendar replay must not create another payment');
+ assert.equal(h.list('cashLedger').length,1,'calendar replay must not duplicate cash');
+});
