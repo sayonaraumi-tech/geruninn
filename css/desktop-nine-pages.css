@@ -238,3 +238,31 @@
  body.tsuki-ui #pageBank .tsuki-bank-candidates,
  body.tsuki-ui #pageBank .tsuki-bank-operations {display:none;}
 }
+
+/* Original black/gold reference: compact settings categories at the left,
+   existing real settings panels at the right. */
+@media screen and (min-width:801px){
+ body.tsuki-ui #pageSettings.active{
+   display:grid;grid-template-columns:210px minmax(0,1fr);
+   column-gap:12px;row-gap:8px;align-items:start;
+ }
+ body.tsuki-ui #pageSettings>.biz-title{grid-column:1/-1;margin:0;}
+ body.tsuki-ui #pageSettings>.tsuki-settings-nav{
+   grid-column:1;grid-row:2/span 50;position:sticky;top:12px;
+   margin:0;min-width:0;display:grid;gap:4px;padding:10px;border-radius:8px;
+ }
+ body.tsuki-ui #pageSettings>.tsuki-settings-nav .biz-btn{
+   display:block;width:100%;padding:11px 9px;text-align:left;
+   border:0;background:#fff;font-size:12px;font-weight:600;color:#252525;
+ }
+ body.tsuki-ui #pageSettings>.tsuki-settings-nav .biz-btn:hover,
+ body.tsuki-ui #pageSettings>.tsuki-settings-nav .biz-btn:focus-visible{
+   background:#fff4d7;color:#7c5b21;outline-color:#b99755;
+ }
+ body.tsuki-ui #pageSettings>.biz-section:not(.tsuki-settings-nav){
+   grid-column:2;min-width:0;margin:0;padding:13px;
+ }
+}
+@media screen and (max-width:800px){
+ body.tsuki-ui #pageSettings>.tsuki-settings-nav{display:none;}
+}
