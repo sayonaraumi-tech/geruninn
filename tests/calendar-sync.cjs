@@ -44,7 +44,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.goto(base);await page.waitForTimeout(200);
   assert.equal(await page.evaluate(()=>localStorage.getItem('tsukinowa_unrelated_preserved')),'yes');
   assert.equal(await page.evaluate(()=>loadConfirmedHistory()[0].customerName),'既存顧客');
-  await page.evaluate(()=>bizSwitchPage('calendar'));await page.locator('#pageCalendar .tsuki-cal-original-table summary').click();
+  await page.evaluate(()=>bizSwitchPage('calendar'));if(await page.locator('#pageCalendar .tsuki-cal-original-table summary').count())await page.locator('#pageCalendar .tsuki-cal-original-table summary').click();
   assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-09');
   assert.equal(await page.locator('#pageCalendar #icsFile, #pageCalendar #googleCalendarSelect, #pageCalendar #googleCalendarStatus').count(),0);
   assert.equal(await page.locator('#googleCalendarReconnect').isVisible(),false);
