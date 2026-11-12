@@ -454,43 +454,71 @@
  }
 }
 
-/* Bank reconciliation: original live CSV rows, actual candidate selector and
-   existing confirmation buttons in three distinct desktop work zones. */
-@media screen and (min-width:801px) {
- body.tsuki-ui #pageBank.active {
-   display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,.85fr);
-   gap:10px;align-items:start;
+/* 銀行照合 desktop reference: compact ledger + original detail tools. */
+@media screen and (min-width:801px){
+ body.tsuki-ui #pageBank.tsuki-bank-desktop.active{display:block;width:100%;max-width:none;padding:12px clamp(18px,1.3vw,30px) 28px;background:#f6f6f6;}
+ body.tsuki-ui #pageBank.tsuki-bank-desktop>.biz-title{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:0 0 13px;flex-wrap:wrap;}
+ body.tsuki-ui #pageBank.tsuki-bank-desktop .biz-title h1{font-size:30px;font-weight:850;color:#111;}
+ body.tsuki-ui #pageBank.tsuki-bank-desktop .biz-title .biz-muted{display:inline;font-size:13px;color:#555;}
+ body.tsuki-ui #pageBank .tsuki-bank-heading-controls{display:flex;align-items:center;gap:11px;font-size:13px;font-weight:750;}
+ body.tsuki-ui #pageBank .tsuki-bank-heading-controls label{display:flex;align-items:center;gap:8px;white-space:nowrap;}
+ body.tsuki-ui #pageBank .tsuki-bank-heading-controls select,body.tsuki-ui #pageBank .tsuki-bank-heading-controls input{min-height:39px;border:1px solid #dedede;border-radius:8px;background:#fff;padding:6px 10px;font-size:14px;max-width:245px;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:16px;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div{min-height:86px;background:#fff;border:1px solid #e3e3e3;border-radius:14px;padding:16px 18px 13px 72px;display:flex;flex-direction:column;justify-content:center;gap:4px;position:relative;box-shadow:0 2px 7px #0000000d;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div:first-child{border-color:#c49d51;background:#fffaf0;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div::before{content:"";position:absolute;left:25px;top:25px;border:3px solid #b58110;width:27px;height:27px;border-radius:8px;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div:nth-child(2)::before{border-radius:50%;content:"✓";font-size:21px;line-height:25px;text-align:center;color:#b58110;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div:nth-child(3)::before{border-radius:50%;content:"";background:conic-gradient(#b58110 0 3deg,transparent 3deg 360deg);}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div:nth-child(4){padding-left:21px;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div:nth-child(4)::before{display:none;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats span{font-size:15px;font-weight:800;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats strong{font-size:28px;font-weight:850;line-height:1.1;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats progress{width:100%;height:11px;accent-color:#2fb52e;}
+ body.tsuki-ui #pageBank .tsuki-bank-layout{display:grid;grid-template-columns:295px minmax(0,1fr);gap:15px;align-items:stretch;}
+ body.tsuki-ui #pageBank .tsuki-bank-sidebar{background:#fff;border:1px solid #e7e7e7;border-radius:15px;padding:13px;margin:0;min-height:540px;}
+ body.tsuki-ui #pageBank .tsuki-bank-sidebar>.biz-btn{display:block;width:100%;min-height:47px;font-size:15px;font-weight:850;border-radius:9px;background:linear-gradient(#dab047,#b47b0b);color:#fff;border-color:#bc8c22;}
+ body.tsuki-ui #pageBank .tsuki-bank-sidebar h2{font-size:17px;margin:21px 0 13px;padding-top:12px;border-top:1px solid #e9e9e9;}
+ body.tsuki-ui #pageBank .tsuki-bank-history-entry{display:block;width:100%;text-align:left;background:#fff;border:0;border-bottom:1px solid #e6e6e6;padding:15px 9px;font-weight:650;font-size:13px;line-height:1.5;cursor:pointer;}
+ body.tsuki-ui #pageBank .tsuki-bank-history-entry:hover{background:#fff5dc;}
+ body.tsuki-ui #pageBank .tsuki-bank-main{min-width:0;background:#fff;border:1px solid #e7e7e7;border-radius:15px;padding:12px 14px 18px;box-shadow:0 3px 8px #0000000c;}
+ body.tsuki-ui #pageBank .tsuki-bank-tabs{display:flex;gap:6px;margin-bottom:13px;border-bottom:1px solid #eee;padding-bottom:8px;}
+ body.tsuki-ui #pageBank .tsuki-bank-tabs button{min-width:150px;min-height:39px;border:1px solid #dfdfdf;border-radius:9px;background:#fff;font-weight:800;font-size:15px;padding:6px 13px;cursor:pointer;}
+ body.tsuki-ui #pageBank .tsuki-bank-tabs button.active{background:linear-gradient(#deb44e,#b67d0b);border-color:#bd8e2c;color:#fff;}
+ body.tsuki-ui #pageBank .tsuki-bank-filter{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px;}
+ body.tsuki-ui #pageBank .tsuki-bank-filter input{min-height:38px;min-width:180px;max-width:320px;flex:1;border:1px solid #ddd;border-radius:8px;padding:7px 10px;font-size:13px;}
+ body.tsuki-ui #pageBank .tsuki-bank-filter label{display:flex;align-items:center;gap:6px;font-size:13px;white-space:nowrap;}
+ body.tsuki-ui #pageBank .tsuki-bank-filter select{min-width:95px;height:37px;border:1px solid #ddd;border-radius:8px;background:#fff;}
+ body.tsuki-ui #pageBank .tsuki-bank-filter .biz-btn{border-color:#c59a3c;color:#9b6f12;white-space:nowrap;}
+ body.tsuki-ui #pageBank .tsuki-bank-main>.tsuki-bank-transactions{margin:0;border:0;padding:0;box-shadow:none;min-width:0;}
+ body.tsuki-ui #pageBank .tsuki-bank-main>.tsuki-bank-transactions>.biz-section-head{display:none;}
+ body.tsuki-ui #pageBank .tsuki-bank-main .biz-table-wrap{max-height:none;overflow-x:auto;}
+ body.tsuki-ui #pageBank .tsuki-bank-main .biz-table{min-width:680px;font-size:13px;}
+ body.tsuki-ui #pageBank .tsuki-bank-main .biz-table th{background:#f5f5f5;color:#272727;font-size:12px;font-weight:750;padding:9px 8px;}
+ body.tsuki-ui #pageBank .tsuki-bank-main .biz-table td{font-size:12px;padding:8px;vertical-align:middle;}
+ body.tsuki-ui #pageBank #bankRows tr[hidden]{display:none!important;}
+ body.tsuki-ui #pageBank #bankRows tr:hover{background:#fff9eb;}
+ body.tsuki-ui #pageBank #bankRows details{min-width:100px;}
+ body.tsuki-ui #pageBank #bankRows summary{font-weight:750;cursor:pointer;}
+ body.tsuki-ui #pageBank .tsuki-bank-pager{display:flex;align-items:center;gap:12px;padding-top:14px;margin-top:13px;border-top:1px solid #eee;font-size:13px;font-weight:700;}
+ body.tsuki-ui #pageBank .tsuki-bank-pager select{height:35px;border:1px solid #ddd;border-radius:8px;}
+ body.tsuki-ui #pageBank .tsuki-bank-pager #tsukiBankPaginationLabel{flex:1;}
+ body.tsuki-ui #pageBank .tsuki-bank-pager button{min-width:36px;min-height:34px;}
+ body.tsuki-ui #pageBank .tsuki-bank-extra{margin-top:12px;border:1px solid #e7e7e7;border-radius:9px;overflow:hidden;}
+ body.tsuki-ui #pageBank .tsuki-bank-extra>summary{padding:12px 13px;background:#fafafa;font-weight:800;font-size:13px;cursor:pointer;}
+ body.tsuki-ui #pageBank .tsuki-bank-extra>.biz-section{margin:8px 10px;padding:12px;}
+ body.tsuki-ui #pageBank .tsuki-bank-extra :is(.tsuki-bank-candidates,.tsuki-bank-operations){min-width:0;}
+ body.tsuki-ui #pageBank #tsukiBankCandidateMirror,body.tsuki-ui #pageBank #tsukiBankOperationMirror{display:grid;gap:8px;}
+ body.tsuki-ui #pageBank #tsukiBankCandidateMirror select{max-width:100%;width:100%;}
+ @media screen and (min-width:801px) and (max-width:1160px){
+ body.tsuki-ui #pageBank .tsuki-bank-layout{grid-template-columns:225px minmax(0,1fr);}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div{padding-left:50px;}
+ body.tsuki-ui #pageBank .tsuki-bank-stats>div::before{left:15px;}
+ body.tsuki-ui #pageBank .tsuki-bank-filter{flex-wrap:wrap;}
  }
- body.tsuki-ui #pageBank>.biz-title,
- body.tsuki-ui #pageBank>.bank-import {grid-column:1/-1;margin:0;}
- body.tsuki-ui #pageBank>.tsuki-bank-transactions {grid-column:1;grid-row:3;}
- body.tsuki-ui #pageBank>.tsuki-bank-candidates {grid-column:2;grid-row:3;}
- body.tsuki-ui #pageBank>.tsuki-bank-operations {grid-column:3;grid-row:3;}
- body.tsuki-ui #pageBank>.biz-section:not(.bank-import):not(.tsuki-bank-transactions):not(.tsuki-bank-candidates):not(.tsuki-bank-operations) {
-   grid-column:1/-1;
- }
- body.tsuki-ui #pageBank>.tsuki-bank-transactions,
- body.tsuki-ui #pageBank>.tsuki-bank-candidates,
- body.tsuki-ui #pageBank>.tsuki-bank-operations {
-   min-width:0;min-height:250px;padding:12px;margin:0;border-radius:8px;
- }
- body.tsuki-ui #pageBank .tsuki-bank-transactions .biz-table-wrap {
-   overflow:auto;max-height:430px;
- }
- body.tsuki-ui #pageBank .tsuki-bank-transactions .biz-table {min-width:700px;}
- body.tsuki-ui #pageBank #bankRows tr {cursor:pointer;}
- body.tsuki-ui #pageBank #bankRows tr.tsuki-bank-selected {background:#fff6df;}
- body.tsuki-ui #tsukiBankCandidateMirror,
- body.tsuki-ui #tsukiBankOperationMirror {display:grid;gap:9px;max-height:430px;overflow:auto;}
- body.tsuki-ui #tsukiBankCandidateMirror select {width:100%;max-width:100%;min-height:38px;}
- body.tsuki-ui #tsukiBankCandidateMirror label {display:flex;gap:6px;align-items:start;font-size:12px;}
- body.tsuki-ui #tsukiBankOperationMirror .biz-btn {width:100%;min-height:38px;text-align:center;}
- body.tsuki-ui #pageBank .tsuki-bank-candidates .biz-muted,
- body.tsuki-ui #pageBank .tsuki-bank-operations .biz-muted {overflow-wrap:anywhere;font-size:12px;margin:0 0 10px;}
 }
-@media screen and (max-width:800px) {
+@media screen and (max-width:800px){
  body.tsuki-ui #pageBank .tsuki-bank-candidates,
- body.tsuki-ui #pageBank .tsuki-bank-operations {display:none;}
+ body.tsuki-ui #pageBank .tsuki-bank-operations{display:none;}
 }
 
 /* Original black/gold reference: compact settings categories at the left,
