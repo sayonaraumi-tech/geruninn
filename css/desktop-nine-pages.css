@@ -266,3 +266,29 @@
 @media screen and (max-width:800px){
  body.tsuki-ui #pageSettings>.tsuki-settings-nav{display:none;}
 }
+
+/* Reference desktop 日程: month calendar at left, linked schedule table at
+ * right. Existing Google/帳票 link and review controls remain unchanged. */
+@media screen and (min-width:801px){
+ body.tsuki-ui #pageCalendar.active {
+   display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);
+   column-gap:12px;row-gap:10px;align-items:start;
+ }
+ body.tsuki-ui #pageCalendar>.biz-title {grid-column:1/-1;grid-row:1;margin:0;}
+ body.tsuki-ui #pageCalendar>.biz-section:nth-child(2){
+   grid-column:1;grid-row:2;min-width:0;margin:0;padding:13px;border-radius:8px;
+ }
+ body.tsuki-ui #pageCalendar>.biz-section:nth-child(3){
+   grid-column:2;grid-row:2;min-width:0;margin:0;padding:13px;border-radius:8px;
+ }
+ body.tsuki-ui #pageCalendar>.biz-section:nth-child(3) .biz-section-head{
+   display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:7px;
+ }
+ body.tsuki-ui #pageCalendar>.biz-section:nth-child(3) .biz-table-wrap{
+   overflow:auto;max-height:425px;
+ }
+ body.tsuki-ui #pageCalendar>.biz-section:nth-child(3) .biz-table{
+   min-width:530px;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-day {min-height:52px;}
+}
