@@ -28,10 +28,11 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>{bizSwitchPage('expenses');expDate.value='2026-10-02';expCategory.value='旅費交通費';expMethod.value='現金';expAmount.value=100;expVendor.value='手工';expMemo.value='現金';return addExpense();});await idle();
  assert.equal((await snapshot()).cash.length,1);
  const csv='日付,科目,支払方法,金額,取引先,内容・備考\n2026-10-02,旅費交通費,現金,100,手工,現金\n2026-10-02,消耗品費,法人銀行デビット,6060,ビックカメラ,備品\n2026-10-02,交通費,代表者立替（交通系IC）,200,駅,電車\n2026-10-02,通信費,銀行振込,1000,電話会社,10月\n2026-10-02,地代家賃,口座振替,2000,家主,家賃\n2026-10-02,その他,銀行振込,3000,候補店,候補';
+ await desktop.locator('#pageExpenses .tsuki-exp-reveal > details').first().locator('summary').click();
  await desktop.locator('#expenseFile').setInputFiles({name:'expenses.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/6件.*12,260.*重複候補 1件.*エラー 0件/);
  await desktop.locator('#expenseImportCommit').click();await desktop.waitForFunction(()=>document.getElementById('expenseImportPreview').textContent==='5件を同期キューに保存しました。重複はスキップします。');await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.length===6);assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
  await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/重複候補 6件/);assert(await desktop.locator('#expenseImportCommit').isDisabled());
- assert.equal(await desktop.locator('#pageExpenses > .biz-section').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
+ assert.equal(await desktop.locator('#pageExpenses #expenseRows, #pageExpenses #cashRows, #pageExpenses #expenseImportCommit, #pageExpenses #expAmount, #pageExpenses #expenseCategoryRules').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
  await desktop.evaluate(()=>bizSwitchPage('bank'));
  const bankCsv='日付,摘要,入金,出金,取引ID\n2026-10-04,電話会社,,1000,high\n2026-10-04,不明摘要,,3000,candidate\n2026-10-04,未登録,,4000,unmatched\n2026-10-04,VISA カード利用代金,,6060,card';
  await desktop.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(bankCsv)});await desktop.evaluate(()=>importBankCsv());await idle();
