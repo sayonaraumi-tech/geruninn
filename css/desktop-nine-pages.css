@@ -9,53 +9,53 @@
   #bizNav button:focus-visible { outline: 2px solid var(--tsuki-accent, #B5964C); outline-offset: -2px; }
 
   /* Every desktop business page shares one compact workspace grid. */
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings).biz-page {
-    width: min(100%, 1480px); max-width: 1480px; margin-inline: auto;
-    padding: 16px 20px 36px; color: var(--tsuki-text, #202124);
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings).biz-page {
+    width: 100%; max-width: none; margin-inline: auto;
+    padding: 18px clamp(18px,1.8vw,32px) 36px; color: var(--tsuki-text, #202124);
     font-size: var(--tsuki-size-body, 14px);
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-title {
-    margin-bottom: 12px; align-items: center; gap: 8px 16px;
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-title {
+    margin-bottom: 16px; align-items: center; gap: 8px 16px;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-title h1 {
-    font-size: var(--tsuki-size-title, 22px); font-weight: 700; line-height: 1.35;
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-title h1 {
+    font-size: clamp(23px,1.9vw,30px); font-weight: 800; line-height: 1.3; color:#111;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section {
-    margin-top: 10px; padding: 12px 16px; border-radius: 8px;
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section {
+    margin-top: 12px; padding: 16px 18px; border-radius: 16px;
     border: 1px solid var(--tsuki-divider, #E0E2E6);
     background: var(--tsuki-surface, #FFFFFF); box-shadow: none;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section-head {
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section-head {
     margin-bottom: 8px; gap: 8px 12px; padding-bottom: 7px;
     border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section h2 {
-    font-size: var(--tsuki-size-section, 17px); font-weight: 600;
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section h2 {
+    font-size: 19px; font-weight: 800; color:#111;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-muted {
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-muted {
     font-size: var(--tsuki-size-small, 12px); color: var(--tsuki-muted, #666B73);
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-actions { gap: 6px; }
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-actions { gap: 6px; }
 
   /* Controls: retain original classes, event handlers, disabled state and IDs. */
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-btn {
-    min-height: 36px; padding: 6px 12px; border-radius: 6px;
-    font-size: 14px; font-weight: 600; border-color: var(--tsuki-divider, #E0E2E6);
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-btn {
+    min-height: 38px; padding: 7px 12px; border-radius: 9px;
+    font-size: 14px; font-weight: 700; border-color: var(--tsuki-divider, #E0E2E6);
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-btn.primary {
-    background: var(--tsuki-accent, #B5964C); border-color: var(--tsuki-accent, #B5964C);
-    color: #171717; box-shadow: none;
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-btn.primary {
+    background: linear-gradient(#d8b451,#a87916); border-color: #b58a32;
+    color: #fff; box-shadow: none;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-field :is(input:not([type="checkbox"]),select,textarea),
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .sales-filters :is(input,select) {
-    min-height: 36px; padding: 6px 9px; border-radius: 6px;
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-field :is(input:not([type="checkbox"]),select,textarea),
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .sales-filters :is(input,select) {
+    min-height: 38px; padding: 7px 10px; border-radius: 9px;
     border: 1px solid var(--tsuki-divider, #E0E2E6); font-size: 14px;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) :is(.biz-btn,input,select,textarea):focus-visible {
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) :is(.biz-btn,input,select,textarea):focus-visible {
     outline: 2px solid var(--tsuki-accent, #B5964C); outline-offset: 2px;
   }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-form-grid { gap: 8px 12px; }
-  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-field label { font-size: 12px; margin-bottom: 4px; }
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-form-grid { gap: 8px 12px; }
+  :is(#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-field label { font-size: 12px; margin-bottom: 4px; }
 
   /* Data density, numeric columns, sticky headers, accessible scrolling. */
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table-wrap { max-width: 100%; overflow-x: auto; }
@@ -63,12 +63,12 @@
     width: 100%; border-collapse: collapse; font-size: 14px;
   }
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table :is(th,td) {
-    padding: 8px 10px; height: 40px; border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
+    padding: 9px 10px; height: 42px; border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
     vertical-align: middle;
   }
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table th {
     background: var(--tsuki-canvas, #F2F3F5); color: var(--tsuki-muted, #666B73);
-    font-size: 13px; font-weight: 600;
+    font-size: 13px; font-weight: 700;
   }
   :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) :is(.biz-money,.tsuki-amount) {
     text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -393,28 +393,28 @@
    Scoped to dashboard being active. Does not alter other business pages or print/PDF. */
 @media screen and (min-width:801px){
  body.tsuki-ui:has(#pageDashboard.active){background:#f5f5f5;color:#121212;font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;}
- body.tsuki-ui:has(#pageDashboard.active) .biz-topbar{
+ body.tsuki-ui .biz-topbar{
   height:52px;padding:0 clamp(16px,1.9vw,32px);gap:16px;
   background:linear-gradient(#171819,#0e0f10);box-shadow:none;color:#fff;
  }
- body.tsuki-ui:has(#pageDashboard.active) .biz-brand{
+ body.tsuki-ui .biz-brand{
   display:flex;align-items:center;gap:12px;font-size:clamp(16px,1.3vw,23px);font-weight:800;
   letter-spacing:0;color:#fff;line-height:1.1;
  }
  body.tsuki-ui:has(#pageDashboard.active) .biz-brand small{display:none;}
- body.tsuki-ui:has(#pageDashboard.active) #bizNav{justify-content:space-around;min-width:0;gap:3px;}
- body.tsuki-ui:has(#pageDashboard.active) #bizNav button{
+ body.tsuki-ui #bizNav{justify-content:space-around;min-width:0;gap:3px;}
+ body.tsuki-ui #bizNav button{
   padding:9px clamp(6px,.86vw,14px);font-size:clamp(11px,.92vw,15px);font-weight:700;
   border-radius:7px;color:#f4f4f4;
  }
- body.tsuki-ui:has(#pageDashboard.active) #bizNav button.active{
+ body.tsuki-ui #bizNav button.active{
   background:linear-gradient(#d8b451,#a87916);color:#fff;box-shadow:inset 0 1px #e9cc83,0 2px 4px #0002;
  }
- body.tsuki-ui:has(#pageDashboard.active) #bizSyncState{display:none;}
- body.tsuki-ui:has(#pageDashboard.active) #bizCloudAccountButton{
+ body.tsuki-ui #bizSyncState{display:none;}
+ body.tsuki-ui #bizCloudAccountButton{
   min-height:30px;padding:5px 9px;border-radius:7px;font-size:11px;background:#242424;color:#fff;border:1px solid #555;
  }
- body.tsuki-ui:has(#pageDashboard.active) #bizUserLabel{white-space:nowrap;font-weight:700;color:#eee;}
+ body.tsuki-ui #bizUserLabel{white-space:nowrap;font-weight:700;color:#eee;}
  body.tsuki-ui #pageDashboard.active{
   max-width:none;width:100%;padding:18px clamp(18px,1.8vw,32px) 28px;
   row-gap:12px;column-gap:12px;background:#f5f5f5;
@@ -540,7 +540,7 @@
  body.tsuki-ui #pageDashboard .tsuki-home-period-top button:focus-visible{outline:2px solid #b78013;outline-offset:2px;}
 }
 @media screen and (min-width:801px) and (max-width:1350px){
- body.tsuki-ui:has(#pageDashboard.active) #bizNav button{padding:9px 6px;font-size:12px;}
+ body.tsuki-ui #bizNav button{padding:9px 6px;font-size:12px;}
  body.tsuki-ui #pageDashboard .tsuki-home-period-segments{margin-left:2px;}
  body.tsuki-ui #pageDashboard .tsuki-home-month-display{min-width:130px;font-size:14px;}
  body.tsuki-ui #pageDashboard .tsuki-home-kpi-symbol{min-width:44px;width:44px;}
