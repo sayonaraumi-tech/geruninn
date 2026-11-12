@@ -131,8 +131,8 @@
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title{
   display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:15px;
  }
- body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title h1{font-size:30px;font-weight:850;line-height:1.3;}
- body.tsuki-ui #pageExpenses.tsuki-expense-desktop .biz-title .biz-muted{display:inline;color:#666;font-size:14px;margin-left:15px;}
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title h1{font-size:30px;font-weight:850;line-height:1.3;white-space:nowrap;}
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title>div:first-child{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}\n body.tsuki-ui #pageExpenses.tsuki-expense-desktop .biz-title .biz-muted{display:inline;color:#555;font-size:14px;margin:0;}
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop .tsuki-exp-period{display:flex;align-items:center;gap:7px;white-space:nowrap;}
  body.tsuki-ui #pageExpenses .tsuki-exp-period>label{font-weight:700;}
  body.tsuki-ui #pageExpenses .tsuki-exp-period input[type=month]{width:157px;max-width:157px;height:40px;font-size:14px;font-weight:700;border:1px solid #dedede;border-radius:8px;padding:6px;}
@@ -140,7 +140,7 @@
  body.tsuki-ui #pageExpenses .tsuki-exp-period #tsukiExpCaption{display:none;}
  body.tsuki-ui #pageExpenses .tsuki-exp-monthly{border-radius:8px;padding:9px 20px;background:linear-gradient(#dfb752,#b17a0e);font-weight:750;color:#fff;}
  body.tsuki-ui #pageExpenses .tsuki-exp-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:15px;}
- body.tsuki-ui #pageExpenses .tsuki-exp-kpi{min-width:0;min-height:114px;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:14px 21px;border-radius:15px;background:#fff;border:1px solid #e3e3e3;box-shadow:0 3px 8px #00000010;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpi{min-width:0;min-height:114px;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:14px 21px 14px 76px;position:relative;border-radius:15px;background:#fff;border:1px solid #e3e3e3;box-shadow:0 3px 8px #00000010;}\n body.tsuki-ui #pageExpenses .tsuki-exp-kpi::before{content:"";position:absolute;left:25px;top:24px;width:30px;height:25px;border:3px solid #af7a0d;border-radius:6px;box-sizing:border-box;box-shadow:5px -5px 0 -2px #fff,5px -5px 0 0 #af7a0d;}\n body.tsuki-ui #pageExpenses .tsuki-exp-kpi:nth-child(1)::before{border-radius:50%;height:20px;box-shadow:0 8px 0 -3px #fff,0 8px 0 0 #af7a0d;}
  body.tsuki-ui #pageExpenses .tsuki-exp-kpi.selected{background:#fffaf0;border-color:#b9963f;box-shadow:0 2px 8px #bc9e531d;}
  body.tsuki-ui #pageExpenses .tsuki-exp-kpi-label{font-size:19px;font-weight:800;color:#111;}
  body.tsuki-ui #pageExpenses .tsuki-exp-kpi strong{font-size:28px;font-weight:850;color:#141414;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;}
@@ -154,13 +154,13 @@
  body.tsuki-ui #pageExpenses .tsuki-exp-sidebar hr{margin:14px 0 12px;border:0;border-top:1px solid #e9e9e9;}
  body.tsuki-ui #pageExpenses .tsuki-exp-sidebar>label{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-weight:700;font-size:12px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-sidebar select{min-height:34px;width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:7px;background:#fff;font-size:13px;}
- body.tsuki-ui #pageExpenses .tsuki-exp-main{min-width:0;background:#fff;border:1px solid #e3e3e3;border-radius:15px;padding:13px 14px 18px;box-shadow:0 3px 9px #0000000a;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main{min-width:0;min-height:575px;background:#fff;border:1px solid #e3e3e3;border-radius:15px;padding:13px 14px 18px;box-shadow:0 3px 9px #0000000a;}
  body.tsuki-ui #pageExpenses .tsuki-exp-tabs{display:flex;gap:0;border-bottom:1px solid #e9e9e9;margin:-2px -4px 11px;padding:0;}
  body.tsuki-ui #pageExpenses .tsuki-exp-tabs button{min-width:178px;border-radius:9px 9px 0 0;padding:11px 18px;border:1px solid #dedede;background:#fbfbfb;color:#161616;font-weight:800;font-size:17px;cursor:pointer;}
  body.tsuki-ui #pageExpenses .tsuki-exp-tabs button.active{background:linear-gradient(#e0b54d,#b17b11);color:#fff;border-color:#bd8f2a;}
- body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar{display:flex;align-items:center;justify-content:space-between;gap:13px;margin-bottom:12px;}
- body.tsuki-ui #pageExpenses #tsukiExpSearch{width:min(350px,48%);min-height:38px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;}
- body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar label{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap;color:#444;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:nowrap;}\n body.tsuki-ui #pageExpenses .tsuki-exp-top-filters{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:1;min-width:0;}\n body.tsuki-ui #pageExpenses .tsuki-exp-top-filters label{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;font-weight:650;}\n body.tsuki-ui #pageExpenses .tsuki-exp-top-filters select{min-width:82px;max-width:125px;height:36px;border:1px solid #ddd;border-radius:7px;background:#fff;}
+ body.tsuki-ui #pageExpenses #tsukiExpSearch{width:min(305px,30%);flex-shrink:0;min-height:38px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar label{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;color:#444;}
  body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar select{width:82px;min-height:34px;border-radius:7px;border:1px solid #ddd;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main>.biz-section{margin:0;padding:0;border:0;border-radius:0;box-shadow:none;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main>.biz-section>.biz-section-head[hidden]{display:none!important;}
@@ -169,14 +169,14 @@
  body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table td{font-size:13px;line-height:1.35;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main #expenseRows tr[hidden]{display:none!important;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main #expenseRows .biz-btn{min-height:27px;padding:4px 7px;font-size:11px;margin:1px 2px;}
- body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-category{font-weight:750;color:#725000;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-category{font-weight:750;color:#725000;}\n body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-category-pill{display:inline-block;border-radius:20px;background:#fff0c9;padding:3px 10px;color:#5f4b23;font-size:12px;white-space:nowrap;}\n body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-description{font-weight:650;color:#222;}\n body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-amount{font-weight:750;font-variant-numeric:tabular-nums;}\n body.tsuki-ui #pageExpenses .tsuki-exp-main input[type=checkbox]{width:17px;height:17px;accent-color:#b88924;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-status{display:inline-block;border-radius:14px;background:#eee;color:#555;padding:3px 8px;white-space:nowrap;font-weight:700;font-size:11px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-status.success{background:#d9f3d8;color:#295f2c;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table tbody td:nth-last-child(-n+3){white-space:nowrap;}
- body.tsuki-ui #pageExpenses #expenseCsvExport{min-height:37px;padding:6px 11px;color:#a16c00;background:#fff9ed;border-color:#bd963e;border-radius:9px;font-weight:750;}
+ body.tsuki-ui #pageExpenses #expenseCsvExport{min-height:37px;padding:6px 11px;color:#a16c00;background:#fff9ed;border-color:#bd963e;border-radius:9px;font-weight:750;margin-left:auto;white-space:nowrap;}
 
  body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table-wrap{overflow-x:auto;}
- body.tsuki-ui #pageExpenses .tsuki-exp-pager{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #ececec;margin-top:13px;padding-top:12px;font-weight:700;font-size:13px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-pager{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #ececec;margin-top:13px;padding-top:12px;font-weight:700;font-size:13px;}\n body.tsuki-ui #pageExpenses .tsuki-exp-page-size{display:flex;align-items:center;gap:7px;}\n body.tsuki-ui #pageExpenses .tsuki-exp-page-size select{height:36px;min-width:80px;border-radius:8px;border:1px solid #ddd;}\n body.tsuki-ui #pageExpenses .tsuki-exp-page-buttons{display:flex;align-items:center;gap:12px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-pager>div{display:flex;align-items:center;gap:12px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-pager .biz-btn{min-width:34px;padding:5px 9px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-cash-panel[hidden],body.tsuki-ui #pageExpenses .tsuki-exp-main>.biz-section[hidden],body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar[hidden],body.tsuki-ui #pageExpenses .tsuki-exp-pager[hidden]{display:none!important;}
