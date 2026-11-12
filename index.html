@@ -1125,8 +1125,9 @@ dialog h2{font-size:15px}
 <div id="pageSavedDocs" class="biz-page app-page">
  <div class="biz-title"><div><h1>保存帳票</h1><div class="biz-muted">保存済みの見積書・請求書・領収書・小野田請求を一覧表示します。呼び出し・再ダウンロードしても同じ帳票IDとして扱い、売上・入金を重複登録しません。</div></div></div>
  <div class="biz-section">
-  <div class="biz-section-head"><h2>保存済み帳票</h2><div class="biz-actions"><input id="savedDocSearch" placeholder="客户名・番号・種類" oninput="renderAllSavedDocs()"></div></div>
+  <div class="biz-section-head"><h2>保存済み帳票</h2><div class="biz-actions"><label class="tsuki-saved-type-label">種類<select id="tsukiSavedDocType" onchange="renderAllSavedDocs()"><option value="">すべて</option><option value="estimate">見積書</option><option value="invoice">請求書</option><option value="receipt">領収書</option><option value="onoda">小野田請求</option></select></label><input id="savedDocSearch" placeholder="顧客名・番号・種類" oninput="renderAllSavedDocs()"></div></div>
   <div id="allSavedDocsList"></div>
+  <div id="tsukiSavedDocDetail" class="tsuki-saved-detail" hidden aria-label="帳票詳細"></div>
  </div>
 </div>
 
@@ -3450,8 +3451,8 @@ bizOnDocumentConfirmed=function(state){
 // PWA v2 保存帳票一覧：再呼出・再DLは同一 historyId を維持する。
 function renderAllSavedDocs(){
   const box=document.getElementById('allSavedDocsList'); if(!box)return;
-  const q=(document.getElementById('savedDocSearch')?.value||'').toLowerCase();
-  const rows=loadConfirmedHistory().filter(r=>{const text=[docTypeLabel(r.docType),r.customerName,r.invoiceNo,r.invoiceDate,historySummary(r)].join(' ').toLowerCase();return !q||text.includes(q)});
+  const q=(document.getElementById('savedDocSearch')?.value||'').toLowerCase(),type=document.getElementById('tsukiSavedDocType')?.value||'';
+  const rows=loadConfirmedHistory().filter(r=>{const text=[docTypeLabel(r.docType),r.customerName,r.invoiceNo,r.invoiceDate,historySummary(r)].join(' ').toLowerCase();return (!type||r.docType===type)&&(!q||text.includes(q))});
   if(!rows.length){box.innerHTML='<div style="padding:18px;text-align:center;color:#999;border:1px dashed #d8dde3;border-radius:10px;">保存済み帳票はありません。</div>';return;}
   box.innerHTML=rows.map(r=>{
     const idx=loadConfirmedHistory().findIndex(x=>x.historyId===r.historyId);
@@ -3460,9 +3461,42 @@ function renderAllSavedDocs(){
     return `<div style="border:1px solid #e0e3e8;border-radius:10px;padding:12px 14px;margin-bottom:9px;background:#fafbfc;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
       <div><div style="font-weight:700;">${bizEsc(docTypeLabel(r.docType))} ｜ ${bizEsc(r.customerName||'名称未入力')} ｜ ${bizMoney(amount)}</div>
       <div style="font-size:12px;color:#777;margin-top:5px;">${bizEsc(r.invoiceDate||'')} ｜ ${bizEsc(r.invoiceNo||'')} ｜ ID: ${bizEsc(r.historyId||'')} ｜ 保存 ${bizEsc(saved)}</div></div>
-      <div class="biz-actions"><button class="biz-btn" onclick="openSavedDoc(${idx})">開く</button><button class="biz-btn primary" onclick="redownloadSavedDoc(${idx})">再ダウンロード</button></div>
+      <div class="biz-actions"><button class="biz-btn" onclick="tsukiShowSavedDocDetail(${idx})">詳細</button><button class="biz-btn" onclick="openSavedDoc(${idx})">開く</button><button class="biz-btn primary" onclick="redownloadSavedDoc(${idx})">再ダウンロード</button></div>
     </div>`;
   }).join('');
+}
+// Saved document detail is a view of the existing immutable history.
+function tsukiShowSavedDocDetail(index){
+ const state=loadConfirmedHistory()[index],box=document.getElementById('tsukiSavedDocDetail');if(!state||!box)return;
+ const amount=state.docType==='receipt'?Number(state.receiptTotal||0):bizCalcDocumentTotal(state);
+ box.hidden=false;
+ box.innerHTML='<div class="tsuki-saved-detail-heading"><h3>'+bizEsc(docTypeLabel(state.docType)+' 詳細')+'</h3><button class="biz-btn" type="button" onclick="document.getElementById(\'tsukiSavedDocDetail\').hidden=true">閉じる</button></div>'+
+ '<p><strong>'+bizEsc(state.customerName||'名称未入力')+'</strong></p>'+
+ '<p>'+bizEsc(state.invoiceDate||'')+'　'+bizEsc(state.invoiceNo||'')+'</p>'+
+ '<div class="tsuki-saved-detail-amount">'+bizEsc(bizMoney(amount))+'</div>'+
+ '<p class="biz-muted">'+bizEsc(historySummary(state))+'</p>'+
+ '<div class="tsuki-saved-detail-actions"><button class="biz-btn" type="button" onclick="openSavedDoc('+index+')">編集・確認</button>'+
+ '<button class="biz-btn" type="button" onclick="redownloadSavedDoc('+index+')">PDFダウンロード</button>'+
+ (state.docType==='estimate'?'<button class="biz-btn primary" type="button" onclick="openSavedDoc('+index+');requestEstimateInvoice()">請求書に変換</button>'+
+ '<button class="biz-btn" type="button" onclick="tsukiEstimateReceiptDraft('+index+')">領収書に変換</button>':'')+'</div>';
+ if(matchMedia('(max-width: 800px)').matches)box.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// Conversion only prepares a new *unsaved* receipt draft. It does not confirm
+// a cash payment, overwrite an estimate, or write to the accounting ledger.
+function tsukiEstimateReceiptDraft(index){
+ const state=loadConfirmedHistory()[index];if(!state||state.docType!=='estimate')return;
+ const total=bizCalcDocumentTotal(state);
+ if(!Number.isFinite(total)||total<=0)return alert('見積金額を確認してください。');
+ if(!confirm('領収書の下書きを作成します。実際の入金を確認してから正式保存してください。よろしいですか？'))return;
+ setDocType('receipt');
+ document.getElementById('customerName').value=state.customerName||'';
+ document.getElementById('invoiceDate').value=todayISO();
+ document.getElementById('receiptTotal').value=String(total);
+ document.getElementById('paymentMethod').value='銀行振込';
+ document.getElementById('remarks').value=state.remarks||'';
+ document.getElementById('tadashi').value=(state.items||[]).map(x=>x.content||'').filter(Boolean).slice(0,3).join('・').slice(0,70);
+ recalc();bizSwitchPage('chohyo');
+ alert('領収書の下書きです。入金日・支払方法・金額を確認してから正式保存してください。見積書は変更していません。');
 }
 function bizRestoreDocumentLinks(state){
   const e=bizState.calendar.find(x=>x.id===state.calendarEventId || (state.historyId && (x.linkedInvoiceId===state.historyId || x.linkedReceiptId===state.historyId)));
