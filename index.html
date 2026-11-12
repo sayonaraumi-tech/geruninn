@@ -1095,8 +1095,18 @@ dialog h2{font-size:15px}
    <div class="biz-field span2"><label for="calendarKeyword">検索 / 絞り込み</label><input id="calendarKeyword" placeholder="例：小野田" oninput="renderCalendarEvents()"></div>
   </div>
   <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
+  <div class="tsuki-month-panel" aria-label="施工月間カレンダー">
+   <div class="tsuki-month-controls">
+    <button type="button" class="biz-btn" onclick="tsukiShiftCalendarMonth(-1)" aria-label="前の月">‹</button>
+    <strong id="tsukiCalendarCaption"></strong>
+    <button type="button" class="biz-btn" onclick="tsukiShiftCalendarMonth(1)" aria-label="次の月">›</button>
+    <button type="button" class="biz-btn" id="tsukiCalendarShowAll" onclick="tsukiSelectCalendarDay('')">全日程</button>
+   </div>
+   <div class="tsuki-month-weekdays" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>
+   <div id="tsukiMonthDays" class="tsuki-month-days" role="group" aria-label="月間日程"></div>
+  </div>
  </div>
- <div class="biz-section"><div class="biz-section-head"><h2>同期済み日程</h2><label><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
+ <div class="biz-section"><div class="biz-section-head"><h2 id="tsukiCalendarListTitle">同期済み日程</h2><label><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
 </div>
 
 
@@ -3479,7 +3489,43 @@ function bizCalendarReviewReason(e, documents){
 }
 function renderCalendarEvents(){
   bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=document.getElementById('calendarReview').checked,documents=bizCalendarDocumentStates();const rows=bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
-  tbody.innerHTML=rows.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">対象月の日程はまだ取り込まれていません。</td></tr>';
+  tsukiRenderMonthCalendar(m,rows);
+  const selected=window.tsukiCalendarSelectedDay||'';
+  const visible=selected&&selected.startsWith(m)?rows.filter(e=>e.date===selected):rows;
+  const label=document.getElementById('tsukiCalendarListTitle');
+  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+' の施工日程':'同期済み日程';
+  tbody.innerHTML=visible.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">選択した期間の日程はありません。</td></tr>';
+}
+function tsukiShiftCalendarMonth(step){
+ const input=document.getElementById('calendarMonth');if(!input)return;
+ const m=/^(\d{4})-(\d{2})$/.exec(input.value||bizNowMonth());if(!m)return;
+ const date=new Date(Number(m[1]),Number(m[2])-1+step,1);
+ input.value=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
+ window.tsukiCalendarSelectedDay='';renderCalendarEvents();
+}
+function tsukiSelectCalendarDay(date){
+ window.tsukiCalendarSelectedDay=date||'';renderCalendarEvents();
+}
+function tsukiRenderMonthCalendar(month,rows){
+ const target=document.getElementById('tsukiMonthDays');if(!target)return;
+ const match=/^(\d{4})-(\d{2})$/.exec(month);if(!match){target.replaceChildren();return;}
+ const year=Number(match[1]),mon=Number(match[2]),start=new Date(year,mon-1,1);
+ const days=new Date(year,mon,0).getDate(),prefix=(start.getDay()+6)%7;
+ const countByDate=new Map();for(const e of rows)countByDate.set(e.date,(countByDate.get(e.date)||0)+1);
+ const caption=document.getElementById('tsukiCalendarCaption');if(caption)caption.textContent=year+'年'+mon+'月';
+ const fragment=document.createDocumentFragment();
+ for(let slot=0;slot<Math.ceil((prefix+days)/7)*7;slot++){
+  const day=slot-prefix+1,cell=document.createElement('button');cell.type='button';
+  if(day<1||day>days){cell.className='tsuki-month-blank';cell.disabled=true;cell.setAttribute('aria-hidden','true');fragment.appendChild(cell);continue;}
+  const date=month+'-'+String(day).padStart(2,'0'),n=countByDate.get(date)||0,weekday=slot%7;
+  cell.className='tsuki-month-day'+(weekday===5?' saturday':weekday===6?' sunday':'')+(window.tsukiCalendarSelectedDay===date?' selected':'')+(n?' has-work':'');
+  cell.setAttribute('aria-label',date+' '+n+'件');cell.setAttribute('aria-pressed',String(window.tsukiCalendarSelectedDay===date));
+  const number=document.createElement('span');number.textContent=String(day);cell.appendChild(number);
+  if(n){const count=document.createElement('small');count.textContent=String(n)+'件';cell.appendChild(count);}
+  cell.addEventListener('click',()=>tsukiSelectCalendarDay(date));fragment.appendChild(cell);
+ }
+ target.replaceChildren(fragment);
+ const all=document.getElementById('tsukiCalendarShowAll');if(all)all.disabled=!window.tsukiCalendarSelectedDay;
 }
 // 新規帳票へ移った時は必要に応じてリンクを解除するヘルパー
 function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCurrentProjectId='';const b=document.getElementById('bizLinkedSource');if(b)b.style.display='none'}
