@@ -20,11 +20,12 @@ root.addExpense=guard(async()=>{if(!enabled())return alert('支出登録はク�
 root.accountingEditExpense=function(id){if(!isAdmin())return;const e=data.expenses.find(x=>x.id===id);if(!e)return;expenseBank=null;expenseEdit={id,revision:rev('expenses',id)};el('expenseLearnCategory').checked=false;for(const [input,key] of [['expDate','expenseDate'],['expCategory','category'],['expMethod','paymentMethod'],['expVendor','vendor'],['expMemo','description'],['expAmount','amount'],['expBankAccount','bankAccount'],['expAttachment','receiptAttachmentRef']])el(input).value=e[key]||'';el('expAmount').scrollIntoView({behavior:'smooth'});};
 root.deleteExpense=function(id){if(!enabled())return old.deleteExpense(id);if(!isAdmin())return;const reason=prompt('支出の取消理由（記録は保持されます）');if(reason)send({type:'deleteExpense',expenseId:id,reason,expectedRevision:rev('expenses',id)});};
 root.renderExpenses=function(){if(!enabled())return old.renderExpenses();const m=value('expenseMonth')||bizNowMonth();el('expenseMonth').value=m;el('expenseRows').innerHTML=A.expenseRegister(data.expenses||[],m).map(e=>'<tr>'+[e.expenseDate,e.category,e.vendor,e.description,e.paymentMethod+' / '+A.expenseStatus(e),money(e.amount)].map(cell).join('')+`<td><button class="biz-btn" onclick="accountingEditExpense('${esc(e.id)}')">訂正</button><button class="biz-btn danger" onclick="deleteExpense('${esc(e.id)}')">取消</button></td></tr>`).join('');renderCash();};
+function cashCustomerKey(name){return A.classificationKey(name).replace(/\s/g,'');}
 function googleCashDuplicateCandidates(cash){
  const oldPayment=(data.payments||[]).find(p=>p.id===cash.linkedPaymentId&&A.live(p)&&p.sourceType==='calendar-cash'&&p.confirmation==='cash-received');
- const oldSale=oldPayment&&(data.sales||[]).find(s=>s.id===oldPayment.saleId&&A.live(s)&&s.sourceType==='calendar-cash'&&s.documentId==='');
+ const oldSale=oldPayment&&(data.sales||[]).find(s=>s.id===oldPayment.saleId&&A.live(s)&&s.sourceType==='calendar-cash'&&!s.documentId);
  if(!oldSale||oldSale.id!=='calendar_cash_'+oldSale.calendarEventId||cash.type!=='income'||oldPayment.amount!==cash.amount)return [];
- return (data.documents||[]).filter(d=>A.live(d)&&d.confirmed===true&&d.docType==='receipt'&&d.snapshot?.paymentMethod==='現金'&&d.saleId&&d.paymentId&&d.amount===cash.amount&&d.snapshot?.invoiceDate===oldSale.salesDate&&A.classificationKey(d.customerName)===A.classificationKey(oldSale.customer)).filter(d=>(data.sales||[]).some(s=>A.live(s)&&s.id===d.saleId&&s.sourceType==='receipt-cash'&&s.documentId===d.id)&&(data.payments||[]).some(p=>A.live(p)&&p.id===d.paymentId&&p.saleId===d.saleId&&p.confirmation==='cash-received'));
+ return (data.documents||[]).filter(d=>A.live(d)&&d.confirmed===true&&d.docType==='receipt'&&d.snapshot?.paymentMethod==='現金'&&d.saleId&&d.paymentId&&d.amount===cash.amount&&d.snapshot?.invoiceDate===oldSale.salesDate&&cashCustomerKey(d.customerName||d.snapshot?.customerName)===cashCustomerKey(oldSale.customer)).filter(d=>(data.sales||[]).some(s=>A.live(s)&&s.id===d.saleId&&s.sourceType==='receipt-cash'&&s.documentId===d.id)&&(data.payments||[]).some(p=>A.live(p)&&p.id===d.paymentId&&p.saleId===d.saleId&&p.confirmation==='cash-received'));
 }
 function renderCash(){
  if(!el('cashRows'))return;
@@ -32,7 +33,10 @@ function renderCash(){
  el('cashBalance').textContent=money(rows.at(-1)?.runningBalance||0);
  el('cashRows').innerHTML=table(['日付','区分','分類','摘要','金額','残高','操作'],rows.filter(r=>!m||r.date.startsWith(m)).map(r=>{
   const choices=googleCashDuplicateCandidates(r);
-  const action=choices.length===1&&B().getClient()?.getState().role==='admin'?'<button class="biz-btn" data-google-duplicate-cash="'+esc(r.cashTxnId)+'">重複したGoogle現金記録を除外</button>':choices.length>1?'正式領収書が複数あります。要確認':'';
+  const oldPay=(data.payments||[]).find(p=>p.id===r.linkedPaymentId&&A.live(p)&&p.sourceType==='calendar-cash'&&p.confirmation==='cash-received');
+  const oldSale=oldPay&&(data.sales||[]).find(s=>s.id===oldPay.saleId&&A.live(s)&&s.sourceType==='calendar-cash'&&!s.documentId);
+  const admin=enabled()&&B().getClient()?.getState().role==='admin';
+  const action=admin&&oldSale&&oldSale.id==='calendar_cash_'+oldSale.calendarEventId?'<button class="biz-btn" data-google-duplicate-cash="'+esc(r.cashTxnId)+'">'+(choices.length===1?'重複したGoogle現金記録を除外':'重複記録の照合')+'</button>':'';
   return '<tr>'+[r.date,r.type==='income'?'収入':'支出',r.category,r.description,money(r.amount),money(r.runningBalance)].map(cell).join('')+'<td>'+action+'</td></tr>';
  }).join(''));
 }
@@ -40,7 +44,8 @@ root.accountingExcludeGoogleCash=guard(async cashId=>{
  if(!isAdmin())return;
  const cash=(data.cashLedger||[]).find(c=>c.cashTxnId===cashId&&A.live(c));
  const matches=cash?googleCashDuplicateCandidates(cash):[];
- if(matches.length!==1)throw Error('対象の正式現金領収書が一意に確認できません。');
+ if(matches.length!==1)throw Error(matches.length===0?'正式領収書との自動照合ができません。帳票ID・顧客名・日付・金額と旧売上の関連を確認してください。':'複数の正式領収書候補があります。正しい帳票IDを特定してください。');
+ if(!confirm('重複したGoogle自動計上のみ取り消します。正式領収書の売上・現金入金とGoogle日程は保持します。続行しますか？'))return;
  const doc=matches[0],oldPay=data.payments.find(p=>p.id===cash.linkedPaymentId),oldSale=data.sales.find(s=>s.id===oldPay?.saleId);
  if(!doc||!oldSale||!oldPay)throw Error('元の現金記録がありません。');
  const reason='管理者が同一工事の重複自動計上であることを確認';
