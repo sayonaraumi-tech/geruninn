@@ -559,3 +559,29 @@
  body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{gap:10px;padding:13px;}
  body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{font-size:12px;}
 }
+
+
+/* HOME screenshot reference alignment, visible content only. */
+@media screen and (min-width:801px){
+ body.tsuki-ui #pageDashboard.active #dashPeriod{display:none;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{min-height:145px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-kpi::before{content:"¥";margin-right:1px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals>.biz-section{min-height:310px;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-axis{position:relative;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-axis::before{
+  content:"（万円）";position:absolute;top:-21px;left:-2px;font-size:12px;white-space:nowrap;color:#333;
+ }
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom>.biz-section{min-height:287px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom h2.tsuki-home-card-title{font-size:21px;font-weight:900;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{
+  display:flex;align-items:center;justify-content:center;gap:10px;font-size:16px;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button svg{
+  display:block;width:30px;height:30px;flex-shrink:0;color:#b68013;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button span{white-space:nowrap;}
+}
+@media screen and (min-width:801px) and (max-width:1350px){
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{gap:5px;font-size:12px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button svg{width:21px;height:21px;}
+}
