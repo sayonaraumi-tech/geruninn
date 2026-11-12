@@ -27,6 +27,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        await testService.execute({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot});
    });
    await page.waitForFunction(()=>loadConfirmedHistory().length===3,{timeout:10000});
+   await page.evaluate(()=>{document.getElementById('homePeriodMode').value='month';document.getElementById('homeMonth').value='2026-11';renderDashboard();});
    const recordsBeforeVisualDraft=await page.evaluate(()=>JSON.stringify([...window.testRecords]));
    const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
    const meta={width,pages:{},isDemo:true,changesToProduction:false};
