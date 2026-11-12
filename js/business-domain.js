@@ -155,7 +155,10 @@ function createService(client,{now=()=>new Date()}={}){
     const cashSaleId=old.cashSaleId||'calendar_cash_'+id,paymentId='pay_'+cashSaleId,cashSale=await read('sales',cashSaleId),cashPayment=await read('payments',paymentId);
     if(old.manualSaleConfirmed){/* Explicitly confirmed accounting survives later title parsing. */}
     else if(e.googleStatus==='cancelled'&&cashSale){incoming.accountingReviewRequired=true;await write('sales',cashSaleId,{...cashSale.payload,accountingReviewRequired:true,reviewReason:'Google予定が取消・削除されました。入金を確認してください。'});}
-    else if(!formal&&!cashSale?.payload.documentId&&parsed.work&&parsed.amount>0&&parsed.payment==='現金'&&(!cashSale||cashSale.payload.amount===parsed.amount)&&(!cashPayment||cashPayment.payload.amount===parsed.amount)){
+    // Google Calendar is a schedule source, not payment evidence. Never create a
+    // new cash sale/payment solely from text like 「現金」. Preserve already existing
+    // legacy calendar-cash records without silently deleting or replaying them.
+    else if(!formal&&cashSale&&cashPayment&&!cashSale.payload.documentId&&parsed.work&&parsed.amount>0&&parsed.payment==='現金'&&cashSale.payload.amount===parsed.amount&&cashPayment.payload.amount===parsed.amount){
       A.date(e.date);incoming.cashSaleId=cashSaleId;
       // The parser keeps absent customers empty; persisted cash anchors share the rules-compatible placeholder.
       const customer=parsed.customer||'現金客';incoming.customerName=customer;

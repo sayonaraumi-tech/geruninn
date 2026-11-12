@@ -332,31 +332,28 @@ test('historical import: admin only, atomic original number/hash locks, non-sale
  admin.dispose();staff.dispose();
 });
 
-test('staff Google cash synchronization atomically updates one sale/payment/cash mirror, locks formal data and flags cancellations',async()=>{
- const staff=await clientFor('staff'),service=createService(staff);const event={googleEventId:'cashgoogle',googleCalendarId:'shared',date:'2026-10-05',title:'下村 健朗、クロス張替、足立区、11万、現金、km'};
+test('staff Google cash schedules never record money; formal cash receipt creates one payment, later sync cannot duplicate',async()=>{
+ const staff=await clientFor('staff'),service=createService(staff);try{
+ const event={googleEventId:'cashgoogle',googleCalendarId:'shared',date:'2026-10-05',title:'下村 健朗、クロス張替、足立区、11万、現金、km'};
  const link=await exec(service,{type:'calendar',event});await exec(service,{type:'calendar',event});
  const all=async n=>(await getDocs(collection(db('admin'),`companies/${company}/${n}`))).docs.map(d=>({id:d.id,...d.data()}));
- assert.equal((await all('sales')).length,1);assert.equal((await all('payments')).length,1);assert.equal((await all('cashLedger')).length,1);
- await exec(service,{type:'calendar',event:{...event,date:'2026-10-06',title:'別 顧客、穴補修、足立区、11万、現金'}});assert.equal((await all('sales'))[0].payload.amount,110000);assert.equal((await all('payments'))[0].payload.amount,110000);assert.equal((await all('cashLedger'))[0].payload.amount,110000);
- // No customer is required, including when staff create a new cash anchor.
+ assert.equal((await all('sales')).length,0);assert.equal((await all('payments')).length,0);assert.equal((await all('cashLedger')).length,0);
  const unnamed={...event,googleEventId:'unnamedcash',title:'クロス張り替え、14000、文京区、km、現金'};
- const unnamedLink=await exec(service,{type:'calendar',event:unnamed});
- const unnamedSale=async()=>(await all('sales')).find(r=>r.payload.calendarEventId===unnamedLink.id);
- for(const [title,customer]of [[unnamed.title,'現金客'],['山田様、'+unnamed.title,'山田様'],[unnamed.title,'現金客']]){
-  await exec(service,{type:'calendar',event:{...unnamed,title}});assert.equal((await unnamedSale()).payload.customer,customer);
- }
- const pays=JSON.stringify(await all('payments')),cash=JSON.stringify(await all('cashLedger'));
- for(const title of [unnamed.title.replace('14000','15000'),unnamed.title.replace('、現金','')]){
+ await exec(service,{type:'calendar',event:unnamed});
+ for(const title of [unnamed.title,'山田様、'+unnamed.title,unnamed.title.replace('14000','15000'),unnamed.title.replace('、現金','')]){
   await exec(service,{type:'calendar',event:{...unnamed,title}});
-  assert((await unnamedSale()).payload.accountingReviewRequired);assert.equal((await unnamedSale()).payload.amount,14000);assert.equal(JSON.stringify(await all('payments')),pays);assert.equal(JSON.stringify(await all('cashLedger')),cash);
+  assert.equal((await all('sales')).length,0);assert.equal((await all('payments')).length,0);
  }
- assert.equal((await all('sales')).length,2);assert.equal((await all('payments')).length,2);assert.equal((await all('cashLedger')).length,2);
- // Staff can lock the same stable accounting anchor with a formal invoice.
- await exec(service,{type:'saveDocument',expectedRevision:0,snapshot:{...snapshot('cashformal'),items:[{content:'穴補修',qty:1,price:100000}],calendarEventId:link.id}});
- await exec(service,{type:'calendar',event:{...event,title:'変更、クロス張替、99万、現金'}});assert.equal((await all('sales')).length,2);assert.equal((await all('sales')).find(r=>r.payload.calendarEventId===link.id).payload.amount,110000);
- await exec(service,{type:'calendar',event:{...event,googleStatus:'cancelled'}});assert((await all('sales'))[0].payload.accountingReviewRequired);
+ const receipt={...snapshot('cashformal','receipt'),customerName:'下村健朗',invoiceDate:event.date,receiptTotal:110000,paymentMethod:'現金',tadashi:'クロス張替',calendarEventId:link.id};
+ await exec(service,{type:'saveDocument',expectedRevision:0,snapshot:receipt});
+ assert.equal((await all('sales')).length,1);assert.equal((await all('payments')).length,1);assert.equal((await all('cashLedger')).length,1);
+ assert.equal((await all('payments'))[0].payload.confirmation,'cash-received');
+ await exec(service,{type:'calendar',event:{...event,title:'変更、クロス張替、99万、現金'}});
+ await exec(service,{type:'calendar',event:{...event,googleStatus:'cancelled'}});
+ assert.equal((await all('sales')).length,1);assert.equal((await all('payments')).length,1);assert.equal((await all('cashLedger')).length,1);
+ assert.equal(A.receivables((await all('sales')).map(r=>r.payload),(await all('payments')).map(r=>r.payload),'2026-10-31')[0].status,'入金済');
+ }finally{staff.dispose();}
 });
-
 test('production gate: legacy slash construction date, undated acceptance, two-way timed location sync and unique calendar',async()=>{
  const c=await clientFor('admin'),s=createService(c);const originalExecute=s.execute;s.execute=async cmd=>{try{return await originalExecute(cmd);}catch(e){console.error('GATE STEP FAILED',cmd.type,cmd.workDate||cmd.event?.date||'');throw e;}};try{
  const snap={...snapshot('gate-est','estimate'),customerName:'琢居株式会社',salesDate:'',workDate:'',items:[{content:'クロス張替',qty:1,price:100000},{content:'穴補修',qty:1,price:2000},{content:'部分的補修',qty:1,price:100},{content:'出張費',qty:1,price:60}]};
@@ -407,31 +404,48 @@ test('production gate: previously saved independent cash receipt is backfilled w
  await exec(s,{type:'repairReceipt',documentId:'old-cash'});await exec(s,{type:'repairReceipt',documentId:'old-cash'});const doc=(await c.listRecords('documents'))[0].payload;assert.deepEqual(doc.snapshot,old);assert.equal(doc.snapshot.invoiceNo,'20261005-2236-01');assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
  }finally{c.dispose();}
 });
-test('cash calendar receipt reuses existing anchors and formal authority for staff, including legacy backfill',async()=>{
+test('cash receipt saves one atomic payment when Google calendar has no financial anchor, including legacy backfill',async()=>{
  const c=await clientFor('staff'),s=createService(c);try{
  const event={googleEventId:'cash-anchor',googleCalendarId:'shared',title:'下村 健朗、クロス張替、11万、現金',date:'2026-10-05'};
- const link=await exec(s,{type:'calendar',event});const anchor=(await c.listRecords('calendarLinks'))[0].payload.cashSaleId;
+ const link=await exec(s,{type:'calendar',event});assert.equal((await records('sales')).length,0);
  const receipt={...snapshot('anchored','receipt'),customerName:'下村健朗',receiptTotal:110000,invoiceDate:event.date,paymentDate:event.date,calendarEventId:link.id,saleId:''};
- const result=await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});assert.equal(result.saleId,anchor);assert.equal(result.paymentId,'pay_'+anchor);assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
- await exec(s,{type:'calendar',event:{...event,title:'別名、クロス張替、12万、現金'}});assert.equal((await records('sales'))[0].customer,'下村健朗');assert.equal((await records('sales'))[0].amount,110000);
+ const result=await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});
+ assert.equal(result.saleId,'sale_anchored');assert.equal(result.paymentId,'pay_anchored');
+ assert.equal((await records('sales')).length,1);assert.equal((await records('payments')).length,1);assert.equal((await records('cashLedger')).length,1);
+ await exec(s,{type:'calendar',event:{...event,title:'別名、クロス張替、12万、現金'}});
+ assert.equal((await records('sales'))[0].customer,'下村健朗');assert.equal((await records('sales'))[0].amount,110000);
  const second=await exec(s,{type:'calendar',event:{...event,googleEventId:'legacy-anchor'}});
  const old={...receipt,documentId:'legacy-anchor-receipt',calendarEventId:second.id,invoiceNo:'20261005-2236-01'};
  await env.withSecurityRulesDisabled(async ctx=>setDoc(ref(ctx.firestore(),'documents',old.documentId),{schemaVersion:2,companyId:company,revision:1,createdBy:'uid-staff',createdAt:serverTimestamp(),updatedBy:'uid-staff',updatedAt:serverTimestamp(),lastOperationId:'old',lastAuditId:'old',payload:{documentId:old.documentId,docType:'receipt',status:'active',confirmed:true,customerName:old.customerName,invoiceDate:old.invoiceDate,calendarEventId:second.id,amount:110000,saleId:'',snapshot:old}}));
- const admin=await clientFor('admin');try{await exec(createService(admin),{type:'repairReceipt',documentId:old.documentId});}finally{admin.dispose();}assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,2);assert.deepEqual((await c.listRecords('documents')).find(d=>d.id===old.documentId).payload.snapshot,old);
+ const admin=await clientFor('admin');try{await exec(createService(admin),{type:'repairReceipt',documentId:old.documentId});}finally{admin.dispose();}
+ assert.equal((await records('sales')).length,2);assert.equal((await records('payments')).length,2);assert.equal((await records('cashLedger')).length,2);
+ assert.deepEqual((await c.listRecords('documents')).find(d=>d.id===old.documentId).payload.snapshot,old);
  }finally{c.dispose();}
 });
-test('explicit calendar duplicate reconciliation preserves originals and audit, archives only exact imported cash duplicate',async()=>{
+test('legacy calendar cash duplicate reconciliation still archives exact linked historical record with audit',async()=>{
  const c=await clientFor('admin'),s=createService(c);try{
- const event={googleEventId:'double-cash',googleCalendarId:'shared',title:'下村 健朗、クロス張替、11万、現金',date:'2026-10-05'};const link=await exec(s,{type:'calendar',event});
- const receipt={...snapshot('official-double','receipt'),customerName:'下村健朗',receiptTotal:110000,invoiceDate:event.date,paymentDate:event.date,saleId:''};await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});
+ const event={googleEventId:'double-cash',googleCalendarId:'shared',title:'下村 健朗、クロス張替、11万、現金',date:'2026-10-05'};
+ const link=await exec(s,{type:'calendar',event});
+ const oldId='calendar_cash_'+link.id,paymentId='pay_'+oldId;
+ // Reconstruct a historical auto-imported cash graph; the new schedule-only rule
+ // must not destroy the existing exact-ID reconciliation mechanism.
+ await exec(s,{type:'migrateRecord',collection:'sales',id:oldId,payload:{id:oldId,sourceType:'calendar-cash',sourceId:link.id,calendarEventId:link.id,documentId:'',amount:110000,customer:'下村健朗',salesDate:event.date,invoiceDate:'',paymentMethod:'現金',paymentIds:[paymentId]}});
+ await exec(s,{type:'migrateRecord',collection:'payments',id:paymentId,payload:{id:paymentId,paymentId,saleId:oldId,sourceType:'calendar-cash',sourceId:link.id,documentId:'',amount:110000,paymentDate:event.date,date:event.date,method:'現金',confirmation:'cash-received'}});
+ await env.withSecurityRulesDisabled(async ctx=>updateDoc(ref(ctx.firestore(),'calendarLinks',link.id),{'payload.cashSaleId':oldId,'payload.saleId':oldId}));
+ const receipt={...snapshot('official-double','receipt'),customerName:'下村健朗',receiptTotal:110000,invoiceDate:event.date,paymentDate:event.date,saleId:''};
+ await exec(s,{type:'saveDocument',snapshot:receipt,expectedRevision:0});
  await env.withSecurityRulesDisabled(async ctx=>updateDoc(ref(ctx.firestore(),'documents',receipt.documentId),{'payload.calendarEventId':link.id}));
  const original=(await c.listRecords('documents'))[0].payload.snapshot;
- const result=await exec(s,{type:'reconcileReceiptCalendarCash',documentId:receipt.documentId});assert(result.reconciled);assert((await exec(s,{type:'reconcileReceiptCalendarCash',documentId:receipt.documentId})).skipped);
- const A=require('../js/accounting.js');assert.equal((await records('sales')).filter(A.live).length,1);assert.equal((await records('payments')).filter(p=>!p.deletedAt).length,1);assert.equal((await records('cashLedger')).filter(p=>!p.deletedAt).length,1);assert.equal((await records('sales')).length,2);assert.deepEqual((await c.listRecords('documents'))[0].payload.snapshot,original);assert((await c.listRecords('auditLogs')).some(r=>r.after?.duplicateOfSaleId==='sale_official-double'));
+ const result=await exec(s,{type:'reconcileReceiptCalendarCash',documentId:receipt.documentId});
+ assert(result.reconciled);assert((await exec(s,{type:'reconcileReceiptCalendarCash',documentId:receipt.documentId})).skipped);
+ const A=require('../js/accounting.js');assert.equal((await records('sales')).filter(A.live).length,1);
+ assert.equal((await records('payments')).filter(p=>!p.deletedAt).length,1);
+ assert.equal((await records('cashLedger')).filter(p=>!p.deletedAt).length,1);
+ assert.equal((await records('sales')).length,2);
+ assert.deepEqual((await c.listRecords('documents'))[0].payload.snapshot,original);
+ assert((await c.listRecords('auditLogs')).some(r=>r.after?.duplicateOfSaleId==='sale_official-double'));
  }finally{c.dispose();}
 });
-
-
 test('admin manual bank confirmation writes only one payment, no document/number, staff cannot bypass permissions',async()=>{
  const admin=await clientFor('admin'),service=createService(admin);await exec(service,{type:'saveDocument',snapshot:snapshot('manual-bank'),expectedRevision:0});
  const docs=JSON.stringify(await admin.listRecords('documents')),numbers=JSON.stringify((await getDocs(collection(db('admin'),'companies/tsukinowa/operations'))).docs.filter(d=>d.id.startsWith('documentNumber_')).map(d=>d.data()));
