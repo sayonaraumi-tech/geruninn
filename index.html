@@ -3803,21 +3803,26 @@ document.addEventListener('DOMContentLoaded',()=>{
   const trs=[...get('expenseRows').querySelectorAll('tr')];
   const tableHead=ledger.querySelector('thead tr');
   if(tableHead&&!tableHead.dataset.expenseDecorated){
-   const buttons=tableHead.lastElementChild;if(buttons)buttons.textContent='操作';
-   const a=document.createElement('th'),b=document.createElement('th');
-   a.textContent='取込元';b.textContent='状態';tableHead.insertBefore(a,buttons);tableHead.insertBefore(b,buttons);
+   const labels=['','取引日','摘要・取引先','カテゴリ','支払方法','金額','取込元','状態','操作'];
+   tableHead.replaceChildren(...labels.map((label,i)=>{const th=document.createElement('th');if(i===0){const check=document.createElement('input');check.type='checkbox';check.setAttribute('aria-label','すべて選択');check.addEventListener('change',()=>get('expenseRows').querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=check.checked));th.append(check);}else th.textContent=label;return th;}));
    tableHead.dataset.expenseDecorated='true';
   }
   items.forEach((expense,i)=>{
-   const row=trs[i];if(!row||row.dataset.expenseDecorated||row.cells.length<7)return;
+   const row=trs[i];if(!row||row.dataset.expenseDecorated||row.cells.length!==7)return;
+   const [date,category,vendor,description,payment,amount,actions]=[...row.cells];
    const status=A.expenseStatus(expense),orig=String(expense.sourceType||expense.importSource||expense.source||expense.importFile||'');
-   row.cells[4].textContent=method(expense);
-   row.cells[1].classList.add('tsuki-exp-category');
+   const checkCell=document.createElement('td'),check=document.createElement('input');
+   check.type='checkbox';check.setAttribute('aria-label',(expense.vendor||'取引')+'を選択');checkCell.append(check);
+   vendor.textContent=[expense.vendor,expense.description].filter(Boolean).join('（')+(expense.vendor&&expense.description?'）':'');
+   vendor.className='tsuki-exp-description';
+   category.className='tsuki-exp-category';const tag=document.createElement('span');tag.textContent=expense.category||'未分類';
+   tag.className='tsuki-exp-category-pill';category.replaceChildren(tag);
+   payment.textContent=method(expense);amount.classList.add('tsuki-exp-amount');
    const src=document.createElement('td');src.textContent=/csv/i.test(orig)?'CSV':orig?'その他':'—';
    const stat=document.createElement('td'),badge=document.createElement('span');
    badge.className='tsuki-exp-status'+(/支払済|入金済|登録済/.test(status)?' success':'');
    badge.textContent=status;stat.append(badge);
-   row.insertBefore(src,row.lastElementChild);row.insertBefore(stat,row.lastElementChild);
+   row.replaceChildren(checkCell,date,vendor,category,payment,amount,src,stat,actions);
    row.dataset.expenseDecorated='true';
   });
   const filtered=items.map((e,i)=>({e,tr:trs[i]})).filter(({e})=>
