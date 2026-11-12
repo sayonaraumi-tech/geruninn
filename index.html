@@ -3807,12 +3807,14 @@ document.addEventListener('DOMContentLoaded',()=>{
    tableHead.replaceChildren(...labels.map((label,i)=>{const th=document.createElement('th');if(i===0){const check=document.createElement('input');check.type='checkbox';check.setAttribute('aria-label','すべて選択');check.addEventListener('change',()=>get('expenseRows').querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=check.checked));th.append(check);}else th.textContent=label;return th;}));
    tableHead.dataset.expenseDecorated='true';
   }
+  const expenseKey=e=>String(e.id||e.expenseId||[e.expenseDate,e.vendor,e.amount,e.description].join('|'));
   items.forEach((expense,i)=>{
-   const row=trs[i];if(!row||row.dataset.expenseDecorated||row.cells.length!==7)return;
+   const key=expenseKey(expense),row=trs.find(t=>t.dataset.expenseRowKey===key)||trs[i];if(!row||row.dataset.expenseDecorated||row.cells.length!==7)return;
    const [date,category,vendor,description,payment,amount,actions]=[...row.cells];
    const status=A.expenseStatus(expense),orig=String(expense.sourceType||expense.importSource||expense.source||expense.importFile||'');
    const checkCell=document.createElement('td'),check=document.createElement('input');
    check.type='checkbox';check.setAttribute('aria-label',(expense.vendor||'取引')+'を選択');checkCell.append(check);
+   date.textContent=String(expense.expenseDate||'').slice(5).replace('-','/');
    vendor.textContent=[expense.vendor,expense.description].filter(Boolean).join('（')+(expense.vendor&&expense.description?'）':'');
    vendor.className='tsuki-exp-description';
    category.className='tsuki-exp-category';const tag=document.createElement('span');tag.textContent=expense.category||'未分類';
@@ -3823,9 +3825,14 @@ document.addEventListener('DOMContentLoaded',()=>{
    badge.className='tsuki-exp-status'+(/支払済|入金済|登録済/.test(status)?' success':'');
    badge.textContent=status;stat.append(badge);
    row.replaceChildren(checkCell,date,vendor,category,payment,amount,src,stat,actions);
-   row.dataset.expenseDecorated='true';
+   row.dataset.expenseDecorated='true';row.dataset.expenseRowKey=key;
   });
-  const filtered=items.map((e,i)=>({e,tr:trs[i]})).filter(({e})=>
+  const body=get('expenseRows'),byKey=new Map([...body.querySelectorAll('tr')].map(row=>[row.dataset.expenseRowKey,row]));
+  const ordered=items.map((e,i)=>({e,tr:byKey.get(expenseKey(e))||trs[i]}))
+   .sort((a,b)=>String(b.e.expenseDate||'').localeCompare(String(a.e.expenseDate||''))||String(b.e.id||'').localeCompare(String(a.e.id||''));
+  const expectedOrder=ordered.map(x=>x.tr).filter(Boolean),existingOrder=[...body.children];
+  if(expectedOrder.length===existingOrder.length&&expectedOrder.some((row,i)=>row!==existingOrder[i]))body.replaceChildren(...expectedOrder);
+  const filtered=ordered.filter(({e})=>
    (!q||[e.expenseDate,e.category,e.vendor,e.description,method(e)].some(x=>String(x||'').toLowerCase().includes(q)))&&
    (!mFilter||method(e)===mFilter)&&(!cFilter||e.category===cFilter)&&(!sourceFilter||source(e)===sourceFilter));
   const size=+get('tsukiExpPageSize').value,totalPages=Math.max(1,Math.ceil(filtered.length/size));state.page=Math.min(state.page,totalPages-1);
