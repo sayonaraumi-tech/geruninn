@@ -85,8 +85,8 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        assert.equal(await page.locator('#tsukiCalendarListTitle').innerText(),'同期済み日程');
      }
      if(width===1280&&(route==='sales'||route==='expenses')){
-       const first=route==='sales'?'#pageSales .sales-register':'#pageExpenses > .biz-section:nth-child(3)';
-       const second=route==='sales'?'#paymentRegistrationForm':'#pageExpenses > .biz-section:nth-child(2)';
+       const first=route==='sales'?'#pageSales .sales-register':'#pageExpenses .tsuki-exp-sidebar';
+       const second=route==='sales'?'#paymentRegistrationForm':'#pageExpenses .tsuki-exp-main';
        const left=await page.locator(first).boundingBox(),right=await page.locator(second).boundingBox();
        assert(left&&right&&left.x<right.x&&Math.abs(left.y-right.y)<4,route+' desktop working areas must be side by side');
      }
