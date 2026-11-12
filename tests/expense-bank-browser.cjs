@@ -74,7 +74,15 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   const bytes=fs.readFileSync(await download.path()),rows=require('../js/accounting').parseCSV(bytes.toString('utf8').slice(1));
   assert.deepEqual([...bytes.subarray(0,3)],[239,187,191]);assert.equal(download.suggestedFilename(),'expenses_'+month+'.csv');
   assert.deepEqual(rows[0],['支出日','科目','取引先','内容','支払方法','金額','状態','領収書参照']);
-  assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),visible.map(r=>[...r.slice(0,4),r[4].split(' / ')[0],r[5].replaceAll(',','')]));
+  const canonical=await page.evaluate(month=>TsukinowaAccounting.expenseRegister(TsukinowaAccountingUI.getData().expenses||[],month).map(e=>[e.expenseDate,e.category,e.vendor,e.description,e.paymentMethod,String(e.amount)]),month);
+  assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),canonical,'CSV contents must remain tied to actual accounting records, not reordered screen columns');
+  if(page.viewportSize().width>=801){
+   const headings=await page.locator('#pageExpenses .tsuki-exp-main .biz-table thead th').allTextContents();
+   assert.deepEqual(headings.slice(1),['取引日','摘要・取引先','カテゴリ','支払方法','金額','取込元','状態','操作']);
+   assert.equal(visible.length,canonical.length);
+  }else{
+   assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),visible.map(r=>[...r.slice(0,4),r[4].split(' / ')[0],r[5].replaceAll(',','')]));
+  }
   const summary=await page.evaluate(month=>TsukinowaAccounting.monthly(TsukinowaAccountingUI.homeData(),month).expenseTotal,month);
   assert.equal(rows.slice(1).reduce((n,r)=>n+Number(r[5]),0),summary);
   assert(await page.locator('#expenseFile').count());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
