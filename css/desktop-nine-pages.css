@@ -1,7 +1,7 @@
 /* Desktop-only visual migration for the nine business screens.
  * Keep all accounting/receipt logic, PDF preview and mobile layouts untouched.
  * Uses the shared tokens from PR #39. No document/PDF selectors. */
-@media screen and (min-width: 769px) {
+@media screen and (min-width: 801px) {
   body:has(#bizNav) { background: var(--tsuki-canvas, #F2F3F5); color: var(--tsuki-text, #202124); font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif); }
   #bizNav { gap: 2px; }
   #bizNav button { border-radius: 5px; padding: 9px 11px; font-size: 13px; }
