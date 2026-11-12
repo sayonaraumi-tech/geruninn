@@ -161,3 +161,11 @@
     color: var(--tsuki-danger-text);
   }
 }
+
+/* Real screen tables across all nine pages inherit one corporate typeface.
+ * Keep the A4 .invoice/PDF typographic styles untouched. */
+@media screen {
+  body.tsuki-ui .biz-page .biz-table {
+    font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif);
+  }
+}
