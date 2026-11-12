@@ -48,6 +48,8 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await phone.context().setOffline(true);await phone.evaluate(()=>{setDocType('receipt');document.getElementById('receiptSale').value=bizState.sales[0].id;document.getElementById('customerName').value=bizState.sales[0].customer;document.getElementById('paymentMethod').value='現金';document.getElementById('invoiceDate').value='2026-09-22';document.getElementById('receiptTotal').value=1000;saveConfirmedHistory();});assert.equal(await phone.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),1);await phone.context().setOffline(false);await desktop.waitForFunction(()=>bizState.payments.length===3);
  // Formal originals cannot be overwritten; admin creates a revision through the saved-doc UI.
  await desktop.evaluate(()=>bizSwitchPage('savedDocs'));
+ await desktop.locator('#allSavedDocsList details.tsuki-saved-advanced > summary').first().waitFor();
+ await desktop.locator('#allSavedDocsList details.tsuki-saved-advanced > summary').evaluateAll(summaries=>summaries.forEach(summary=>summary.click()));
  await desktop.locator('#allSavedDocsList').getByRole('button',{name:'訂正版を作成',exact:true}).first().waitFor();
  await desktop.evaluate(id=>manageFormalDocument(loadConfirmedHistory().findIndex(x=>x.documentId===id),'revision'),invoiceId);
  await desktop.locator('#customerName').fill('管理者訂正');await desktop.evaluate(()=>{document.getElementById('customerCompany').value='法人テスト';document.getElementById('customerAddress').value='東京都';});
