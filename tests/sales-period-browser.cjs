@@ -123,7 +123,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
      const box=await page.locator('#'+id).boundingBox();
      const details=await page.locator('#'+id).evaluate(e=>({font:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize,background:getComputedStyle(e).backgroundColor}));
      meta.pages[route]={...details,width:box?.width,height:box?.height};
-     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:width>=801&&!(route==='dashboard'&&(width===1536||width===1672))});
+     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:width>=801&&!(width===1536&&(route==='dashboard'||route==='expenses'))&&!(route==='dashboard'&&width===1672)});
      if(route==='bank'&&width===1280){
        const names=['.tsuki-bank-transactions','.tsuki-bank-candidates','.tsuki-bank-operations'];
        const rects=await Promise.all(names.map(n=>page.locator('#pageBank '+n).boundingBox()));
