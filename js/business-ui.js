@@ -169,6 +169,41 @@ root.bizConvertEstimateRecordToInvoice=function(id){
  applyFormState(draft,'invoice');bizSwitchPage('chohyo');
 };
 root.convertEstimateToInvoice=function(){if(!enabled)return original.convertEstimateToInvoice();if(!bizCurrentEstimateId)return alert('先に見積を正式保存して、見積履歴から受注してください。');bizConvertEstimateRecordToInvoice(bizCurrentEstimateId);};
+root.bizDraftReceiptFromEstimate=function(){
+ if(docType!=='estimate'||(enabled&&!ready()))return;
+ const history=loadConfirmedHistory();
+ const estimate=bizState.estimates.find(e=>e.id===bizCurrentEstimateId&&root.TsukinowaAccounting.live(e));
+ const source=estimate&&history.find(h=>h.docType==='estimate'&&
+  (estimate.documentId&&h.documentId===estimate.documentId||estimate.historyId&&h.historyId===estimate.historyId));
+ if(!source||(source.documentStatus&&source.documentStatus!=='active'))return alert('有効な保存済みの見積書を開いてください。');
+
+ const invoices=bizEstimateInvoices(estimate.id).filter(d=>!d.status||d.status==='active');
+ const invoice=invoices.length===1?invoices[0]:null;
+ const calendarId=estimate.calendarEventId||source.calendarEventId||invoice?.calendarEventId;
+ const event=bizState.calendar.find(e=>e.id===calendarId);
+ if(invoices.length>1||!event||bizCalendarReviewReason(event,bizCalendarDocumentStates())){
+  return alert('見積履歴から施工日を登録し、有効な関連日程を確認してください。');
+ }
+ const existing=history.findIndex(h=>h.docType==='receipt'&&(!h.documentStatus||h.documentStatus==='active')&&
+  (h.estimateId===estimate.id||event.linkedReceiptId&&[h.documentId,h.historyId].includes(event.linkedReceiptId)));
+ if(existing>=0)return openSavedDoc(existing);
+ if(enabled&&event.documentId&&event.documentId!==(invoice?.documentId||invoice?.id)){
+  return alert('この日程は見積書に紐付いています。正式請求書を発行し、入金を確認してから領収書を作成してください。');
+ }
+
+ // Prepare an editor draft. Formal save still validates the calendar, sale and payment together.
+ applyFormState({
+  docType:'receipt',documentId:'receipt_'+estimate.id,estimateId:estimate.id,projectId:estimate.projectId||'',
+  calendarEventId:event.id,saleId:invoice?.saleId||'',customerName:source.customerName,
+  customerCompany:source.customerCompany,customerAddress:source.customerAddress,
+  invoiceDate:event.workDate||event.date,salesDate:event.workDate||event.date,
+  receiptTotal:bizCalcDocumentTotal(source),items:source.items,bizJobMemo:source.bizJobMemo,
+  remarks:source.remarks,tadashi:bizSummaryContent(source),paymentMethod:''
+ },'receipt');
+ el('bizLinkedSource').textContent='見積書から作成した下書きです。実際の入金日・金額・支払方法を確認してから発行してください。';
+ el('bizLinkedSource').style.display='block';
+ root.scrollTo({top:0});
+};
 
 const paymentFlights=new Map();
 async function registerPayment(value){
@@ -250,8 +285,9 @@ function archiveDocument(h){
 }
 function renderDocuments(boxId,kind){
  const box=el(boxId);if(!box)return;box.replaceChildren();const q=(el('savedDocSearch')?.value||'').toLowerCase();
- history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId].join(' ').toLowerCase().includes(q))return;
+ history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId,docTypeLabel(h.docType),h.bizJobMemo,h.remarks,...(h.items||[]).map(item=>item.content)].join(' ').toLowerCase().includes(q))return;
   const row=document.createElement('div');row.className='biz-card';row.dataset.documentId=h.documentId;row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
+  if(!kind)row.dataset.docType=h.docType;
   const label=document.createElement('strong');label.textContent=`${documentLabels[h.documentStatus]} ｜ ${docTypeLabel(h.docType)} ｜ ${h.customerName||''}`;if(h.documentStatus!=='active')label.style.color='#a23';row.append(label);
   const detail=document.createElement('p');detail.textContent=`${h.sourceType==='historicalPdfImport'?'過去PDF ｜ ':''}No.${h.invoiceNo||''} ｜ ${h.invoiceDate||''} ｜ ID: ${h.documentId}`+(h.statusReason?' ｜ 理由: '+h.statusReason:'')+(h.revisedFromDocumentId?' ｜ 訂正元: '+h.revisedFromDocumentId:'')+(h.duplicateOfDocumentId?' ｜ 原帳票: '+h.duplicateOfDocumentId:'')+(h.revisedToDocumentId?' ｜ 訂正版: '+h.revisedToDocumentId:'');row.append(detail);
   const add=(text,fn)=>{const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=text;b.onclick=fn;row.append(b);};
@@ -269,7 +305,15 @@ function renderDocuments(boxId,kind){
   box.append(row);
  });if(!box.childNodes.length)box.textContent='保存済み帳票はありません。';
 }
-root.renderAllSavedDocs=function(){if(!enabled)return original.renderAllSavedDocs();renderDocuments('allSavedDocsList');};
+root.renderAllSavedDocs=function(){
+ if(enabled)return renderDocuments('allSavedDocsList');
+ original.renderAllSavedDocs();
+ const labels=new Map(['estimate','invoice','receipt','onoda'].map(kind=>[docTypeLabel(kind),kind]));
+ for(const row of el('allSavedDocsList').children){
+  const label=row.firstElementChild?.firstElementChild?.textContent.split(' ｜ ')[0];
+  if(labels.has(label))row.dataset.docType=labels.get(label);
+ }
+};
 root.renderConfirmedHistory=function(){if(!enabled)return original.renderConfirmedHistory();renderDocuments('confirmedHistoryList',docType);};
 function invoiceBalance(id){
  const doc=rows.documents?.find(r=>r.id===id);if(!doc)throw Error('請求書を読み込み直してください。');
@@ -313,6 +357,118 @@ root.TsukinowaBusinessUI={registerPayment,invoiceBalance,patchPending,googleErro
   return documents;
  },getSync:()=>sync,getClient:()=>client,enqueue:command,isEnabled:()=>enabled
 };
+// These controls reuse the rendered schedule and saved-document views.
+function installResponsiveUI(){
+ const stylesheet=document.createElement('link');
+ stylesheet.rel='stylesheet';
+ stylesheet.href='./css/business-ui.css';
+ stylesheet.media='screen';
+ document.head.append(stylesheet);
+
+ const editor=el('pageChohyo').querySelector('.editor-card');
+ editor.querySelector('h2').textContent='帳票';
+ editor.querySelector('.subtitle').remove();
+ const conversion=el('estimateConvertWrap');
+ const invoiceButton=conversion.querySelector('button');
+ conversion.style.margin='0 0 12px';
+ conversion.innerHTML='<h3>見積書から作成</h3><div class="biz-actions"><button class="biz-btn phone-only" type="button">領収書の下書き</button></div>';
+ conversion.querySelector('button').onclick=root.bizDraftReceiptFromEstimate;
+ conversion.querySelector('.biz-actions').prepend(invoiceButton);
+ editor.querySelector('.tabs').after(conversion);
+
+ const list=el('allSavedDocsList');
+ const filter=document.createElement('select');
+ filter.className='phone-only';
+ filter.setAttribute('aria-label','帳票の種類');
+ filter.add(new Option('すべての種類',''));
+ for(const kind of ['estimate','invoice','receipt','onoda'])filter.add(new Option(docTypeLabel(kind),kind));
+ filter.onchange=()=>{list.dataset.kind=filter.value;};
+ el('savedDocSearch').setAttribute('aria-label','保存帳票を検索');
+ el('savedDocSearch').before(filter);
+ list.insertAdjacentHTML('afterend','<p id="savedDocFilterEmpty" class="biz-muted phone-only">この種類の帳票はありません。</p>');
+
+ el('googleCalendarReconnect').insertAdjacentHTML('afterend',
+  '<div id="calendarMonthGrid" class="phone-only" role="group" aria-label="月間カレンダー"></div>'+
+  '<button id="calendarShowMonth" class="biz-btn phone-only" type="button" aria-pressed="false">月間一覧</button>');
+ const calendarRows=el('calendarRows');
+ const calendarSection=calendarRows.closest('.biz-section');
+ calendarSection.querySelector('h2').insertAdjacentHTML('beforeend',
+  ' <span id="calendarDayHeading" class="phone-only" aria-live="polite"></span>');
+ calendarSection.insertAdjacentHTML('beforeend',
+  '<p id="calendarDayEmpty" class="biz-muted phone-only" hidden>対象の日程はありません。</p>');
+
+ // Published Japanese holidays and substitute holidays. Schedule data is independent.
+ const holidaysByYear={
+  2026:'01-01 01-12 02-11 02-23 03-20 04-29 05-03 05-04 05-05 05-06 07-20 08-11 09-21 09-22 09-23 10-12 11-03 11-23',
+  2027:'01-01 01-11 02-11 02-23 03-21 03-22 04-29 05-03 05-04 05-05 07-19 08-11 09-20 09-23 10-11 11-03 11-23'
+ }; // https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html
+ const weekdays=['日','月','火','水','木','金','土'];
+ const dayClass=['sunday','','','','','','saturday'];
+ const grid=el('calendarMonthGrid');
+ const showMonthButton=el('calendarShowMonth');
+ let selectedDay='';
+ let showAllDays=false;
+ function refreshCalendarDisplay(){
+  let count=0;
+  for(const row of calendarRows.rows){
+   // The existing date column is formatted by bizFmtDate (M/D).
+   const date=row.cells.length>1?row.cells[0].textContent:'';
+   const show=!!date&&(showAllDays||date===bizFmtDate(selectedDay));
+   row.classList.toggle('other-calendar-day',!show);
+   if(show)count++;
+  }
+  for(const button of grid.querySelectorAll('button[data-day]')){
+   button.setAttribute('aria-pressed',String(!showAllDays&&button.dataset.day===selectedDay));
+  }
+  calendarRows.classList.toggle('show-calendar-month',showAllDays);
+  showMonthButton.setAttribute('aria-pressed',String(showAllDays));
+  el('calendarDayHeading').textContent=showAllDays?'月間一覧':bizFmtDate(selectedDay);
+  el('calendarDayEmpty').hidden=count>0;
+ }
+ grid.onclick=({target})=>{
+  const day=target.closest('button[data-day]');
+  if(!day)return;
+  selectedDay=day.dataset.day;
+  showAllDays=false;
+  refreshCalendarDisplay();
+ };
+ showMonthButton.onclick=()=>{showAllDays=!showAllDays;refreshCalendarDisplay();};
+
+ const renderSchedule=root.renderCalendarEvents;
+ root.renderCalendarEvents=function(){
+  renderSchedule();
+  const month=el('calendarMonth').value||bizNowMonth();
+  const today=todayISO();
+  if(!selectedDay.startsWith(month+'-')){
+   selectedDay=today.startsWith(month+'-')?today:month+'-01';
+   showAllDays=false;
+  }
+  if(el('calendarKeyword').value||el('calendarReview').checked)showAllDays=true;
+  const first=new Date(month+'-01T00:00:00Z');
+  const last=new Date(first);
+  last.setUTCMonth(last.getUTCMonth()+1,0);
+  const holidays=new Set(holidaysByYear[first.getUTCFullYear()]?.split(' '));
+  const counts=new Map();
+  for(const row of calendarRows.rows){
+   if(row.cells.length<2)continue;
+   const date=row.cells[0].textContent;
+   counts.set(date,(counts.get(date)||0)+1);
+  }
+  const headings=weekdays.map((label,index)=>`<span class="${dayClass[index]}">${label}</span>`).join('');
+  const spacers='<span aria-hidden="true"></span>'.repeat(first.getUTCDay());
+  const days=[];
+  for(let day=1;day<=last.getUTCDate();day++){
+   const date=month+'-'+String(day).padStart(2,'0');
+   const weekday=(first.getUTCDay()+day-1)%7;
+   const holiday=holidays.has(date.slice(5));
+   const count=counts.get(bizFmtDate(date))||0;
+   days.push(`<button type="button" data-day="${date}" class="${holiday?'holiday':dayClass[weekday]}${count?' has-events':''}" ${date===today?'aria-current="date"':''} aria-label="${bizFmtDate(date)} ${weekdays[weekday]}曜日${holiday?' 祝日・休日':''}、日程${count}件">${day}</button>`);
+  }
+  grid.innerHTML=`<div class="calendar-days">${headings}${spacers}${days.join('')}</div>`;
+  refreshCalendarDisplay();
+ };
+}
+installResponsiveUI();
 document.addEventListener('DOMContentLoaded',()=>{
  el('pageChohyo').addEventListener('input',()=>{pendingInvoice=null;});
  const badge=document.createElement('span');badge.id='coreSyncStatus';badge.setAttribute('role','status');badge.textContent='端末内保存';el('bizCloudAccountButton').prepend(badge);badge.style.cssText='display:block;font-size:10px;font-weight:normal';

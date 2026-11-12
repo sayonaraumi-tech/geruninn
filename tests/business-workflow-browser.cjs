@@ -1,5 +1,5 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
-const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
+const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.css')?'text/css':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{for(const width of [390,1280]){
  const page=await browser.newPage({viewport:{width,height:900},hasTouch:width===390,serviceWorkers:'block'}),errors=[],remote=new Map(),posts=[],patches=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false,companyId:'tsukinowa',firebase:{}}}));await page.route('https://cdnjs.cloudflare.com/**',r=>r.fulfill({body:''}));await page.route('https://accounts.google.com/**',r=>r.fulfill({body:''}));
@@ -62,6 +62,19 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(id=>bizAcceptEstimate(id),estimate.id);await page.waitForFunction(()=>bizState.calendar.length===4);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).date),'2026-10-20');assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googlePatchPending),true);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googleCreatePending),true);
  await page.evaluate(()=>TsukinowaBusinessUI.patchPending());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);
  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);const beforeOriginal=await page.evaluate(()=>JSON.stringify([...testRecords]));const saves=await page.evaluate(()=>pdfSaves);await page.evaluate(()=>doPrint());await page.waitForFunction(n=>pdfSaves===n,saves+1);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
+ if(width===390){
+  await page.locator('#bizNav [data-page="savedDocs"]').click();
+  await page.getByRole('combobox',{name:'帳票の種類'}).selectOption('estimate');
+  const card=page.locator(`#allSavedDocsList [data-document-id="${estimate.documentId}"]`);
+  assert.equal(await page.locator('#allSavedDocsList [data-doc-type="receipt"]').first().isVisible(),false);
+  await card.getByRole('button',{name:'開く',exact:true}).click();
+  await page.getByRole('button',{name:'領収書の下書き'}).click();
+  assert.equal(await page.evaluate(()=>docType),'estimate');
+  assert.match(alerts.at(-1),/正式請求書を発行/);
+  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
+  assert.equal(await page.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),0);
+  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);
+ }
  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimate.id);assert.equal(await page.locator('#customerName').isDisabled(),false);assert.equal(await page.evaluate(()=>collectFormState().calendarEventId),await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).id));assert.equal(await page.evaluate(()=>collectFormState().salesDate),'2026-10-20');
  await require('./estimate-issued-history-browser.cjs')(page);
  // Google calendar's cash label is not receipt evidence. A formal cash receipt
@@ -123,7 +136,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  assert.equal(draft.type,'estimate');
  assert.deepEqual(await page.evaluate(id=>{const h=loadConfirmedHistory().find(h=>h.documentId===id);return [h.docType,h.documentStatus,TsukinowaBusiness.total(h),bizState.sales.some(s=>s.documentId===id)];},draft.id),['estimate','active',207526,false]);
  assert.match(await page.evaluate(()=>pdfNames.at(-1)),/見積書\.pdf$/);
- const convert=page.locator('#estimateConvertWrap button');
+ const convert=page.getByRole('button',{name:'見積書を請求書に変換',exact:true});
  const press=locator=>width===390?locator.tap():locator.click();
  await press(convert);
  assert.equal(await page.evaluate(()=>docType),'estimate');
@@ -185,6 +198,47 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  assert.equal(await page.locator('[data-calendar-document]').first().isDisabled(),true);
  assert.equal(await page.locator('#eventSaleButton').isVisible(),false);
  await page.evaluate(()=>closeEventModal());
+ if(width===390){
+  const receiptEstimate=await page.evaluate(async()=>{
+   const saved=await testService.execute({type:'saveDocument',operationId:'receipt-ui-estimate',expectedRevision:0,snapshot:{
+    documentId:'receipt-ui-estimate',docType:'estimate',customerName:'領収書テスト',invoiceDate:'2026-10-15',
+    items:[{content:'クロス張替',qty:1,price:1000,taxable:true}],workDate:'2026-10-22'
+   }});
+   await testService.execute({type:'acceptEstimate',operationId:'receipt-ui-accept',estimateId:saved.estimateId,expectedRevision:1,workDate:'2026-10-22'});
+   await TsukinowaBusinessUI.getSync().reload();
+   return saved.estimateId;
+  });
+  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),receiptEstimate);
+  assert.equal(await page.evaluate(()=>docType),'invoice');
+  await page.evaluate(()=>doPrint());
+  await page.waitForFunction(id=>bizState.sales.some(s=>s.estimateId===id),receiptEstimate);
+  const sourceSale=await page.evaluate(id=>bizState.sales.find(s=>s.estimateId===id),receiptEstimate);
+  await page.evaluate(id=>bizEstimateFromHistory(id),receiptEstimate);
+  const beforeDraft=await page.evaluate(()=>JSON.stringify([...testRecords]));
+  await page.getByRole('button',{name:'領収書の下書き'}).click();
+  const receipt=await page.evaluate(()=>collectFormState());
+  assert.equal(receipt.docType,'receipt');
+  assert.equal(receipt.estimateId,receiptEstimate);
+  assert.equal(receipt.calendarEventId,sourceSale.calendarEventId);
+  assert.equal(receipt.saleId,sourceSale.id);
+  assert.equal(receipt.customerName,'領収書テスト');
+  assert.equal(Number(receipt.receiptTotal),1100);
+  assert.equal(receipt.paymentMethod,'');
+  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeDraft);
+  await page.locator('#paymentMethod').selectOption('現金');
+  await page.evaluate(()=>doPrint());
+  await page.waitForFunction(id=>loadConfirmedHistory().some(h=>h.documentId===id),receipt.documentId);
+  assert.deepEqual(await page.evaluate(({estimateId,saleId})=>({
+   sales:bizState.sales.filter(s=>s.estimateId===estimateId).length,
+   payments:bizState.payments.filter(p=>p.saleId===saleId).map(p=>p.confirmation),
+   original:loadConfirmedHistory().find(h=>h.estimateId===estimateId&&h.docType==='estimate')?.documentStatus
+  }),{estimateId:receiptEstimate,saleId:sourceSale.id}),{sales:1,payments:['cash-received'],original:'active'});
+  await page.evaluate(id=>bizEstimateFromHistory(id),receiptEstimate);
+  await page.getByRole('button',{name:'領収書の下書き'}).click();
+  assert.equal(await page.evaluate(()=>collectFormState().documentId),receipt.documentId);
+  assert.equal(await page.locator('#customerName').isDisabled(),true);
+  console.log('PASS 390px saved estimate → invoice → receipt, one sale, one confirmed cash payment, and immutable originals');
+ }
  assert.deepEqual(errors,[]);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
  console.log(`PASS ${width}px: four new formal documents/PDF without Google; original open/redownload/bottom PDF zero save calls and zero database/number/accounting/Calendar writes; readonly controls; sales button/payment form/balance dialog confirmed bank payments, partial/final balances, double-click one payment, identical real second deposit accepted, no PDF/document/number writes; modified content rejected; saved workDate acceptance without prompt; pending Google visible`);await page.close();
  }}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);server.close();process.exitCode=1;});

@@ -7,7 +7,7 @@ let serveOldWorker=false;
 const server=http.createServer((req,res)=>{
  const name=new URL(req.url,'http://localhost').pathname,file=path.join(root,name==='/'?'index.html':name);
  if(name==='/sw.js'&&serveOldWorker){res.setHeader('Content-Type','text/javascript');return res.end(fs.readFileSync(file,'utf8').replace(/const CACHE='[^']+';/,`const CACHE='${oldCache}';`));}
- try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
+ try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.css')?'text/css':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
 });
 const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
 const mobileRoutes=['calendar','estimates','chohyo','savedDocs'];
@@ -46,6 +46,24 @@ async function checkPage(page,route){
     await page.locator('#bizNav [data-page="calendar"]').click();await checkPage(page,'calendar');
    }
    await page.locator('#bizNav [data-page="estimates"]').focus();await page.keyboard.press('Enter');await checkPage(page,'estimates');
+   await page.locator('#bizNav [data-page="calendar"]').click();
+   if(width===390){
+    await page.locator('#calendarMonth').fill('2026-11');
+    assert.equal(await page.locator('#calendarMonthGrid button').count(),30);
+    assert.equal(await page.locator('[data-day="2026-11-03"]').evaluate(e=>getComputedStyle(e).color),'rgb(172, 41, 51)');
+    assert.equal(await page.locator('[data-day="2026-11-07"]').evaluate(e=>getComputedStyle(e).color),'rgb(34, 95, 151)');
+    await page.locator('[data-day="2026-11-03"]').click();
+    assert.equal(await page.locator('[data-day="2026-11-03"]').getAttribute('aria-pressed'),'true');
+    assert.equal(await page.locator('#calendarDayHeading').innerText(),'11/3');
+    assert.equal(await page.locator('#calendarDayEmpty').isVisible(),true);
+    for(const route of ['calendar','chohyo','savedDocs']){
+     const bounds=await page.locator(`#bizNav [data-page="${route}"]`).boundingBox();
+     assert(bounds.y>=830&&bounds.y+bounds.height<=900);
+    }
+   }else{
+    assert.equal(await page.locator('#calendarMonthGrid').isVisible(),false);
+    assert.equal(await page.locator('.biz-topbar').evaluate(e=>getComputedStyle(e).backgroundColor),'rgb(23, 23, 23)');
+   }
    if(width===390||role==='staff')for(const route of Object.keys(routes).filter(r=>!visibleRoutes.includes(r)))assert.equal(await page.locator(`#bizNav [data-page="${route}"]`).isVisible(),false);
    assert.equal(await page.evaluate(()=>JSON.stringify({business:bizState,history:loadConfirmedHistory()})),before);
    assert.deepEqual(errors,[]);console.log(`PASS ${width}px ${role}: navigation clicks, active page/state, keyboard, existing visibility and unchanged business data`);
@@ -87,6 +105,8 @@ async function checkPage(page,route){
   assert.equal(await page.evaluate(()=>localStorage.getItem('tsukinowa_navigation_preserved')),'keep');
   assert.equal(await page.evaluate(async key=>{const c=await caches.open(key);return (await c.match(new URL('./index.html',location.href).href)).text();},newCache),fs.readFileSync(path.join(root,'index.html'),'utf8'));
   await context.setOffline(true);await page.reload();
+  await page.locator('#bizNav [data-page="calendar"]').click();
+  assert.equal(await page.locator('#calendarMonthGrid').isVisible(),true);
   for(const route of mobileRoutes){await page.locator(`#bizNav [data-page="${route}"]`).click();await checkPage(page,route);}
   assert.equal(await page.evaluate(()=>localStorage.getItem('tsukinowa_navigation_preserved')),'keep');
   console.log('PASS installed PWA worker upgrade, old cache cleanup, current cached HTML, offline navigation and storage preservation');
