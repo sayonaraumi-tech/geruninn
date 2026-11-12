@@ -1064,31 +1064,44 @@ dialog h2{font-size:15px}
 </dialog>
 
 <div id="pageDashboard" class="biz-page app-page active">
- <div class="biz-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
+ <div class="biz-title tsuki-home-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
  <div class="biz-section home-period"><div class="biz-form-grid">
- <div class="biz-field"><label for="homePeriodMode">対象期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
+ <div class="biz-field"><label for="homePeriodMode">期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
  <div class="biz-field" id="homeMonthField"><label for="homeMonth">対象月</label><input type="month" id="homeMonth" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeYearField" hidden><label for="homeYear">年度開始年（10月）</label><input type="number" min="2000" max="9998" id="homeYear" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeStartField" hidden><label for="homeStart">開始日</label><input type="date" id="homeStart" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeEndField" hidden><label for="homeEnd">終了日</label><input type="date" id="homeEnd" onchange="renderDashboard()"></div>
  </div></div>
- <div class="biz-grid tsuki-home-primary">
-  <div class="biz-card"><h3>売上</h3><div class="biz-kpi" id="kpiSales">0</div></div>
-  <div class="biz-card"><h3>入金額</h3><div class="biz-kpi" id="kpiPayments">0</div></div>
-  <div class="biz-card"><h3>支出合計</h3><div class="biz-kpi" id="kpiExpenses">0</div></div>
-  <div class="biz-card"><h3>収支差額（現金基準）</h3><div class="biz-kpi" id="kpiDifference">0</div></div>
+ <div class="biz-grid tsuki-home-primary" aria-label="経営指標">
+  <div class="biz-card tsuki-kpi-sales"><div class="tsuki-home-kpi-symbol" aria-hidden="true">▥</div><div><h3>売上</h3><div class="biz-kpi" id="kpiSales">0</div></div></div>
+  <div class="biz-card"><div class="tsuki-home-kpi-symbol" aria-hidden="true">◎</div><div><h3>入金</h3><div class="biz-kpi" id="kpiPayments">0</div></div></div>
+  <div class="biz-card"><div class="tsuki-home-kpi-symbol" aria-hidden="true">▣</div><div><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">0</div></div></div>
+  <div class="biz-card"><div class="tsuki-home-kpi-symbol" aria-hidden="true">▤</div><div><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div></div></div>
  </div>
- <div class="biz-grid home-secondary"><div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
- <div class="tsuki-home-visuals" aria-label="期間内の収支と支出構成">
+ <div class="tsuki-home-visuals" aria-label="月別収支と支出構成">
    <section class="biz-section tsuki-home-trend"><h2>月別収支推移</h2><div id="tsukiHomeChart" class="tsuki-home-chart"></div></section>
    <section class="biz-section tsuki-home-categories"><h2>支出内訳</h2><div id="tsukiHomeDonut" class="tsuki-home-donut"></div></section>
-   <section class="biz-section tsuki-home-reminders"><h2>確認事項</h2><div id="tsukiHomePreviewAlerts" class="tsuki-home-preview-alerts"></div></section>
  </div>
- <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
+ <div class="tsuki-home-bottom">
+   <section class="biz-section tsuki-home-recent"><div class="tsuki-home-section-heading"><h2>最近の入出金 <small>（直近5件）</small></h2><button class="biz-btn" onclick="bizSwitchPage('sales')">売上・入金 ›</button></div><div id="tsukiHomeRecent" class="tsuki-home-recent-table"></div></section>
+   <section class="biz-section tsuki-home-reminders"><div class="tsuki-home-section-heading"><h2>銀行照合・確認事項</h2><button class="biz-btn" onclick="bizSwitchPage('bank')">銀行照合 ›</button></div><div id="tsukiHomePreviewAlerts" class="tsuki-home-preview-alerts"></div></section>
+   <section class="biz-section tsuki-home-quick"><h2>よく使う操作</h2><div class="tsuki-home-shortcuts">
+     <button type="button" onclick="bizSwitchPage('chohyo');setDocType('estimate')">見積書作成</button>
+     <button type="button" onclick="bizSwitchPage('chohyo');setDocType('invoice')">請求書作成</button>
+     <button type="button" onclick="bizSwitchPage('chohyo');setDocType('receipt')">領収書作成</button>
+     <button type="button" onclick="bizSwitchPage('sales')">売上登録</button>
+     <button type="button" onclick="bizSwitchPage('expenses')">支出登録</button>
+     <button type="button" onclick="bizSwitchPage('bank')">銀行照合</button>
+   </div></section>
+ </div>
+ <p class="biz-muted tsuki-home-note">売上・入金・支出は既存台帳から集計。未収金は期間末残高です。収支差額は会計上の利益ではありません。</p>
+ <details class="tsuki-home-details"><summary>詳細集計・月次収支台帳</summary>
+ <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額（現金基準）</h3><div class="biz-kpi" id="kpiDifference">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
  <div id="homeSettlement" class="biz-section"></div>
  <div class="biz-section"><div class="biz-section-head"><h2>要確認</h2></div><div id="attentionList" class="biz-alert">確認事項はありません。</div></div>
+ </details>
 </div>
 
 <div id="pageCalendar" class="biz-page app-page">
