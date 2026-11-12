@@ -68,6 +68,11 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        assert.equal(await page.evaluate(()=>JSON.stringify([...window.testRecords])),recordsBeforeVisualDraft,'draft conversion must not create or update Firestore records');
        await page.evaluate(()=>{document.getElementById('tsukiSavedDocType').value='';renderAllSavedDocs();bizSwitchPage('savedDocs');});
      }
+     if(route==='calendar'&&width===1280){
+       const month=await page.locator('#pageCalendar>.biz-section:nth-child(2)').boundingBox();
+       const schedule=await page.locator('#pageCalendar>.biz-section:nth-child(3)').boundingBox();
+       assert(month&&schedule&&month.x<schedule.x&&Math.abs(month.y-schedule.y)<5,'approved desktop calendar must show month and schedule side by side');
+     }
      if(route==='calendar'){
        const dayCells=page.locator('#tsukiMonthDays button.tsuki-month-day');
        assert((await dayCells.count())>=28,'month calendar missing day buttons');
