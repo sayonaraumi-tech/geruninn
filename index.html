@@ -3964,8 +3964,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   const query=get('tsukiBankSearch').value.toLowerCase(),direction=get('tsukiBankDirection').value,amountFilter=get('tsukiBankAmount').value;
   const view=scoped.filter(b=>(state.tab==='all'||(state.tab==='done'?['照合済','除外'].includes(status(b)):!['照合済','除外'].includes(status(b))))&&(!direction||(direction==='in'?Number(b.incoming)>0:Number(b.outgoing)>0))&&(!amountFilter||(Number(b.incoming)>0||Number(b.outgoing)>0))&&(!query||[b.description,b.bankAccount,b.incoming,b.outgoing].some(x=>String(x||'').toLowerCase().includes(query))));
   // Original renderer always owns DOM, including its inline reconciliation widgets.
-  const tbodyRows=[...rows.querySelectorAll(':scope > tr')],original=all.slice().sort((a,b)=>recordDate(b).localeCompare(recordDate(a)));
-  const byId=new Map(original.map((b,i)=>[key(b),tbodyRows[i]]));
+  const tbodyRows=[...rows.querySelectorAll(':scope > tr')];
+  const byId=new Map(tbodyRows.map(row=>[row.querySelector('details[data-bank-detail]')?.dataset.bankDetail,row]).filter(([id])=>id));
   let ordered=view.map(b=>byId.get(key(b))).filter(Boolean);
   if(!window.TsukinowaBusinessUI?.isEnabled?.())ordered=tbodyRows.filter(r=>query?r.textContent.toLowerCase().includes(query):true);
   const show=new Set(ordered.slice(state.page*Number(get('tsukiBankPageSize').value),(state.page+1)*Number(get('tsukiBankPageSize').value)));
