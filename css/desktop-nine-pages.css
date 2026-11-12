@@ -491,6 +491,7 @@
  body.tsuki-ui #pageBank .tsuki-bank-filter .biz-btn{border-color:#c59a3c;color:#9b6f12;white-space:nowrap;}
  body.tsuki-ui #pageBank .tsuki-bank-main>.tsuki-bank-transactions{margin:0;border:0;padding:0;box-shadow:none;min-width:0;}
  body.tsuki-ui #pageBank .tsuki-bank-main>.tsuki-bank-transactions>.biz-section-head{display:none;}
+ body.tsuki-ui #pageBank .tsuki-bank-main .bank-status-filter{display:none; /* Same views are in the desktop tab bar; original buttons stay in DOM for legacy commands. */}
  body.tsuki-ui #pageBank .tsuki-bank-main .biz-table-wrap{max-height:none;overflow-x:auto;}
  body.tsuki-ui #pageBank .tsuki-bank-main .biz-table{min-width:680px;font-size:13px;}
  body.tsuki-ui #pageBank .tsuki-bank-main .biz-table th{background:#f5f5f5;color:#272727;font-size:12px;font-weight:750;padding:9px 8px;}
