@@ -1147,7 +1147,9 @@ dialog h2{font-size:15px}
 <div id="pageBank" class="biz-page app-page">
  <div class="biz-title"><div><h1>銀行照合</h1><div class="biz-muted">GMO あおぞらのCSVを読み込み、請求入金と既存支出を照合します。銀行明細だけで費用は追加しません。</div></div></div>
  <div class="biz-section bank-import"><div class="biz-section-head"><h2>CSV取込</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>銀行CSV</label><input type="file" id="bankFile" accept=".csv,text/csv"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="importBankCsv()">読込</button></div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
+ <div class="biz-section tsuki-bank-transactions"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
+ <div class="biz-section tsuki-bank-candidates"><div class="biz-section-head"><h2>システム候補</h2></div><p id="tsukiBankCandidateLabel" class="biz-muted">銀行取引を選択すると、既存の売上・支出候補を表示します。</p><div id="tsukiBankCandidateMirror"></div></div>
+ <div class="biz-section tsuki-bank-operations"><div class="biz-section-head"><h2>照合操作</h2></div><p id="tsukiBankOperationLabel" class="biz-muted">未選択</p><div id="tsukiBankOperationMirror"></div></div>
 </div>
 
 <div id="pageSettings" class="biz-page app-page">
@@ -3574,6 +3576,62 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
 <script src="./js/outstanding-ui.js"></script>
 <script src="./js/historical-import-ui.js"></script>
 <script src="./js/accounting-ui.js"></script>
+<script>
+// Desktop-only reconciliation workspace. Controls forward directly to the
+// original bank row handlers: no new accounting commands or matching logic.
+document.addEventListener('DOMContentLoaded',()=>{
+ const rows=document.getElementById('bankRows');
+ const label=document.getElementById('tsukiBankCandidateLabel');
+ const candidate=document.getElementById('tsukiBankCandidateMirror');
+ const operations=document.getElementById('tsukiBankOperationMirror');
+ const operationLabel=document.getElementById('tsukiBankOperationLabel');
+ if(!rows||!candidate||!operations)return;
+ let selectedId='';
+ function refresh(){
+   const detail=[...rows.querySelectorAll('details[data-bank-detail]')].find(d=>d.dataset.bankDetail===selectedId);
+   const tr=detail?.closest('tr');
+   rows.querySelectorAll('tr').forEach(r=>r.classList.toggle('tsuki-bank-selected',r===tr));
+   candidate.replaceChildren();operations.replaceChildren();
+   if(!tr){
+     label.textContent='銀行取引を選択すると、既存の売上・支出候補を表示します。';
+     operationLabel.textContent='未選択';return;
+   }
+   const cells=[...tr.cells];
+   label.textContent=(cells[0]?.textContent||'')+'｜'+(cells[1]?.textContent||'');
+   operationLabel.textContent=(cells[2]?.textContent||cells[3]?.textContent||'')+'｜'+(cells[5]?.textContent||'');
+   const hint=document.createElement('p');hint.className='biz-muted';hint.textContent=detail.querySelector('.bank-candidate')?.textContent||'候補なし';
+   candidate.append(hint);
+   const controls=detail.querySelector('.bank-controls');
+   if(!controls)return;
+   for(const source of controls.querySelectorAll('select')){
+     const mirror=source.cloneNode(true);mirror.removeAttribute('id');mirror.removeAttribute('onchange');
+     mirror.setAttribute('aria-label','この銀行取引の既存照合候補');
+     mirror.value=source.value;
+     mirror.addEventListener('change',()=>{source.value=mirror.value;source.dispatchEvent(new Event('change',{bubbles:true}));});
+     candidate.append(mirror);
+   }
+   for(const original of controls.querySelectorAll('input[type="checkbox"]')){
+     const wrap=document.createElement('label'),mirror=document.createElement('input');mirror.type='checkbox';mirror.checked=original.checked;
+     const text=original.closest('label')?.textContent?.trim()||original.value;
+     mirror.addEventListener('change',()=>{original.checked=mirror.checked;original.dispatchEvent(new Event('change',{bubbles:true}));});
+     wrap.append(mirror,document.createTextNode(text));candidate.append(wrap);
+   }
+   for(const source of controls.querySelectorAll('button')){
+     const mirror=document.createElement('button');mirror.type='button';mirror.className=source.className||'biz-btn';
+     mirror.textContent=source.textContent;mirror.disabled=source.disabled;
+     mirror.addEventListener('click',()=>{source.click();requestAnimationFrame(refresh);});
+     operations.append(mirror);
+   }
+   if(!operations.childElementCount)operationLabel.textContent+='｜この取引に実行可能な操作はありません。';
+ }
+ rows.addEventListener('click',event=>{
+   const tr=event.target.closest('tr'),detail=tr?.querySelector('details[data-bank-detail]');
+   if(detail){selectedId=detail.dataset.bankDetail;requestAnimationFrame(refresh);}
+ });
+ const observer=new MutationObserver(()=>requestAnimationFrame(refresh));
+ observer.observe(rows,{childList:true});
+});
+</script>
 <script src="./js/year-end.js"></script>
 <script src="./js/year-end-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
