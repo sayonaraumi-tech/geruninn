@@ -46,11 +46,15 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  const bic=page.locator('#bankRows tr').filter({hasText:'池袋西口店'});await bic.locator('summary').click();assert.match(await bic.innerText(),/BIC CAMERA/);assert.equal(await bic.getByRole('button',{name:'この銀行明細から支出登録'}).count(),0);
  await bic.locator('select').selectOption({index:1});const selected=await bic.locator('select').inputValue();await page.evaluate(()=>accountingBankView('all'));assert.equal(await bic.locator('select').inputValue(),selected);await bic.getByRole('button',{name:'照合確定'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='bic-bank').status==='照合済').catch(async e=>{console.error(await page.evaluate(()=>({queue:TsukinowaBusinessUI.getSync().getQueue(),status:document.getElementById('coreSyncStatus').textContent,banks:TsukinowaAccountingUI.getData().bankTransactions,expenses:TsukinowaAccountingUI.getData().expenses})));throw e;});
  const before=await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length);
- await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).locator('details').evaluate(e=>e.open=true);await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
+ const newBank=page.locator('#bankRows tr').filter({hasText:'未登録店舗'});
+ await newBank.locator('summary').click();
+ assert(await newBank.locator('details').evaluate(e=>e.open),'expense bank details must open by actual user click');
+ await newBank.getByRole('button',{name:'この銀行明細から支出登録'}).click();
  assert(await page.locator('#pageBank').isVisible());assert(await page.locator('#bankExpenseDialog').isVisible());
  await page.locator('#bankExpenseForm [name=vendor]').fill('株式会社新店舗');await page.locator('#bankExpenseForm [name=category]').selectOption('消耗品費');
  await page.locator('#bankExpenseClose').click();assert(await page.locator('#pageBank').isVisible());assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length),before);
- await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
+ if(!await newBank.locator('details').evaluate(e=>e.open))await newBank.locator('summary').click();
+ await newBank.getByRole('button',{name:'この銀行明細から支出登録'}).click();
  await page.locator('#bankExpenseForm [name=vendor]').fill('株式会社新店舗');await page.locator('#bankExpenseForm [name=category]').selectOption('消耗品費');
  await page.getByRole('button',{name:'支出登録・照合確認'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='new-bank').status==='照合済');
  assert(await page.locator('#pageBank').isVisible());assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length),before+1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

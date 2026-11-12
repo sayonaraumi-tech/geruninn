@@ -249,12 +249,22 @@ function archiveDocument(h){
  command({type:'archiveDocument',documentId:h.documentId,expectedRevision:h.cloudRevision});
 }
 function renderDocuments(boxId,kind){
- const box=el(boxId);if(!box)return;box.replaceChildren();const q=(el('savedDocSearch')?.value||'').toLowerCase();
- history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId].join(' ').toLowerCase().includes(q))return;
+ const box=el(boxId);if(!box)return;box.replaceChildren();const q=(el('savedDocSearch')?.value||'').toLowerCase(),type=!kind?(el('tsukiSavedDocType')?.value||''):'';
+ history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&type&&h.docType!==type||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId,docTypeLabel(h.docType)].join(' ').toLowerCase().includes(q))return;
   const row=document.createElement('div');row.className='biz-card';row.dataset.documentId=h.documentId;row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
   const label=document.createElement('strong');label.textContent=`${documentLabels[h.documentStatus]} ｜ ${docTypeLabel(h.docType)} ｜ ${h.customerName||''}`;if(h.documentStatus!=='active')label.style.color='#a23';row.append(label);
   const detail=document.createElement('p');detail.textContent=`${h.sourceType==='historicalPdfImport'?'過去PDF ｜ ':''}No.${h.invoiceNo||''} ｜ ${h.invoiceDate||''} ｜ ID: ${h.documentId}`+(h.statusReason?' ｜ 理由: '+h.statusReason:'')+(h.revisedFromDocumentId?' ｜ 訂正元: '+h.revisedFromDocumentId:'')+(h.duplicateOfDocumentId?' ｜ 原帳票: '+h.duplicateOfDocumentId:'')+(h.revisedToDocumentId?' ｜ 訂正版: '+h.revisedToDocumentId:'');row.append(detail);
-  const add=(text,fn)=>{const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=text;b.onclick=fn;row.append(b);};
+  const actions=document.createElement('div');actions.className='biz-actions tsuki-saved-actions';row.append(actions);
+  const advancedNames=new Set(['訂正版を作成','無効にする','重複として無効','履歴から削除','誤登録を削除']);
+  const advanced=document.createElement('details');advanced.className='tsuki-saved-advanced';
+  const summary=document.createElement('summary');summary.textContent='管理・その他';
+  const advancedActions=document.createElement('div');advancedActions.className='tsuki-saved-advanced-buttons';
+  advanced.append(summary,advancedActions);
+  const add=(text,fn)=>{const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=text;b.onclick=fn;
+    if(advancedNames.has(text)){if(!advanced.isConnected)actions.append(advanced);advancedActions.append(b);}
+    else actions.append(b);
+  };
+  if(!kind && h.sourceType!=='historicalPdfImport')add('詳細',()=>root.tsukiShowSavedDocDetail(i));
   if(h.sourceType==='historicalPdfImport'){add('取込原本情報',()=>root.TsukinowaHistoricalUI.showSource(rows.documents.find(r=>r.id===h.documentId).payload));}else{add('開く',()=>openSavedDoc(i));add('再ダウンロード',()=>redownloadSavedDoc(i));}
   if(h.documentStatus!=='active'&&client?.getState().role==='admin'&&root.TsukinowaBusiness.canDeleteMisregistration(rows.documents.find(r=>r.id===h.documentId)?.payload||{}))add('誤登録を削除',()=>deleteMisregistration(h));
   if(client?.getState().role==='admin'&&['void','duplicate','revised','cancelled'].includes(h.documentStatus))add('履歴から削除',()=>archiveDocument(h));
