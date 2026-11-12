@@ -3735,6 +3735,86 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="./js/year-end-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
 <script>
+// Desktop-only visual workspace. Existing accounting controls and records are moved,
+// never copied or rewritten; mobile remains on its original document structure.
+document.addEventListener('DOMContentLoaded',()=>{
+ if(!matchMedia('(min-width:801px)').matches)return;
+ const page=document.getElementById('pageExpenses'),A=window.TsukinowaAccounting;
+ if(!page||!A||page.classList.contains('tsuki-expense-desktop'))return;
+ const sect=[...page.children].filter(n=>n.classList.contains('biz-section'));
+ const byTitle=name=>sect.find(n=>n.querySelector('.biz-section-head h2')?.textContent.trim()===name);
+ const register=byTitle('支出登録'),imports=byTitle('支出CSV取込'),ledger=byTitle('支出台帳'),cash=byTitle('現金帳（確認済み実収支）'),adjust=byTitle('現金残高の調整'),rules=byTitle('支出科目の学習ルール');
+ if(!register||!imports||!ledger||!cash)return;
+ page.classList.add('tsuki-expense-desktop');
+ const title=page.querySelector('.biz-title'),desc=title.querySelector('.biz-muted');
+ if(desc)desc.textContent='会社カード支出と現金支出を管理します。';
+ const get=id=>document.getElementById(id);
+ const period=document.createElement('div');period.className='tsuki-exp-period';
+ period.innerHTML='<label for="expenseMonth">期間</label><button type="button" id="tsukiExpPrev" class="biz-btn" aria-label="前の月">‹</button><span id="tsukiExpCaption"></span><button type="button" id="tsukiExpNext" class="biz-btn" aria-label="次の月">›</button><span class="tsuki-exp-monthly">月次</span>';
+ title.append(period);
+ const mInput=get('expenseMonth');period.querySelector('label').after(mInput);
+ const kpis=document.createElement('div');kpis.className='tsuki-exp-kpis';
+ kpis.innerHTML=[['支出合計','tsukiExpTotal'],['会社カード支出','tsukiExpCard'],['現金支出','tsukiExpCash'],['現金残高','tsukiExpBalance']].map(([label,id],i)=>'<div class="tsuki-exp-kpi'+(i===0?' selected':'')+'"><div class="tsuki-exp-kpi-label">'+label+'</div><strong id="'+id+'">—</strong><small id="'+id+'Count"></small></div>').join('');
+ const shell=document.createElement('div');shell.className='tsuki-exp-workspace';
+ const side=document.createElement('aside');side.className='tsuki-exp-sidebar biz-section';
+ side.innerHTML='<h2>取込（CSV）</h2><button type="button" class="biz-btn" id="tsukiExpCardImport">会社カード支出CSVを取込</button><button type="button" class="biz-btn" id="tsukiExpCashImport">現金支出CSVを取込</button><hr><h2>登録・管理</h2><button type="button" class="biz-btn" id="tsukiExpManual">＋ 支出を手入力で登録</button><button type="button" class="biz-btn" id="tsukiExpShowExpenses">支出一覧</button><button type="button" class="biz-btn" id="tsukiExpShowCash">現金帳（出納）</button><hr><h2>絞り込み</h2><label>支払方法<select id="tsukiExpMethod"><option value="">すべて</option></select></label><label>カテゴリ<select id="tsukiExpCategory"><option value="">すべて</option></select></label><label>取込元<select id="tsukiExpSource"><option value="">すべて</option><option value="csv">CSV</option><option value="other">その他・不明</option></select></label>';
+ const main=document.createElement('div');main.className='tsuki-exp-main';
+ const tabs=document.createElement('div');tabs.className='tsuki-exp-tabs';tabs.innerHTML='<button type="button" id="tsukiExpTabExpenses" class="active">支出一覧</button><button type="button" id="tsukiExpTabCash">現金帳（出納）</button>';
+ const toolbar=document.createElement('div');toolbar.className='tsuki-exp-table-toolbar';toolbar.innerHTML='<input id="tsukiExpSearch" type="search" placeholder="取引日・摘要・取引先で検索"><label>表示件数 <select id="tsukiExpPageSize"><option value="10">10件</option><option value="20">20件</option><option value="50">50件</option></select></label>';
+ const pager=document.createElement('div');pager.className='tsuki-exp-pager';pager.innerHTML='<span id="tsukiExpPagerLabel"></span><div><button type="button" class="biz-btn" id="tsukiExpPagePrev">‹</button><span id="tsukiExpPageNumber"></span><button type="button" class="biz-btn" id="tsukiExpPageNext">›</button></div>';
+ const heading=ledger.querySelector('.biz-section-head');if(heading)heading.hidden=true;
+ main.append(tabs,toolbar,ledger,pager);
+ const cashPanel=document.createElement('div');cashPanel.className='tsuki-exp-cash-panel';cashPanel.hidden=true;cashPanel.append(cash);if(adjust)cashPanel.append(adjust);main.append(cashPanel);
+ const reveal=document.createElement('div');reveal.className='tsuki-exp-reveal';
+ const importDisclosure=document.createElement('details');importDisclosure.innerHTML='<summary>CSV取込・確認</summary>';importDisclosure.append(imports);
+ const manualDisclosure=document.createElement('details');manualDisclosure.innerHTML='<summary>支出登録フォーム</summary>';manualDisclosure.append(register);
+ reveal.append(importDisclosure,manualDisclosure);
+ if(rules){const d=document.createElement('details');d.innerHTML='<summary>科目の学習ルール</summary>';d.append(rules);reveal.append(d);}
+ main.append(reveal);shell.append(side,main);title.after(kpis,shell);
+ const state={tab:'expenses',page:0};const records=()=>window.TsukinowaAccountingUI?.getData?.()||{};
+ const month=()=>mInput.value||bizNowMonth(),yen=n=>'¥'+Math.round(Number(n)||0).toLocaleString('ja-JP');
+ const method=e=>String(e.paymentMethod||e.method||'');
+ const source=e=>/csv/i.test(String(e.sourceType||e.importSource||e.source||e.importFile||''))?'csv':'other';
+ function refresh(){
+  const [y,m]=month().split('-').map(Number);get('tsukiExpCaption').textContent=y+'年'+m+'月';
+  const data=records(),items=A.expenseRegister(data.expenses||[],month());
+  const card=items.filter(e=>/法人.*カード|デビット|クレジット/.test(method(e)));
+  const cashItems=items.filter(e=>method(e)==='現金');
+  const cashRows=A.cashRows(data.cashLedger||[]);
+  const amounts=[['tsukiExpTotal',items],['tsukiExpCard',card],['tsukiExpCash',cashItems]];
+  for(const [id,set]of amounts){get(id).textContent=yen(set.reduce((a,e)=>a+(+e.amount||0),0));get(id+'Count').textContent=set.length+'件';}
+  get('tsukiExpBalance').textContent=yen(cashRows.at(-1)?.runningBalance||0);get('tsukiExpBalanceCount').textContent='';
+  for(const [id,values]of [['tsukiExpMethod',[...new Set(items.map(method).filter(Boolean))]],['tsukiExpCategory',[...new Set(items.map(e=>e.category).filter(Boolean))]]]){
+   const el=get(id),selection=el.value;el.replaceChildren(new Option('すべて',''),...values.map(v=>new Option(v,v)));el.value=selection;
+  }
+  const q=get('tsukiExpSearch').value.toLowerCase(),mFilter=get('tsukiExpMethod').value,cFilter=get('tsukiExpCategory').value,sourceFilter=get('tsukiExpSource').value;
+  const trs=[...get('expenseRows').querySelectorAll('tr')];
+  const filtered=items.map((e,i)=>({e,tr:trs[i]})).filter(({e})=>
+   (!q||[e.expenseDate,e.category,e.vendor,e.description,method(e)].some(x=>String(x||'').toLowerCase().includes(q)))&&
+   (!mFilter||method(e)===mFilter)&&(!cFilter||e.category===cFilter)&&(!sourceFilter||source(e)===sourceFilter));
+  const size=+get('tsukiExpPageSize').value,totalPages=Math.max(1,Math.ceil(filtered.length/size));state.page=Math.min(state.page,totalPages-1);
+  trs.forEach(t=>t.hidden=true);
+  filtered.slice(state.page*size,(state.page+1)*size).forEach(({tr})=>{if(tr)tr.hidden=false;});
+  get('tsukiExpPagerLabel').textContent='全 '+filtered.length+' 件';get('tsukiExpPageNumber').textContent=(state.page+1)+' / '+totalPages+' ページ';
+  get('tsukiExpPagePrev').disabled=state.page===0;get('tsukiExpPageNext').disabled=state.page>=totalPages-1;
+  const isCash=state.tab==='cash';ledger.hidden=isCash;toolbar.hidden=isCash;pager.hidden=isCash;cashPanel.hidden=!isCash;
+  get('tsukiExpTabExpenses').classList.toggle('active',!isCash);get('tsukiExpTabCash').classList.toggle('active',isCash);
+ }
+ function setTab(v){state.tab=v;refresh();}
+ get('tsukiExpTabExpenses').onclick=()=>setTab('expenses');get('tsukiExpTabCash').onclick=()=>setTab('cash');
+ get('tsukiExpShowExpenses').onclick=()=>setTab('expenses');get('tsukiExpShowCash').onclick=()=>setTab('cash');
+ get('tsukiExpManual').onclick=()=>{manualDisclosure.open=true;register.scrollIntoView({behavior:'smooth',block:'center'});};
+ for(const id of ['tsukiExpCardImport','tsukiExpCashImport'])get(id).onclick=()=>{importDisclosure.open=true;imports.scrollIntoView({behavior:'smooth',block:'center'});get('expenseFile')?.focus();};
+ function shift(n){const [y,m]=month().split('-').map(Number),d=new Date(y,m-1+n,1);mInput.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');state.page=0;renderExpenses();refresh();}
+ get('tsukiExpPrev').onclick=()=>shift(-1);get('tsukiExpNext').onclick=()=>shift(1);
+ for(const id of ['tsukiExpSearch','tsukiExpMethod','tsukiExpCategory','tsukiExpSource','tsukiExpPageSize'])get(id).addEventListener('input',()=>{state.page=0;refresh()});
+ get('tsukiExpPagePrev').onclick=()=>{state.page=Math.max(0,state.page-1);refresh()};
+ get('tsukiExpPageNext').onclick=()=>{state.page++;refresh()};
+ mInput.addEventListener('change',()=>{state.page=0;requestAnimationFrame(refresh)});
+ new MutationObserver(()=>requestAnimationFrame(refresh)).observe(get('expenseRows'),{childList:true});
+ refresh();
+});
+
 // Preview only on desktop. Original A4/PDF markup and rendering stay unchanged.
 document.addEventListener('DOMContentLoaded',()=>{
   if(matchMedia('(min-width: 801px)').matches)
