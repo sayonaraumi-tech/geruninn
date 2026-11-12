@@ -8,6 +8,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   window.testRecords=records;window.testClient=client;window.testService=TsukinowaBusiness.createService(client);bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;bizGoogleGrantedScopes=TSUKINOWA_GOOGLE_SCOPE;bizGoogleCalendarId='shared';bizGoogleCalendarsLoaded=true;
  });
 
+ await page.waitForFunction(()=>document.getElementById('coreSyncStatus')?.textContent==='クラウド同期済');
  await page.evaluate(()=>{const wrap=payload=>({id:payload.id,payload});TsukinowaAccountingUI.hydrate({sales:[wrap({id:'partial',salesDate:'2026-08-01',invoiceDate:'2026-08-01',amount:779379,customer:'顧客,"引用"\n改行'}),wrap({id:'paid',salesDate:'2026-09-20',amount:1000,customer:'入金済顧客'}),wrap({id:'unpaid',salesDate:'2026-10-31',amount:2000,customer:'未入金顧客'}),wrap({id:'future',salesDate:'2026-11-01',amount:500})],payments:[wrap({id:'p',saleId:'partial',paymentDate:'2026-08-25',amount:770379,confirmation:'bank-confirmed'}),wrap({id:'paid-p',saleId:'paid',paymentDate:'2026-10-01',amount:1000,confirmation:'bank-confirmed'}),wrap({id:'final',saleId:'partial',paymentDate:'2026-11-01',amount:9000,confirmation:'bank-confirmed'}),wrap({id:'pending',saleId:'unpaid',paymentDate:'2026-10-31',amount:2000,confirmation:'pending-bank'})]});bizSwitchPage('sales');document.getElementById('homePeriodMode').value='custom';document.getElementById('homeStart').value='';});
 
  if(process.env.UI_SCREENSHOT_ONLY==='1'){
