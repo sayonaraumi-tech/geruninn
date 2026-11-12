@@ -53,6 +53,8 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>bizSwitchPage('expenses'));
  // Invalid preview disables commit and cannot enqueue a partial batch.
  await desktop.locator('#expenseFile').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('日付,科目,支払方法,金額,取引先,内容・備考\n2026-02-30,その他,現金,1,A,B')});await desktop.evaluate(()=>accountingPreviewExpenses());assert(await desktop.locator('#expenseImportCommit').isDisabled());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/エラー 1件/);
+ await desktop.locator('#pageExpenses .tsuki-exp-reveal > details').nth(1).locator('summary').click();
+ await desktop.locator('#pageExpenses .tsuki-exp-reveal > details').nth(2).locator('summary').click();
  // Explicit learning uses the same authenticated expense transaction and syncs settings.
  await desktop.evaluate(()=>{expDate.value='2026-10-10';expCategory.value='通信費';expMethod.value='銀行振込';expAmount.value=123;expVendor.value='ＡＢＣ 店';expMemo.value='学習確認';expenseLearnCategory.checked=false;expCategory.dispatchEvent(new Event('change'));if(!expenseLearnCategory.checked)throw Error('manual category confirmation must enable learning');return addExpense();});await idle();
  await desktop.waitForFunction(()=>document.getElementById('expenseCategoryRules').textContent.includes('ＡＢＣ 店'));
