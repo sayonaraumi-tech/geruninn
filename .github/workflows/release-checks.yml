@@ -32,7 +32,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
-      - run: pnpm test:release:${{ matrix.suite }}
       - name: Capture 9 desktop and mobile UI pages from isolated test data
         if: matrix.suite == 'local'
         env:
@@ -46,6 +45,7 @@ jobs:
           name: ui-v1-screenshots
           path: ui-preview
           if-no-files-found: ignore
+      - run: pnpm test:release:${{ matrix.suite }}
       - name: Collect failure diagnostics
         if: failure()
         run: |
