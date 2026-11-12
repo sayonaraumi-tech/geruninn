@@ -116,13 +116,13 @@
   body.tsuki-ui #pageSales > #paymentRegistrationForm {
     grid-column: 2; grid-row: 2; min-width: 0;
   }
-  body.tsuki-ui #pageExpenses > .biz-section:first-of-type {
+  body.tsuki-ui #pageExpenses > .biz-section:nth-child(2) {
     grid-column: 2; grid-row: 2; min-width: 0;
   }
-  body.tsuki-ui #pageExpenses > .biz-section:nth-of-type(2) {
+  body.tsuki-ui #pageExpenses > .biz-section:nth-child(3) {
     grid-column: 1; grid-row: 2; min-width: 0;
   }
-  body.tsuki-ui #pageExpenses > .biz-section:nth-of-type(n+3) {
+  body.tsuki-ui #pageExpenses > .biz-section:nth-child(n+4) {
     grid-column: 1 / -1; min-width: 0;
   }
   body.tsuki-ui #pageSales :is(.biz-table-wrap,#salesRegisterTable),
