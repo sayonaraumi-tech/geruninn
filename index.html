@@ -1278,7 +1278,7 @@ dialog h2{font-size:15px}
     <button class="btn-add" onclick="addItem()">＋ 新增一行</button>
   </div>
 
-  <div class="editor-card">
+  <div class="editor-card tsuki-document-extra">
     <div id="onodaCarryover" hidden>
       <h3>未入金残高（任意）</h3>
       <div class="form-row"><label for="carryoverMonth">対象月</label><input id="carryoverMonth" placeholder="8月分" maxlength="40" oninput="recalc()"></div>
@@ -1305,7 +1305,7 @@ dialog h2{font-size:15px}
     </div>
   </div>
 
-  <div class="editor-card">
+  <div class="editor-card tsuki-document-actions">
     <button id="onodaRegenerate" class="biz-btn" type="button" hidden onclick="importOnodaFromCalendar({month:document.getElementById('invoiceDate').value.slice(0,7)||currentMonthKey()})">最新日程で月次再生成</button>
     <button class="btn-preview" onclick="togglePreview()">👁 预览</button>
     <button class="btn-print" onclick="doPrint()">📄 PDFをダウンロード（保存）</button>
