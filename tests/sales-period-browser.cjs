@@ -15,16 +15,19 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
    fs.mkdirSync(dir,{recursive:true});
    // Representative in-memory fixtures for visual inspection only. Never use
    // production Firestore, calendar data or sample financial totals.
-   await page.evaluate(()=>{
+   await page.evaluate(async()=>{
+     // Real domain validation and normal mocked Firestore listeners, but
+     // ONLY the in-memory test driver seeded above. No production access.
      const rows=[
-       {historyId:'demo-est-001',docType:'estimate',customerName:'株式会社WOOC',invoiceDate:'2026-11-12',invoiceNo:'M-202611-0123',items:[{content:'内装クロス工事',qty:120,unit:'㎡',price:1400,taxable:true}],travelFee:0,remarks:'施工予定の見積り',savedAt:'2026-11-12T09:00:00Z'},
-       {historyId:'demo-inv-002',docType:'invoice',customerName:'シンケン株式会社',invoiceDate:'2026-11-08',invoiceNo:'I-202611-0088',items:[{content:'補修工事',qty:1,unit:'式',price:107860,taxable:true}],travelFee:0,savedAt:'2026-11-08T09:00:00Z'},
-       {historyId:'demo-rec-003',docType:'receipt',customerName:'山与商事',invoiceDate:'2026-11-05',invoiceNo:'R-202611-0066',receiptTotal:112376,paymentMethod:'現金',savedAt:'2026-11-05T09:00:00Z'}
+       {documentId:'demo-est-001',docType:'estimate',customerName:'株式会社WOOC',invoiceDate:'2026-11-12',invoiceNo:'M-202611-0123',items:[{content:'内装クロス工事',qty:120,unit:'㎡',price:1400,taxable:true}],travelFee:0,remarks:'施工予定の見積り'},
+       {documentId:'demo-inv-002',docType:'invoice',customerName:'シンケン株式会社',invoiceDate:'2026-11-08',invoiceNo:'I-202611-0088',items:[{content:'補修工事',qty:1,unit:'式',price:107860,taxable:true}],travelFee:0},
+       {documentId:'demo-rec-003',docType:'receipt',customerName:'山与商事',invoiceDate:'2026-11-05',invoiceNo:'R-202611-0066',receiptTotal:112376,paymentMethod:'銀行振込'}
      ];
-     window.__visualDemoHistory=rows;
-     window.loadConfirmedHistory=()=>rows;
-     renderAllSavedDocs();
+     for(const snapshot of rows)
+       await testService.execute({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot});
    });
+   await page.waitForFunction(()=>loadConfirmedHistory().length===3,{timeout:10000});
+   const recordsBeforeVisualDraft=await page.evaluate(()=>JSON.stringify([...window.testRecords]));
    const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
    const meta={width,pages:{},isDemo:true,changesToProduction:false};
    for(const [route,id]of Object.entries(routes)){
@@ -61,7 +64,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        assert.equal(await page.locator('#receiptTotal').inputValue(),String(await page.evaluate(()=>bizCalcDocumentTotal(window.__visualDemoHistory[0]))));
        assert.equal(await page.locator('#paymentMethod').inputValue(),'銀行振込');
        assert.equal(await page.evaluate(()=>JSON.stringify(window.__visualDemoHistory)),before,'conversion preview must not change source estimate');
-       assert.equal(await page.evaluate(()=>window.testRecords.size),0,'draft conversion must not create Firestore records');
+       assert.equal(await page.evaluate(()=>JSON.stringify([...window.testRecords])),recordsBeforeVisualDraft,'draft conversion must not create or update Firestore records');
        await page.evaluate(()=>{document.getElementById('tsukiSavedDocType').value='';renderAllSavedDocs();bizSwitchPage('savedDocs');});
      }
      if(route==='calendar'){
