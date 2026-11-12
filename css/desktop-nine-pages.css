@@ -169,6 +169,12 @@
  body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table td{font-size:13px;line-height:1.35;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main #expenseRows tr[hidden]{display:none!important;}
  body.tsuki-ui #pageExpenses .tsuki-exp-main #expenseRows .biz-btn{min-height:27px;padding:4px 7px;font-size:11px;margin:1px 2px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-category{font-weight:750;color:#725000;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-status{display:inline-block;border-radius:14px;background:#eee;color:#555;padding:3px 8px;white-space:nowrap;font-weight:700;font-size:11px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .tsuki-exp-status.success{background:#d9f3d8;color:#295f2c;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table tbody td:nth-last-child(-n+3){white-space:nowrap;}
+ body.tsuki-ui #pageExpenses #expenseCsvExport{min-height:37px;padding:6px 11px;color:#a16c00;background:#fff9ed;border-color:#bd963e;border-radius:9px;font-weight:750;}
+
  body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table-wrap{overflow-x:auto;}
  body.tsuki-ui #pageExpenses .tsuki-exp-pager{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #ececec;margin-top:13px;padding-top:12px;font-weight:700;font-size:13px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-pager>div{display:flex;align-items:center;gap:12px;}
