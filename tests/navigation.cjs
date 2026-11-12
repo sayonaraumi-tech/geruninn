@@ -34,6 +34,21 @@ async function checkPage(page,route){
      const styles=getComputedStyle(el);
      return [styles.getPropertyValue('--tsuki-nav').trim(),styles.getPropertyValue('--tsuki-accent').trim(),styles.getPropertyValue('--tsuki-size-body').trim()];
    }),['#171717','#B5964C','0.875rem']);
+   if(width===390){
+     for(const route of ['calendar','chohyo','savedDocs']){
+       const button=page.locator('#bizNav [data-page="'+route+'"]');
+       assert.equal(await button.evaluate(el=>getComputedStyle(el).position),'fixed');
+       assert(await button.isVisible());
+       await button.click();
+       await checkPage(page,route);
+       assert.match(await button.getAttribute('class')||'',/active/);
+     }
+     assert.equal(await page.locator('#bizNav [data-page="sales"]').isVisible(),false);
+     // The original HOME and 見積履歴 routes must remain accessible.
+     assert(await page.locator('#bizNav [data-page="estimates"]').isVisible());
+     await page.locator('#bizNav [data-page="estimates"]').click();
+     await checkPage(page,'estimates');
+   }
    await page.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});
    await page.evaluate(()=>bizSwitchPage('bank'));assert.match(await page.locator('#bankRows').innerText(),/ログイン/);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.evaluate(()=>bizSwitchPage('calendar'));
    await page.locator('#bizCloudAccountButton').click();
