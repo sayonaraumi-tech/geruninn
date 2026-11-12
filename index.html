@@ -1105,28 +1105,51 @@ dialog h2{font-size:15px}
 </div>
 
 <div id="pageCalendar" class="biz-page app-page">
- <div class="biz-title"><div><h1>日程</h1></div></div>
- <div class="biz-section">
-  <div class="biz-form-grid">
-   <div class="biz-field"><label for="calendarMonth">対象月</label><input type="month" id="calendarMonth" onchange="renderCalendarEvents()"></div>
-   <div class="biz-field"><label>&nbsp;</label><button id="googleCalendarSync" class="biz-btn ok" style="width:100%" onclick="bizGoogleSyncMonth()">Google日程を同期</button></div>
-   <div class="biz-field span2"><label for="calendarKeyword">検索 / 絞り込み</label><input id="calendarKeyword" placeholder="例：小野田" oninput="renderCalendarEvents()"></div>
+ <div class="biz-title tsuki-cal-title">
+  <div><h1>日程 <span class="tsuki-cal-subtitle">（工事予定・見積・現地調査）</span></h1></div>
+  <div class="tsuki-cal-toolbar">
+   <details class="tsuki-cal-menu" id="tsukiOnodaMenu"><summary class="biz-btn tsuki-cal-onoda">小野田直接導入 ▾</summary>
+    <div class="tsuki-cal-menu-list"><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;importOnodaFromCalendar()">日程を取り込み（工事・見積）</button><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;bizSwitchPage('chohyo');setDocType('onoda')">取込結果を確認</button><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;bizSwitchPage('settings')">取込設定</button></div>
+   </details>
+   <button type="button" id="googleCalendarSync" class="biz-btn" onclick="bizGoogleSyncMonth()">Google日程を同期</button>
+   <button type="button" class="biz-btn tsuki-cal-new" onclick="window.open('https://calendar.google.com/calendar/u/0/r/eventedit','_blank','noopener')">＋ 予定登録</button>
   </div>
-  <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
+ </div>
+ <div class="biz-section tsuki-cal-month-section">
   <div class="tsuki-month-panel" aria-label="施工月間カレンダー">
    <div class="tsuki-month-controls">
     <button type="button" class="biz-btn" onclick="tsukiShiftCalendarMonth(-1)" aria-label="前の月">‹</button>
-    <strong id="tsukiCalendarCaption"></strong>
     <button type="button" class="biz-btn" onclick="tsukiShiftCalendarMonth(1)" aria-label="次の月">›</button>
-    <button type="button" class="biz-btn" id="tsukiCalendarShowAll" onclick="tsukiSelectCalendarDay('')">全日程</button>
+    <strong id="tsukiCalendarCaption"></strong>
+    <button type="button" class="biz-btn" onclick="document.getElementById('calendarMonth').value=bizNowMonth();tsukiSelectCalendarDay('');renderCalendarEvents()">今月</button>
    </div>
-   <div class="tsuki-month-weekdays" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>
+   <div class="tsuki-month-weekdays" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
    <div id="tsukiMonthDays" class="tsuki-month-days" role="group" aria-label="月間日程"></div>
   </div>
+  <div class="tsuki-cal-utilities">
+   <label for="calendarMonth">対象月 <input type="month" id="calendarMonth" onchange="window.tsukiCalendarSelectedDay='';renderCalendarEvents()"></label>
+   <label for="calendarKeyword">検索 <input id="calendarKeyword" placeholder="現場名・小野田など" oninput="renderCalendarEvents()"></label>
+   <button type="button" class="biz-btn" id="tsukiCalendarShowAll" onclick="tsukiSelectCalendarDay('')">全日程</button>
+   <label class="tsuki-cal-review"><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 要確認</label>
+  </div>
+  <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
  </div>
- <div class="biz-section"><div class="biz-section-head"><h2 id="tsukiCalendarListTitle">同期済み日程</h2><label><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
+ <div class="biz-section tsuki-cal-list-section">
+  <div class="biz-section-head"><h2 id="tsukiCalendarListTitle">同期済み日程</h2>
+   <div class="tsuki-cal-filters" aria-label="予定の種類">
+    <button type="button" class="active" data-tsuki-kind="all" onclick="tsukiSetCalendarKind('all')">すべて</button>
+    <button type="button" data-tsuki-kind="work" onclick="tsukiSetCalendarKind('work')">工事</button>
+    <button type="button" data-tsuki-kind="estimate" onclick="tsukiSetCalendarKind('estimate')">見積</button>
+    <button type="button" data-tsuki-kind="survey" onclick="tsukiSetCalendarKind('survey')">調査</button>
+    <button type="button" data-tsuki-kind="other" onclick="tsukiSetCalendarKind('other')">その他</button>
+   </div>
+  </div>
+  <div id="tsukiCalendarCards" class="tsuki-cal-event-cards" aria-live="polite"></div>
+  <details class="tsuki-cal-original-table"><summary>同期日程一覧を表示</summary><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></details>
+ </div>
+ <div class="biz-section tsuki-cal-recent"><div class="biz-section-head"><h2>最近の予定</h2></div><div id="tsukiCalendarRecentRows" class="tsuki-cal-recent-rows"></div></div>
+ <div class="biz-section tsuki-cal-detail"><div class="biz-section-head"><h2>工事予定の詳細</h2></div><div id="tsukiCalendarDetail" class="tsuki-cal-detail-body">予定を選択すると詳細を表示します。</div></div>
 </div>
-
 
 <div id="pageEstimates" class="biz-page app-page">
  <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">正式請求書の発行前はここで管理します。発行後の入金確認は売上・入金台帳へ。元の見積書・取消／訂正帳票は保存帳票から確認できます。</div></div></div>
