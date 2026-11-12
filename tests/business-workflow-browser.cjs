@@ -180,6 +180,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  const calendarRow=page.locator('#calendarRows tr').filter({has:page.locator(`button[onclick*="${formalEventId}"]`)});
  assert.equal(await calendarRow.count(),0);
  await page.locator('#calendarReview').check();
+ await page.locator('#pageCalendar .tsuki-cal-original-table > summary').click();
  assert.match(await calendarRow.innerText(),/無効/);
  await calendarRow.getByRole('button',{name:'開く'}).click();
  assert.equal(await page.locator('[data-calendar-document]').first().isDisabled(),true);
