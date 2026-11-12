@@ -3571,7 +3571,7 @@ function renderCalendarEvents(){
   const selected=window.tsukiCalendarSelectedDay||'';
   const visible=selected&&selected.startsWith(m)?rows.filter(e=>e.date===selected):rows;
   const label=document.getElementById('tsukiCalendarListTitle');
-  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+' の予定':'日程';
+  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+' の予定':'同期済み日程';
   tbody.innerHTML=visible.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">'+(selected?'選択した日付に日程はありません。':'対象月の日程はまだ取り込まれていません。')+'</td></tr>';
   const cards=document.getElementById('tsukiCalendarCards');
   if(cards)cards.innerHTML=visible.map(e=>{
