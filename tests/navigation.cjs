@@ -28,6 +28,12 @@ async function checkPage(page,route){
    await context.route('**/js/firebase-driver.js',r=>r.fulfill({contentType:'text/javascript',body:fakeDriver}));
    await context.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:true,companyId:'tsukinowa',firebase:{apiKey:'test',authDomain:'test.firebaseapp.com',projectId:'test',appId:'test'}}}));
    await page.goto(base);
+   // Design tokens must be attached to the *real* application, not just
+   // an isolated style-guide fixture. Print/PDF media remains unaffected.
+   assert.deepEqual(await page.locator('body').evaluate(el=>{
+     const styles=getComputedStyle(el);
+     return [styles.getPropertyValue('--tsuki-nav').trim(),styles.getPropertyValue('--tsuki-accent').trim(),styles.getPropertyValue('--tsuki-size-body').trim()];
+   }),['#171717','#B5964C','0.875rem']);
    await page.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});
    await page.evaluate(()=>bizSwitchPage('bank'));assert.match(await page.locator('#bankRows').innerText(),/ログイン/);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.evaluate(()=>bizSwitchPage('calendar'));
    await page.locator('#bizCloudAccountButton').click();
