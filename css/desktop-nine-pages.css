@@ -96,6 +96,5 @@
   #pageExpenses .biz-form-grid, #pageBank .biz-form-grid, #pageSettings .biz-form-grid { align-items: end; }
 
   /* Document editor: only its business-page chrome, NEVER invoice/preview/PDF DOM. */
-  #pageChohyo.biz-page { background: transparent; }
   #pageChohyo .biz-title { margin-bottom: 10px; }
 }
