@@ -1153,7 +1153,8 @@ dialog h2{font-size:15px}
 </div>
 
 <div id="pageSettings" class="biz-page app-page">
- <div class="biz-title"><div><h1>Google Calendar API 接続設定</h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
+ <div class="biz-title"><div><h1>設定</h1><div class="biz-muted">既存の会社情報・接続・分類・アカウント設定を変更せずに整理して表示します。</div></div></div>
+ <nav id="tsukiSettingsNav" class="biz-section tsuki-settings-nav" aria-label="設定項目"></nav>
  <div class="biz-section">
   <div class="biz-section-head"><h2>Google Calendar 接続</h2><div id="googleCalendarStatus" class="biz-badge warn">未接続</div></div>
   <div class="biz-form-grid">
@@ -3577,6 +3578,25 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
 <script src="./js/historical-import-ui.js"></script>
 <script src="./js/accounting-ui.js"></script>
 <script>
+// Desktop settings menu points only to sections that actually exist.
+// No new configuration fields and no database changes.
+document.addEventListener('DOMContentLoaded',()=>{
+ const page=document.getElementById('pageSettings'),nav=document.getElementById('tsukiSettingsNav');
+ if(!page||!nav)return;
+ function refresh(){
+  const sections=[...page.children].filter(el=>el.classList?.contains('biz-section')&&el!==nav);
+  const signature=sections.map(el=>el.querySelector('.biz-section-head h2,summary')?.textContent?.trim()||'').join('|');
+  if(nav.dataset.sections===signature)return;
+  nav.dataset.sections=signature;nav.replaceChildren();
+  for(const [i,section] of sections.entries()){
+   const text=section.querySelector('.biz-section-head h2,summary')?.textContent?.trim();
+   if(!text)continue;
+   const button=document.createElement('button');button.type='button';button.className='biz-btn';
+   button.textContent=text;button.addEventListener('click',()=>section.scrollIntoView({block:'start',behavior:'smooth'}));nav.append(button);
+  }
+ }
+ refresh();new MutationObserver(refresh).observe(page,{childList:true});
+});
 // Desktop-only reconciliation workspace. Controls forward directly to the
 // original bank row handlers: no new accounting commands or matching logic.
 document.addEventListener('DOMContentLoaded',()=>{
