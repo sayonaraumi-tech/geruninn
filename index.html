@@ -3571,7 +3571,7 @@ function renderCalendarEvents(){
   const selected=window.tsukiCalendarSelectedDay||'';
   const visible=selected&&selected.startsWith(m)?rows.filter(e=>e.date===selected):rows;
   const label=document.getElementById('tsukiCalendarListTitle');
-  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+' の予定':'同期済み日程';
+  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+(matchMedia('(max-width:800px)').matches?' の施工日程':' の予定'):'同期済み日程';
   tbody.innerHTML=visible.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">'+(selected?'選択した日付に日程はありません。':'対象月の日程はまだ取り込まれていません。')+'</td></tr>';
   const cards=document.getElementById('tsukiCalendarCards');
   if(cards)cards.innerHTML=visible.map(e=>{
@@ -3594,7 +3594,7 @@ function tsukiRenderMonthCalendar(month,rows){
  const target=document.getElementById('tsukiMonthDays');if(!target)return;
  const match=/^(\d{4})-(\d{2})$/.exec(month);if(!match){target.replaceChildren();return;}
  const year=Number(match[1]),mon=Number(match[2]),start=new Date(year,mon-1,1);
- const days=new Date(year,mon,0).getDate(),prefix=start.getDay();
+ const days=new Date(year,mon,0).getDate(),compact=matchMedia('(max-width:800px)').matches,prefix=compact?(start.getDay()+6)%7:start.getDay();
  const countByDate=new Map();for(const e of rows)countByDate.set(e.date,(countByDate.get(e.date)||0)+1);
  const caption=document.getElementById('tsukiCalendarCaption');if(caption)caption.textContent=year+'年'+mon+'月';
  const fragment=document.createDocumentFragment();
@@ -3602,12 +3602,12 @@ function tsukiRenderMonthCalendar(month,rows){
   const day=slot-prefix+1,cell=document.createElement('button');cell.type='button';
   if(day<1||day>days){cell.className='tsuki-month-blank';cell.disabled=true;cell.setAttribute('aria-hidden','true');fragment.appendChild(cell);continue;}
   const date=month+'-'+String(day).padStart(2,'0'),n=countByDate.get(date)||0,weekday=slot%7;
-  cell.className='tsuki-month-day'+(weekday===6?' saturday':weekday===0?' sunday':'')+(window.tsukiCalendarSelectedDay===date?' selected':'')+(n?' has-work':'');
+  cell.className='tsuki-month-day'+(compact?(weekday===5?' saturday':weekday===6?' sunday':''):(weekday===6?' saturday':weekday===0?' sunday':''))+(window.tsukiCalendarSelectedDay===date?' selected':'')+(n?' has-work':'');
   cell.setAttribute('aria-label',date+' '+n+'件');cell.setAttribute('aria-pressed',String(window.tsukiCalendarSelectedDay===date));
   const number=document.createElement('span');number.textContent=String(day);cell.appendChild(number);
   if(n){const count=document.createElement('small');count.textContent=String(n)+'件';cell.appendChild(count);
    const events=rows.filter(e=>e.date===date).slice(0,2);
-   events.forEach(e=>{const chip=document.createElement('span');chip.className='tsuki-cal-cell-chip tsuki-kind-'+tsukiCalendarKindOf(e);chip.textContent=e.customerName||e.title||'予定';chip.title=e.title||'';cell.appendChild(chip);});
+   if(!compact)events.forEach(e=>{const chip=document.createElement('span');chip.className='tsuki-cal-cell-chip tsuki-kind-'+tsukiCalendarKindOf(e);chip.textContent=e.customerName||e.title||'予定';chip.title=e.title||'';cell.appendChild(chip);});
   }
   cell.addEventListener('click',()=>tsukiSelectCalendarDay(date));fragment.appendChild(cell);
  }
@@ -3735,6 +3735,14 @@ document.addEventListener('DOMContentLoaded',()=>{
 <script src="./js/year-end-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
 <script>
+// Restore the pre-PR45 mobile 日程 DOM. All other mobile pages stay untouched.
+document.addEventListener('DOMContentLoaded',()=>{
+ if(!matchMedia('(max-width:800px)').matches)return;
+ const calendar=document.getElementById('pageCalendar');
+ if(!calendar)return;
+ calendar.outerHTML="<div id=\"pageCalendar\" class=\"biz-page app-page\">\n <div class=\"biz-title\"><div><h1>日程</h1></div></div>\n <div class=\"biz-section\">\n  <div class=\"biz-form-grid\">\n   <div class=\"biz-field\"><label for=\"calendarMonth\">対象月</label><input type=\"month\" id=\"calendarMonth\" onchange=\"renderCalendarEvents()\"></div>\n   <div class=\"biz-field\"><label>&nbsp;</label><button id=\"googleCalendarSync\" class=\"biz-btn ok\" style=\"width:100%\" onclick=\"bizGoogleSyncMonth()\">Google日程を同期</button></div>\n   <div class=\"biz-field span2\"><label for=\"calendarKeyword\">検索 / 絞り込み</label><input id=\"calendarKeyword\" placeholder=\"例：小野田\" oninput=\"renderCalendarEvents()\"></div>\n  </div>\n  <button id=\"googleCalendarReconnect\" class=\"biz-btn primary\" hidden onclick=\"bizGoogleConnect()\">Googleに再接続</button>\n  <div class=\"tsuki-month-panel\" aria-label=\"施工月間カレンダー\">\n   <div class=\"tsuki-month-controls\">\n    <button type=\"button\" class=\"biz-btn\" onclick=\"tsukiShiftCalendarMonth(-1)\" aria-label=\"前の月\">‹</button>\n    <strong id=\"tsukiCalendarCaption\"></strong>\n    <button type=\"button\" class=\"biz-btn\" onclick=\"tsukiShiftCalendarMonth(1)\" aria-label=\"次の月\">›</button>\n    <button type=\"button\" class=\"biz-btn\" id=\"tsukiCalendarShowAll\" onclick=\"tsukiSelectCalendarDay('')\">全日程</button>\n   </div>\n   <div class=\"tsuki-month-weekdays\" aria-hidden=\"true\"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>\n   <div id=\"tsukiMonthDays\" class=\"tsuki-month-days\" role=\"group\" aria-label=\"月間日程\"></div>\n  </div>\n </div>\n <div class=\"biz-section\"><div class=\"biz-section-head\"><h2 id=\"tsukiCalendarListTitle\">同期済み日程</h2><label><input id=\"calendarReview\" type=\"checkbox\" onchange=\"renderCalendarEvents()\"> 非表示・要確認の日程</label><div class=\"biz-actions\"><button class=\"biz-btn\" onclick=\"importOnodaFromCalendar()\">小野田明細に取込</button></div></div><div class=\"biz-table-wrap\"><table class=\"biz-table\"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id=\"calendarRows\"></tbody></table></div></div>\n</div>\n";
+ bizCalendarCheckMonth();renderCalendarEvents();
+});
 // Desktop-only visual workspace. Existing accounting controls and records are moved,
 // never copied or rewritten; mobile remains on its original document structure.
 document.addEventListener('DOMContentLoaded',()=>{
