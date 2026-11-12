@@ -3797,6 +3797,25 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
   const q=get('tsukiExpSearch').value.toLowerCase(),mFilter=get('tsukiExpMethod').value,cFilter=get('tsukiExpCategory').value,sourceFilter=get('tsukiExpSource').value;
   const trs=[...get('expenseRows').querySelectorAll('tr')];
+  const tableHead=ledger.querySelector('thead tr');
+  if(tableHead&&!tableHead.dataset.expenseDecorated){
+   const buttons=tableHead.lastElementChild;if(buttons)buttons.textContent='操作';
+   const a=document.createElement('th'),b=document.createElement('th');
+   a.textContent='取込元';b.textContent='状態';tableHead.insertBefore(a,buttons);tableHead.insertBefore(b,buttons);
+   tableHead.dataset.expenseDecorated='true';
+  }
+  items.forEach((expense,i)=>{
+   const row=trs[i];if(!row||row.dataset.expenseDecorated||row.cells.length<7)return;
+   const status=A.expenseStatus(expense),orig=String(expense.sourceType||expense.importSource||expense.source||expense.importFile||'');
+   row.cells[4].textContent=method(expense);
+   row.cells[1].classList.add('tsuki-exp-category');
+   const src=document.createElement('td');src.textContent=/csv/i.test(orig)?'CSV':orig?'その他':'—';
+   const stat=document.createElement('td'),badge=document.createElement('span');
+   badge.className='tsuki-exp-status'+(/支払済|入金済|登録済/.test(status)?' success':'');
+   badge.textContent=status;stat.append(badge);
+   row.insertBefore(src,row.lastElementChild);row.insertBefore(stat,row.lastElementChild);
+   row.dataset.expenseDecorated='true';
+  });
   const filtered=items.map((e,i)=>({e,tr:trs[i]})).filter(({e})=>
    (!q||[e.expenseDate,e.category,e.vendor,e.description,method(e)].some(x=>String(x||'').toLowerCase().includes(q)))&&
    (!mFilter||method(e)===mFilter)&&(!cFilter||e.category===cFilter)&&(!sourceFilter||source(e)===sourceFilter));
