@@ -3761,7 +3761,7 @@ document.addEventListener('DOMContentLoaded',()=>{
  const period=document.createElement('div');period.className='tsuki-exp-period';
  period.innerHTML='<label for="expenseMonth">期間</label><span id="tsukiExpCaption"></span><button type="button" id="tsukiExpPrev" class="biz-btn" aria-label="前の月">‹</button><button type="button" id="tsukiExpNext" class="biz-btn" aria-label="次の月">›</button><span class="tsuki-exp-monthly">月次</span>';
  title.append(period);
- const mInput=get('expenseMonth');period.querySelector('label').after(mInput);
+ const mInput=get('expenseMonth');mInput.lang='ja-JP';period.querySelector('label').after(mInput);
  const kpis=document.createElement('div');kpis.className='tsuki-exp-kpis';
  kpis.innerHTML=[['支出合計','tsukiExpTotal'],['会社カード支出','tsukiExpCard'],['現金支出','tsukiExpCash'],['現金残高','tsukiExpBalance']].map(([label,id],i)=>'<div class="tsuki-exp-kpi'+(i===0?' selected':'')+'"><div class="tsuki-exp-kpi-label">'+label+'</div><strong id="'+id+'">—</strong><small id="'+id+'Count"></small></div>').join('');
  const shell=document.createElement('div');shell.className='tsuki-exp-workspace';
