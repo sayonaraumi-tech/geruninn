@@ -3829,7 +3829,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   });
   const body=get('expenseRows'),byKey=new Map([...body.querySelectorAll('tr')].map(row=>[row.dataset.expenseRowKey,row]));
   const ordered=items.map((e,i)=>({e,tr:byKey.get(expenseKey(e))||trs[i]}))
-   .sort((a,b)=>String(b.e.expenseDate||'').localeCompare(String(a.e.expenseDate||''))||String(b.e.id||'').localeCompare(String(a.e.id||''));
+   .sort((a,b)=>String(b.e.expenseDate||'').localeCompare(String(a.e.expenseDate||''))||String(b.e.id||'').localeCompare(String(a.e.id||'')));
   const expectedOrder=ordered.map(x=>x.tr).filter(Boolean),existingOrder=[...body.children];
   if(expectedOrder.length===existingOrder.length&&expectedOrder.some((row,i)=>row!==existingOrder[i]))body.replaceChildren(...expectedOrder);
   const filtered=ordered.filter(({e})=>
