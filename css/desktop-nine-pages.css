@@ -169,6 +169,69 @@
  body.tsuki-ui #pageDashboard .tsuki-home-visuals{display:grid;gap:10px;}
  body.tsuki-ui #pageDashboard .tsuki-home-visuals>.biz-section{margin:0;min-width:0;}
 }
+
+/* HOME: approved November 2026 visual reference; screen-only, no PDF impact. */
+@media screen and (min-width:801px) {
+ body.tsuki-ui #pageDashboard.active {max-width:1600px;display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;row-gap:14px;background:#f6f6f6;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-title{grid-column:1;margin:0;}
+ body.tsuki-ui #pageDashboard>.home-period{grid-column:2;align-self:center;margin:0;border:0;padding:0;background:transparent;box-shadow:none;}
+ body.tsuki-ui #pageDashboard>.home-period .biz-form-grid{display:flex;flex-wrap:wrap;align-items:end;gap:7px;}
+ body.tsuki-ui #pageDashboard>.home-period .biz-field{min-width:100px;margin:0;}
+ body.tsuki-ui #pageDashboard>.home-period label{font-size:11px;margin:0 0 3px;}
+ body.tsuki-ui #pageDashboard>.home-period :is(input,select){min-height:37px;background:#fff;border-radius:9px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary,
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals,
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom,
+ body.tsuki-ui #pageDashboard>.tsuki-home-note,
+ body.tsuki-ui #pageDashboard>.tsuki-home-details{grid-column:1/-1;margin:0;min-width:0;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{display:flex;align-items:center;gap:14px;min-width:0;min-height:116px;padding:16px 18px;border:1px solid #e8e8e8;border-radius:16px;background:#fff;box-shadow:0 3px 10px #00000010;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card:after{display:none;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .tsuki-kpi-sales{border-color:#c18a19;background:#fffcf4;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card h3{font-size:18px;font-weight:800;margin:0 0 6px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-kpi{font-size:clamp(22px,2vw,32px);font-weight:800;letter-spacing:-.5px;line-height:1.15;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals{display:grid;grid-template-columns:1.36fr 1fr;gap:16px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals >.biz-section{margin:0;min-height:290px;padding:18px 22px;border-radius:17px;background:#fff;border:1px solid #eee;box-shadow:0 3px 10px #0000000c;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals h2{font-size:20px;margin-bottom:12px;color:#171717;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-bars{height:195px;grid-template-columns:repeat(11,minmax(0,1fr));gap:5px;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-month{font-size:12px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-donut{min-height:205px;gap:20px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-ring{flex-basis:205px;width:205px;height:205px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-ring::before{inset:49px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-ring span{font-size:15px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-legend>div{font-size:14px;grid-template-columns:12px minmax(0,1fr) 45px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-legend i{width:12px;height:12px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom{display:grid;grid-template-columns:1.15fr 1fr .9fr;gap:16px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom>.biz-section{min-width:0;margin:0;padding:16px 18px;border-radius:17px;background:#fff;border:1px solid #eee;box-shadow:0 3px 10px #0000000c;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom h2{font-size:18px;margin:0 0 10px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-section-heading{display:flex;justify-content:space-between;align-items:start;gap:6px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-section-heading small{font-size:11px;font-weight:500;}
+ body.tsuki-ui #pageDashboard .tsuki-home-section-heading .biz-btn{font-size:11px;white-space:nowrap;padding:5px 6px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{border:1px solid #dedede;background:#fff;min-height:45px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button:hover{background:#fff5df;border-color:#b99755;}
+ body.tsuki-ui #pageDashboard .tsuki-home-preview-alerts{max-height:195px;gap:9px;font-size:13px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-preview-alerts p{background:#fafafa;padding:12px;border:1px solid #eee;border-left:3px solid #b99755;border-radius:9px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table{overflow:auto;max-height:220px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table{min-width:0;width:100%;font-size:12px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table th,body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table td{padding:8px 5px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-details{border:1px solid #e1e1e1;border-radius:10px;background:#fff;padding:12px 16px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-details>summary{cursor:pointer;font-weight:700;color:#725315;}
+ body.tsuki-ui #pageDashboard .tsuki-home-details .biz-card:after{display:none;}
+}
+@media screen {
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-symbol{font-size:34px;color:#b58112;line-height:1;flex-shrink:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table td{white-space:nowrap;}
+ body.tsuki-ui #pageDashboard .tsuki-home-note{font-size:11px;}
+}
+@media screen and (max-width:800px){
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom{display:grid;gap:10px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom>.biz-section{margin:0;min-width:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{min-height:42px;border:1px solid #dedede;border-radius:8px;background:#fff;}
+ body.tsuki-ui #pageDashboard .tsuki-home-primary .biz-card:after{display:none;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-details{margin-top:10px;}
+}
 /* Document workspace on desktop: preserve the existing A4 .invoice itself
    exactly, and scale only its ON-SCREEN preview in the existing wrapper.
    PDF export clones .invoice outside #previewArea, so no PDF styling changes. */
