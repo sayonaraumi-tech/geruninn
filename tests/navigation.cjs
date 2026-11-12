@@ -7,7 +7,7 @@ let serveOldWorker=false;
 const server=http.createServer((req,res)=>{
  const name=new URL(req.url,'http://localhost').pathname,file=path.join(root,name==='/'?'index.html':name);
  if(name==='/sw.js'&&serveOldWorker){res.setHeader('Content-Type','text/javascript');return res.end(fs.readFileSync(file,'utf8').replace(/const CACHE='[^']+';/,`const CACHE='${oldCache}';`));}
- try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
+ try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
 });
 const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
 const mobileRoutes=['calendar','estimates','chohyo','savedDocs'];
