@@ -54,7 +54,8 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        assert(await page.locator('#tsukiSavedDocDetail').isVisible());
        assert(await page.locator('#tsukiSavedDocDetail').getByText('請求書に変換').count()===1);
        assert(await page.locator('#tsukiSavedDocDetail').getByText('領収書に変換').count()===1);
-       await page.screenshot({path:path.join(dir,'savedDocs-detail-'+width+'.png'),fullPage:true});
+       await page.locator('#tsukiSavedDocDetail').scrollIntoViewIfNeeded();
+       await page.screenshot({path:path.join(dir,'savedDocs-detail-'+width+'.png'),fullPage:width>=801});
        const before=await page.evaluate(()=>JSON.stringify(loadConfirmedHistory()));
        await page.evaluate(()=>{
          window.confirm=()=>true;
@@ -86,7 +87,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
      const box=await page.locator('#'+id).boundingBox();
      const details=await page.locator('#'+id).evaluate(e=>({font:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize,background:getComputedStyle(e).backgroundColor}));
      meta.pages[route]={...details,width:box?.width,height:box?.height};
-     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:true});
+     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:width>=801});
      if(route==='bank'&&width===1280){
        const names=['.tsuki-bank-transactions','.tsuki-bank-candidates','.tsuki-bank-operations'];
        const rects=await Promise.all(names.map(n=>page.locator('#pageBank '+n).boundingBox()));
