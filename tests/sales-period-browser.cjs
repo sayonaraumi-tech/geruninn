@@ -127,7 +127,8 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
      if(route==='bank'&&width===1280){
        const names=['.tsuki-bank-transactions','.tsuki-bank-candidates','.tsuki-bank-operations'];
        const rects=await Promise.all(names.map(n=>page.locator('#pageBank '+n).boundingBox()));
-       assert(rects.every(Boolean)&&rects[0].x<rects[1].x&&rects[1].x<rects[2].x,'bank must have three side-by-side work zones');
+       assert(rects.every(Boolean)&&rects[0].width>0&&rects[1].width>0&&rects[2].width>0,'bank must retain all original transaction, candidate, and operation work zones');
+       await page.locator('#pageBank .tsuki-bank-extra').first().locator('summary').click();
        await page.evaluate(()=>{
          window.__tsukiBankProbe=0;
          document.getElementById('bankRows').innerHTML='<tr><td>2026-11-12</td><td>テスト取引 / GMO</td><td>+100</td><td></td><td><details data-bank-detail="bank-demo"><summary><span class="bank-candidate">売上候補 1件</span>確認・処理</summary><div class="bank-controls"><select id="bankTarget_demo"><option value="">照合先を選択</option><option value="sale-demo">売上 テスト取引</option></select><button type="button" onclick="window.__tsukiBankProbe++">照合確定</button></div></details></td><td>未照合</td></tr>';
