@@ -1106,7 +1106,7 @@ dialog h2{font-size:15px}
 
 <div id="pageCalendar" class="biz-page app-page">
  <div class="biz-title tsuki-cal-title">
-  <div><h1>日程 <span class="tsuki-cal-subtitle">（工事予定・見積・現地調査）</span></h1></div>
+  <div><h1>日程</h1></div>
   <div class="tsuki-cal-toolbar">
    <details class="tsuki-cal-menu" id="tsukiOnodaMenu"><summary class="biz-btn tsuki-cal-onoda">小野田直接導入 ▾</summary>
     <div class="tsuki-cal-menu-list"><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;importOnodaFromCalendar()">日程を取り込み（工事・見積）</button><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;bizSwitchPage('chohyo');setDocType('onoda')">取込結果を確認</button><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;bizSwitchPage('settings')">取込設定</button></div>
@@ -1136,19 +1136,11 @@ dialog h2{font-size:15px}
  </div>
  <div class="biz-section tsuki-cal-list-section">
   <div class="biz-section-head"><h2 id="tsukiCalendarListTitle">同期済み日程</h2>
-   <div class="tsuki-cal-filters" aria-label="予定の種類">
-    <button type="button" class="active" data-tsuki-kind="all" onclick="tsukiSetCalendarKind('all')">すべて</button>
-    <button type="button" data-tsuki-kind="work" onclick="tsukiSetCalendarKind('work')">工事</button>
-    <button type="button" data-tsuki-kind="estimate" onclick="tsukiSetCalendarKind('estimate')">見積</button>
-    <button type="button" data-tsuki-kind="survey" onclick="tsukiSetCalendarKind('survey')">調査</button>
-    <button type="button" data-tsuki-kind="other" onclick="tsukiSetCalendarKind('other')">その他</button>
-   </div>
+
   </div>
   <div id="tsukiCalendarCards" class="tsuki-cal-event-cards" aria-live="polite"></div>
   <details class="tsuki-cal-original-table"><summary>同期日程一覧を表示</summary><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></details>
  </div>
- <div class="biz-section tsuki-cal-recent"><div class="biz-section-head"><h2>最近の予定</h2></div><div id="tsukiCalendarRecentRows" class="tsuki-cal-recent-rows"></div></div>
- <div class="biz-section tsuki-cal-detail"><div class="biz-section-head"><h2>工事予定の詳細</h2></div><div id="tsukiCalendarDetail" class="tsuki-cal-detail-body">予定を選択すると詳細を表示します。</div></div>
 </div>
 
 <div id="pageEstimates" class="biz-page app-page">
@@ -3573,46 +3565,20 @@ function tsukiCalendarKindOf(e){
  if(/工事|施工|クロス|補修|張替|床/.test(text)||e.projectId)return 'work';
  return 'other';
 }
-function tsukiSetCalendarKind(kind){
- window.tsukiCalendarKind=kind;
- document.querySelectorAll('#pageCalendar [data-tsuki-kind]').forEach(b=>{b.classList.toggle('active',b.dataset.tsukiKind===kind);b.setAttribute('aria-pressed',String(b.dataset.tsukiKind===kind));});
- renderCalendarEvents();
-}
-function tsukiShowCalendarDetail(id,openModal){
- const e=bizState.calendar.find(x=>x.id===id);
- const area=document.getElementById('tsukiCalendarDetail');
- if(!area)return;
- if(!e){area.textContent='予定を選択すると詳細を表示します。';return;}
- window.tsukiCalendarDetailId=id;
- const rows=[['日時',bizFmtDate(e.date)+' '+(TsukinowaBusiness.calendarTime(e.start)||'')],['現場',e.customerName||e.title||''],['住所',e.location||e.area||''],['工事内容',e.description||e.projectCategory||''],['状態',bizEventStatus(e)]];
- area.innerHTML='<dl>'+rows.map(([key,val])=>'<div><dt>'+key+'</dt><dd>'+bizEsc(val)+'</dd></div>').join('')+'</dl><button type="button" class="biz-btn primary" id="tsukiCalendarDetailOpen">詳細・編集 / 売上登録</button>';
- area.querySelector('#tsukiCalendarDetailOpen').addEventListener('click',()=>openEventModal(e.id));
- if(openModal)openEventModal(e.id);
-}
 function renderCalendarEvents(){
   bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=document.getElementById('calendarReview').checked,documents=bizCalendarDocumentStates();const rows=bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
   tsukiRenderMonthCalendar(m,rows);
   const selected=window.tsukiCalendarSelectedDay||'';
   const visible=selected&&selected.startsWith(m)?rows.filter(e=>e.date===selected):rows;
   const label=document.getElementById('tsukiCalendarListTitle');
-  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+' の施工日程':'同期済み日程';
+  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+' の予定':'日程';
   tbody.innerHTML=visible.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">'+(selected?'選択した日付に日程はありません。':'対象月の日程はまだ取り込まれていません。')+'</td></tr>';
-  const kind=window.tsukiCalendarKind||'all';
-  const shown=visible.filter(e=>kind==='all'||tsukiCalendarKindOf(e)===kind);
   const cards=document.getElementById('tsukiCalendarCards');
-  if(cards)cards.innerHTML=shown.map(e=>{
-    const type=tsukiCalendarKindOf(e),label={work:'工事',estimate:'見積',survey:'調査',other:'その他'}[type];
+  if(cards)cards.innerHTML=visible.map(e=>{
     const title=bizEsc(e.customerName||e.title||'(無題)'),loc=bizEsc(e.location||e.area||''),time=bizEsc(TsukinowaBusiness.calendarTime(e.start)||'時刻未設定');
-    return '<article class="tsuki-cal-event"><div class="tsuki-cal-event-time">'+time+'</div><div class="tsuki-cal-event-main"><span class="tsuki-cal-kind tsuki-kind-'+type+'">'+label+'</span><strong>'+title+'</strong><div class="tsuki-cal-location">'+loc+'</div><small>'+bizEsc(e.description||bizEventStatus(e))+'</small></div><div class="tsuki-cal-event-actions"><button type="button" class="biz-btn" data-tsuki-open="'+bizEsc(e.id)+'">詳細・編集</button></div></article>';
-  }).join('')||'<p class="biz-muted">この条件の予定はありません。</p>';
-  if(cards)cards.querySelectorAll('[data-tsuki-open]').forEach(b=>b.addEventListener('click',()=>tsukiShowCalendarDetail(b.dataset.tsukiOpen,true)));
-  const recent=document.getElementById('tsukiCalendarRecentRows');
-  if(recent)recent.innerHTML=rows.slice(0,5).map(e=>'<button type="button" class="tsuki-cal-recent-row" data-tsuki-recent="'+bizEsc(e.id)+'"><span>'+bizEsc(bizFmtDate(e.date))+'</span><span class="tsuki-cal-kind tsuki-kind-'+tsukiCalendarKindOf(e)+'">'+({work:'工事',estimate:'見積',survey:'調査',other:'その他'}[tsukiCalendarKindOf(e)])+'</span><strong>'+bizEsc(e.customerName||e.title||'予定')+'</strong></button>').join('')||'<p class="biz-muted">予定はありません。</p>';
-  if(recent)recent.querySelectorAll('[data-tsuki-recent]').forEach(b=>b.addEventListener('click',()=>tsukiShowCalendarDetail(b.dataset.tsukiRecent,false)));
-  const selectedId=window.tsukiCalendarDetailId;
-  const chosen=rows.find(e=>e.id===selectedId)||shown[0]||rows[0];
-  tsukiShowCalendarDetail(chosen?.id||'',false);
-
+    return '<article class="tsuki-cal-event"><div class="tsuki-cal-event-time">'+time+'</div><div class="tsuki-cal-event-main"><strong>'+title+'</strong>'+(loc?'<div class="tsuki-cal-location">'+loc+'</div>':'')+(e.description?'<small>'+bizEsc(e.description)+'</small>':'')+'</div><div class="tsuki-cal-event-actions"><button type="button" class="biz-btn" data-tsuki-open="'+bizEsc(e.id)+'">開く</button></div></article>';
+  }).join('')||'<p class="biz-muted">予定はありません。</p>';
+  if(cards)cards.querySelectorAll('[data-tsuki-open]').forEach(b=>b.addEventListener('click',()=>openEventModal(b.dataset.tsukiOpen)));
 }
 function tsukiShiftCalendarMonth(step){
  const input=document.getElementById('calendarMonth');if(!input)return;
@@ -3641,7 +3607,7 @@ function tsukiRenderMonthCalendar(month,rows){
   const number=document.createElement('span');number.textContent=String(day);cell.appendChild(number);
   if(n){const count=document.createElement('small');count.textContent=String(n)+'件';cell.appendChild(count);
    const events=rows.filter(e=>e.date===date).slice(0,2);
-   events.forEach(e=>{const chip=document.createElement('span');chip.className='tsuki-cal-cell-chip tsuki-kind-'+tsukiCalendarKindOf(e);chip.textContent=({work:'工事',estimate:'見積',survey:'調査',other:'予定'}[tsukiCalendarKindOf(e)]);cell.appendChild(chip);});
+   events.forEach(e=>{const chip=document.createElement('span');chip.className='tsuki-cal-cell-chip tsuki-kind-'+tsukiCalendarKindOf(e);chip.textContent=e.customerName||e.title||'予定';chip.title=e.title||'';cell.appendChild(chip);});
   }
   cell.addEventListener('click',()=>tsukiSelectCalendarDay(date));fragment.appendChild(cell);
  }
