@@ -19,6 +19,22 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
      await page.evaluate(r=>bizSwitchPage(r),route);
      await page.evaluate(()=>scrollTo(0,0));
      assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
+     if(route==='calendar'){
+       const dayCells=page.locator('#tsukiMonthDays button.tsuki-month-day');
+       assert((await dayCells.count())>=28,'month calendar missing day buttons');
+       const day=dayCells.first();
+       await day.click();
+       assert.equal(await day.getAttribute('aria-pressed'),'true');
+       assert(await page.locator('#tsukiCalendarListTitle').innerText()!=='同期済み日程');
+       await page.locator('#tsukiCalendarShowAll').click();
+       assert.equal(await page.locator('#tsukiCalendarListTitle').innerText(),'同期済み日程');
+     }
+     if(width===1280&&(route==='sales'||route==='expenses')){
+       const first=route==='sales'?'#pageSales .sales-register':'#pageExpenses > .biz-section:nth-child(3)';
+       const second=route==='sales'?'#paymentRegistrationForm':'#pageExpenses > .biz-section:nth-child(2)';
+       const left=await page.locator(first).boundingBox(),right=await page.locator(second).boundingBox();
+       assert(left&&right&&left.x<right.x&&Math.abs(left.y-right.y)<4,route+' desktop working areas must be side by side');
+     }
      const box=await page.locator('#'+id).boundingBox();
      const details=await page.locator('#'+id).evaluate(e=>({font:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize,background:getComputedStyle(e).backgroundColor}));
      meta.pages[route]={...details,width:box?.width,height:box?.height};
