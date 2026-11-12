@@ -339,7 +339,7 @@ function createService(client,{now=()=>new Date()}={}){
        oc.linkedPaymentId!==p.paymentId||oc.deletedAt||oc.type!=='income'||
        a.amount!==amount||b.amount!==amount||r.amount!==amount||v.amount!==amount||c.amount!==amount||oc.amount!==amount||
        a.salesDate!==p.snapshot?.invoiceDate||b.paymentDate!==date||v.paymentDate!==date||
-       A.classificationKey(a.customer)!==A.classificationKey(p.customerName)||
+       A.classificationKey(a.customer).replace(/\s/g,'')!==A.classificationKey(p.customerName).replace(/\s/g,'')||
        (a.paymentIds||[]).some(id=>id!==oldPaymentId)||
        (link.payload.linkedReceiptId&&link.payload.linkedReceiptId!==docId)||
        (link.payload.receiptSaleId&&link.payload.receiptSaleId!==p.saleId))
