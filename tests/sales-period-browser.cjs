@@ -28,7 +28,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        const a=await page.locator('#pageChohyo > .editor-card').first().boundingBox();
        const b=await page.locator('#itemsCard').boundingBox();
        const c=await page.locator('#previewArea').boundingBox();
-       assert(a&&b&&c&&a.x<b.x&&b.x<c.x,'document must use three distinct edit/detail/preview columns');
+       assert(a&&b&&c&&a.x<b.x&&b.x<c.x,'document must use three distinct edit/detail/preview columns; '+JSON.stringify({a,b,c,layout:await page.locator('#pageChohyo').evaluate(el=>({display:getComputedStyle(el).display,columns:getComputedStyle(el).gridTemplateColumns,classes:el.className}))}));
        assert(await page.locator('#previewArea').isVisible(),'actual original A4 preview must be visible');
      }
      if(route==='calendar'){
