@@ -190,7 +190,7 @@
  body.tsuki-ui #pageDashboard>.tsuki-home-primary .tsuki-kpi-sales{border-color:#c18a19;background:#fffcf4;}
  body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card h3{font-size:18px;font-weight:800;margin:0 0 6px;}
  body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-kpi{font-size:clamp(22px,2vw,32px);font-weight:800;letter-spacing:-.5px;line-height:1.15;}
- body.tsuki-ui #pageDashboard>.tsuki-home-visuals{display:grid;grid-template-columns:1.36fr 1fr;gap:16px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals{display:grid;gap:16px;}
  body.tsuki-ui #pageDashboard>.tsuki-home-visuals >.biz-section{margin:0;min-height:290px;padding:18px 22px;border-radius:17px;background:#fff;border:1px solid #eee;box-shadow:0 3px 10px #0000000c;}
  body.tsuki-ui #pageDashboard>.tsuki-home-visuals h2{font-size:20px;margin-bottom:12px;color:#171717;}
  body.tsuki-ui #pageDashboard .tsuki-chart-bars{height:195px;grid-template-columns:repeat(11,minmax(0,1fr));gap:5px;}
