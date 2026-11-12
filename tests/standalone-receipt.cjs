@@ -206,7 +206,7 @@ test('calendar text 現金 is schedule-only; formal cash receipt is sole new acc
 
 test('confirmed duplicate Google cash may be soft-voided exactly once while keeping official receipt and audit data',async()=>{
  const h=await harness('admin'),run=cmd=>h.service.execute({...cmd,operationId:crypto.randomUUID()});
- const receipt=await run(save({documentId:'official-takei',docType:'receipt',customerName:'武井千春',receiptTotal:22000,invoiceDate:'2026-11-09',paymentMethod:'現金',tadashi:'クロス張替代'}));
+ const receipt=await run(save({documentId:'official-takei',docType:'receipt',customerName:'武井 千春',receiptTotal:22000,invoiceDate:'2026-11-09',paymentMethod:'現金',tadashi:'クロス張替代'}));
  const doc=h.list('documents').find(d=>d.id==='official-takei'),payment=h.list('payments')[0];
  const link=await run({type:'calendar',event:{googleEventId:'legacy-google-takei',googleCalendarId:'shared',title:'武井千春、別の工事、22000円、現金',date:'2026-11-09'}});
  const oldId='calendar_cash_'+link.id,oldPayId='pay_'+oldId,root='companies/tsukinowa/';
