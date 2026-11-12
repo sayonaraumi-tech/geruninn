@@ -77,7 +77,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   const canonical=await page.evaluate(month=>TsukinowaAccounting.expenseRegister(TsukinowaAccountingUI.getData().expenses||[],month).map(e=>[e.expenseDate,e.category,e.vendor,e.description,e.paymentMethod,String(e.amount)]),month);
   assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),canonical,'CSV contents must remain tied to actual accounting records, not reordered screen columns');
   if(page.viewportSize().width>=801){
-   const headings=await page.locator('#pageExpenses .tsuki-exp-main .biz-table thead th').allTextContents();
+   const headings=await page.locator('#expenseRows').evaluate(t=>[...t.closest('table').querySelectorAll('thead th')].map(th=>th.textContent));
    assert.deepEqual(headings.slice(1),['取引日','摘要・取引先','カテゴリ','支払方法','金額','取込元','状態','操作']);
    assert.equal(visible.length,canonical.length);
   }else{
