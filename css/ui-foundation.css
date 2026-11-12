@@ -185,3 +185,44 @@
     font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif) !important;
   }
 }
+
+/* V1.0 month view: read-only calendar presentation based on already synchronized
+ * schedule records. Selecting a date only filters existing rows; no write. */
+@media screen {
+ body.tsuki-ui #pageCalendar .tsuki-month-panel { margin-top: 12px; min-width: 0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-controls {
+   display: flex; align-items: center; justify-content: center; gap: 10px;
+   margin-bottom: 10px;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-controls strong { font-size: 15px; min-width: 105px; text-align: center; }
+ body.tsuki-ui #pageCalendar .tsuki-month-controls .biz-btn { min-height: 36px; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays,
+ body.tsuki-ui #pageCalendar .tsuki-month-days {
+   display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays { text-align: center; color: var(--tsuki-muted,#666); font-size: 12px; padding-bottom: 6px; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(6) { color: #2563b0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(7) { color: #bb3333; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day,
+ body.tsuki-ui #pageCalendar .tsuki-month-blank {
+   display: flex; flex-direction: column; align-items: center; justify-content: center;
+   min-width: 0; min-height: 58px; gap: 3px; border: 1px solid var(--tsuki-divider,#e0e2e6);
+   border-radius: 6px; background: var(--tsuki-surface,#fff);
+   font: 600 13px/1.3 var(--tsuki-font,sans-serif);
+   color: var(--tsuki-text,#252525); cursor: pointer; box-shadow: none;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-blank { background: var(--tsuki-canvas,#f5f5f3); border-color: transparent; cursor: default; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.saturday { color: #2563b0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.sunday { color: #bb3333; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day small { font: 600 10px/1.1 var(--tsuki-font,sans-serif); color: #956c22; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.has-work { border-left: 3px solid var(--tsuki-accent,#b99755); }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.selected { background: #fff6df; outline: 2px solid var(--tsuki-accent,#b99755); outline-offset: -2px; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day:focus-visible { outline: 3px solid #b99755; }
+ @media (max-width:800px) {
+   body.tsuki-ui #pageCalendar .tsuki-month-weekdays,
+   body.tsuki-ui #pageCalendar .tsuki-month-days { gap: 2px; }
+   body.tsuki-ui #pageCalendar .tsuki-month-day,
+   body.tsuki-ui #pageCalendar .tsuki-month-blank { min-height: 47px; font-size: 12px; border-radius: 4px; }
+   body.tsuki-ui #pageCalendar .tsuki-month-controls { gap: 6px; }
+ }
+}
