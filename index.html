@@ -3477,14 +3477,14 @@ function tsukiShowSavedDocDetail(index){
  '<p class="biz-muted">'+bizEsc(historySummary(state))+'</p>'+
  '<div class="tsuki-saved-detail-actions"><button class="biz-btn" type="button" onclick="openSavedDoc('+index+')">編集・確認</button>'+
  '<button class="biz-btn" type="button" onclick="redownloadSavedDoc('+index+')">PDFダウンロード</button>'+
- (state.docType==='estimate'?'<button class="biz-btn primary" type="button" onclick="openSavedDoc('+index+');requestEstimateInvoice()">請求書に変換</button>'+
+ (state.docType==='estimate'&&(!state.documentStatus||state.documentStatus==='active')&&state.sourceType!=='historicalPdfImport'?'<button class="biz-btn primary" type="button" onclick="openSavedDoc('+index+');requestEstimateInvoice()">請求書に変換</button>'+
  '<button class="biz-btn" type="button" onclick="tsukiEstimateReceiptDraft('+index+')">領収書に変換</button>':'')+'</div>';
  if(matchMedia('(max-width: 800px)').matches)box.scrollIntoView({behavior:'smooth',block:'start'});
 }
 // Conversion only prepares a new *unsaved* receipt draft. It does not confirm
 // a cash payment, overwrite an estimate, or write to the accounting ledger.
 function tsukiEstimateReceiptDraft(index){
- const state=loadConfirmedHistory()[index];if(!state||state.docType!=='estimate')return;
+ const state=loadConfirmedHistory()[index];if(!state||state.docType!=='estimate'||(state.documentStatus&&state.documentStatus!=='active')||state.sourceType==='historicalPdfImport')return;
  const total=bizCalcDocumentTotal(state);
  if(!Number.isFinite(total)||total<=0)return alert('見積金額を確認してください。');
  if(!confirm('領収書の下書きを作成します。実際の入金を確認してから正式保存してください。よろしいですか？'))return;
