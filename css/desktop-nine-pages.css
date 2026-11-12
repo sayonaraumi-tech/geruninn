@@ -126,12 +126,13 @@
    no new records, import commands, PDF rules or mobile selectors. */
 @media screen and (min-width:801px){
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop.active{
-  display:block;width:100%;max-width:none;padding:12px clamp(18px,1.25vw,28px) 25px;background:#f6f6f6;
+  display:block;width:100%;max-width:none;padding:2px clamp(18px,1.25vw,28px) 25px;background:#f6f6f6;
  }
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title{
   display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:11px;
  }
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title h1{font-size:30px;font-weight:850;line-height:1.3;white-space:nowrap;}
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title h1::before{content:"";display:inline-block;vertical-align:middle;width:37px;height:27px;margin-right:16px;border:4px solid #af7b12;border-radius:6px;box-shadow:inset 0 5px 0 -2px #af7b12;box-sizing:border-box;}
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title>div:first-child{display:flex;align-items:center;gap:16px;flex-wrap:wrap;}
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop .biz-title .biz-muted{display:inline;color:#555;font-size:14px;margin:0;}
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop .tsuki-exp-period{display:flex;align-items:center;gap:7px;white-space:nowrap;}
