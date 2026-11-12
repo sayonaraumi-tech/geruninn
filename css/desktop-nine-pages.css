@@ -395,7 +395,7 @@
  body.tsuki-ui #pageChohyo .tsuki-doc-preview-controls #tsukiDocExport{border-color:#c49b45;color:#9a6a0b;}
  body.tsuki-ui #pageChohyo>#previewArea .invoice{
   flex:0 0 auto;zoom:var(--tsuki-doc-preview-scale,.60);
-  transform:none;transform-origin:top left;margin:0;
+  transform:none;transform-origin:top left;margin:0 auto;
   box-shadow:0 1px 5px #0000001c;
  }
  body.tsuki-ui #pageChohyo .tsuki-document-customer>h2{
@@ -426,7 +426,7 @@
  body.tsuki-ui #pageChohyo .editor-card .form-group input,
  body.tsuki-ui #pageChohyo .editor-card .form-group textarea,
  body.tsuki-ui #pageChohyo .editor-card .form-group select{
-  width:100%;min-height:39px;padding:8px 11px;font-size:15px;font-weight:600;
+  width:100%;min-height:39px;padding:8px 11px;font-size:14px;font-weight:600;
   color:#171717;background:#fff;border:1px solid #dadada;border-radius:8px;
  }
  body.tsuki-ui #pageChohyo .editor-card :is(.item-row input,.item-row select){
