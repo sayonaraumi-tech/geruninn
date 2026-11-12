@@ -10,6 +10,26 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
 
  await page.evaluate(()=>{const wrap=payload=>({id:payload.id,payload});TsukinowaAccountingUI.hydrate({sales:[wrap({id:'partial',salesDate:'2026-08-01',invoiceDate:'2026-08-01',amount:779379,customer:'顧客,"引用"\n改行'}),wrap({id:'paid',salesDate:'2026-09-20',amount:1000,customer:'入金済顧客'}),wrap({id:'unpaid',salesDate:'2026-10-31',amount:2000,customer:'未入金顧客'}),wrap({id:'future',salesDate:'2026-11-01',amount:500})],payments:[wrap({id:'p',saleId:'partial',paymentDate:'2026-08-25',amount:770379,confirmation:'bank-confirmed'}),wrap({id:'paid-p',saleId:'paid',paymentDate:'2026-10-01',amount:1000,confirmation:'bank-confirmed'}),wrap({id:'final',saleId:'partial',paymentDate:'2026-11-01',amount:9000,confirmation:'bank-confirmed'}),wrap({id:'pending',saleId:'unpaid',paymentDate:'2026-10-31',amount:2000,confirmation:'pending-bank'})]});bizSwitchPage('sales');document.getElementById('homePeriodMode').value='custom';document.getElementById('homeStart').value='';});
 
+ if(process.env.UI_SCREENSHOT_ONLY==='1'){
+   const dir=process.env.PREVIEW_DIR||'ui-preview';
+   fs.mkdirSync(dir,{recursive:true});
+   const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
+   const meta={width,pages:{},isDemo:true,changesToProduction:false};
+   for(const [route,id]of Object.entries(routes)){
+     await page.evaluate(r=>bizSwitchPage(r),route);
+     await page.evaluate(()=>scrollTo(0,0));
+     assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
+     const box=await page.locator('#'+id).boundingBox();
+     const details=await page.locator('#'+id).evaluate(e=>({font:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize,background:getComputedStyle(e).backgroundColor}));
+     meta.pages[route]={...details,width:box?.width,height:box?.height};
+     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:true});
+   }
+   fs.writeFileSync(path.join(dir,'ui-meta-'+width+'.json'),JSON.stringify(meta,null,2));
+   assert.deepEqual(errors,[],'visual capture page errors');
+   console.log('PASS standalone V1.0 visual capture '+width+'px of nine real pages');
+   await page.close();
+   continue;
+ }
  await page.evaluate(()=>{document.getElementById('salesPeriodMode').value='custom';document.getElementById('salesStart').value='2026-08-01';document.getElementById('salesEnd').value='2026-11-30';renderSales();});
  const table=()=>page.locator('#salesRegisterTable table').evaluate(t=>[...t.rows].map(r=>[...r.cells].slice(0,-1).map(c=>c.textContent)));
  assert.equal(await page.getByRole('button',{name:'CSV出力',exact:true}).count(),1);
