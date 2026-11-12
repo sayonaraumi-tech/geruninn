@@ -53,7 +53,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
          ];
          const expenses=Array.from({length:37},(_,i)=>{
            const [d,vendor,description,category,paymentMethod,amount,sourceType]=examples[i%examples.length];
-           return {id:'visual-exp-'+i,expenseDate:'2026-'+(i<10?d:'11-'+String(21+(i-10)%10).padStart(2,'0')),amount:amount+(i>=10?i:0),vendor,description,category,paymentMethod,sourceType,bankAccount:'デモ',createdAt:{seconds:1}};
+           return {id:'visual-exp-'+i,expenseDate:'2026-11-'+String(i<10?30-i:1+(i-10)%20).padStart(2,'0'),amount:amount+(i>=10?i:0),vendor,description,category,paymentMethod,sourceType,bankAccount:'デモ',createdAt:{seconds:1}};
          });
          snapshot.expenses=expenses.map(e=>({id:e.id,payload:e}));
          TsukinowaAccountingUI.hydrate(snapshot);
