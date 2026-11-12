@@ -3902,6 +3902,90 @@ document.addEventListener('DOMContentLoaded',()=>{
  updateTitle();requestAnimationFrame(sizePreview);
 });
 
+// Desktop 銀行照合 visual shell. All bank rows, reconciliation controls and
+// accounting writes remain owned by the original bank renderer.
+document.addEventListener('DOMContentLoaded',()=>{
+ if(!matchMedia('(min-width:801px)').matches)return;
+ const page=document.getElementById('pageBank'),importBox=page?.querySelector('.bank-import'),transactions=page?.querySelector('.tsuki-bank-transactions'),rows=document.getElementById('bankRows');
+ if(!page||!importBox||!transactions||!rows||page.classList.contains('tsuki-bank-desktop'))return;
+ page.classList.add('tsuki-bank-desktop');
+ const title=page.querySelector('.biz-title');title.querySelector('.biz-muted').textContent='会社口座の入出金明細と既存の帳票・支出を照合します。';
+ const headingControls=document.createElement('div');headingControls.className='tsuki-bank-heading-controls';
+ headingControls.innerHTML='<label>口座 <select id="tsukiBankAccount"><option value="">すべて</option></select></label><label>期間 <input id="tsukiBankStart" type="date"></label><span>～</span><input id="tsukiBankEnd" type="date" aria-label="終了日">';
+ title.append(headingControls);
+ const stats=document.createElement('div');stats.className='tsuki-bank-stats';
+ stats.innerHTML='<div><span>取込明細数</span><strong id="tsukiBankTotal">0 件</strong></div><div><span>照合済</span><strong id="tsukiBankDone">0 件</strong></div><div><span>未照合</span><strong id="tsukiBankTodo">0 件</strong></div><div><span>照合率</span><strong id="tsukiBankRate">0 %</strong><progress id="tsukiBankProgress" value="0" max="100"></progress></div>';
+ title.after(stats);
+ const layout=document.createElement('div');layout.className='tsuki-bank-layout';
+ const side=document.createElement('aside');side.className='tsuki-bank-sidebar biz-section';
+ side.innerHTML='<button type="button" id="tsukiBankImportButton" class="biz-btn primary">銀行明細を取込（CSV）</button><h2>取込履歴</h2><div id="tsukiBankHistory"></div>';
+ const right=document.createElement('div');right.className='tsuki-bank-main';
+ const tabs=document.createElement('div');tabs.className='tsuki-bank-tabs';
+ tabs.innerHTML='<button type="button" data-bank-tab="todo" class="active">照合（未照合）</button><button type="button" data-bank-tab="done">照合済一覧</button><button type="button" data-bank-tab="all">すべて</button>';
+ const filters=document.createElement('div');filters.className='tsuki-bank-filter';
+ filters.innerHTML='<input id="tsukiBankSearch" type="search" placeholder="摘要・取引先・金額で検索"><label>取引種別：<select id="tsukiBankDirection"><option value="">すべて</option><option value="in">入金</option><option value="out">出金</option></select></label><label>金額：<select id="tsukiBankAmount"><option value="">すべて</option><option value="positive">金額あり</option></select></label><button type="button" id="tsukiBankOpenCandidates" class="biz-btn">候補を確認</button>';
+ const pager=document.createElement('div');pager.className='tsuki-bank-pager';
+ pager.innerHTML='<label>表示件数：<select id="tsukiBankPageSize"><option>20</option><option>50</option><option>100</option></select></label><span id="tsukiBankPaginationLabel"></span><button type="button" class="biz-btn" id="tsukiBankPrev">‹</button><span id="tsukiBankPage">1 / 1</span><button type="button" class="biz-btn" id="tsukiBankNext">›</button>';
+ const detail=document.createElement('details');detail.className='tsuki-bank-extra';
+ detail.innerHTML='<summary>照合候補・詳細操作</summary>';
+ const candidate=page.querySelector('.tsuki-bank-candidates'),operation=page.querySelector('.tsuki-bank-operations');
+ if(candidate)detail.append(candidate);
+ if(operation)detail.append(operation);
+ const extra=document.createElement('details');extra.className='tsuki-bank-extra';extra.innerHTML='<summary>CSV取込・前渡金・詳細管理</summary>';extra.append(importBox);
+ const others=[...page.children].filter(el=>el.classList.contains('biz-section')&&!['bank-import','tsuki-bank-transactions','tsuki-bank-candidates','tsuki-bank-operations'].some(c=>el.classList.contains(c)));
+ others.forEach(section=>extra.append(section));
+ right.append(tabs,filters,transactions,pager,detail,extra);
+ layout.append(side,right);stats.after(layout);
+ const state={tab:'todo',page:0},get=id=>document.getElementById(id),data=()=>window.TsukinowaAccountingUI?.getData?.()?.bankTransactions||[];
+ const recordDate=b=>String(b.bankTransactionDate||b.date||''),status=b=>String(b.status||((b.matched)?'照合済':'未照合')),active=b=>!b.deletedAt&&!b.cancelled;
+ const key=b=>String(b.id||'');
+ const today=new Date(),month=y=>String(y).padStart(2,'0');
+ const last=new Date(today.getFullYear(),today.getMonth()+1,0);
+ get('tsukiBankStart').value=today.getFullYear()+'-'+month(today.getMonth()+1)+'-01';
+ get('tsukiBankEnd').value=last.getFullYear()+'-'+month(last.getMonth()+1)+'-'+month(last.getDate());
+ function refresh(){
+  const all=data().filter(active);
+  const account=get('tsukiBankAccount'),selected=account.value,accounts=[...new Set(all.map(b=>String(b.bankAccount||'')).filter(Boolean))].sort();
+  if(accounts.length!==account.options.length-1||accounts.some((v,i)=>account.options[i+1]?.value!==v)){account.replaceChildren(new Option('すべて',''),...accounts.map(x=>new Option(x,x)));account.value=selected;}
+  const start=get('tsukiBankStart').value,end=get('tsukiBankEnd').value;
+  const scoped=all.filter(b=>(!account.value||b.bankAccount===account.value)&&(!start||recordDate(b)>=start)&&(!end||recordDate(b)<=end));
+  const done=scoped.filter(b=>['照合済','除外'].includes(status(b))),todo=scoped.filter(b=>!['照合済','除外'].includes(status(b)));
+  get('tsukiBankTotal').textContent=scoped.length+' 件';get('tsukiBankDone').textContent=done.length+' 件';get('tsukiBankTodo').textContent=todo.length+' 件';
+  const rate=scoped.length?Math.round(done.length*1000/scoped.length)/10:0;
+  get('tsukiBankRate').textContent=rate+' %';get('tsukiBankProgress').value=rate;
+  const groups=new Map();
+  for(const b of all){const date=recordDate(b).slice(0,7),acct=String(b.bankAccount||'銀行口座'),k=date+'|'+acct;groups.set(k,(groups.get(k)||0)+1);}
+  const history=get('tsukiBankHistory');
+  const signature=[...groups].sort().map(([k,n])=>k+':'+n).join(';');
+  if(history.dataset.signature!==signature){
+   history.replaceChildren(...[...groups].sort((a,b)=>b[0].localeCompare(a[0])).slice(0,12).map(([k,count])=>{const [m,acc]=k.split('|'),b=document.createElement('button');b.type='button';b.className='tsuki-bank-history-entry';b.textContent=m.replace('-','年')+'月　'+acc+'　'+count+'件';b.onclick=()=>{get('tsukiBankStart').value=m+'-01';const [y,mon]=m.split('-').map(Number),d=new Date(y,mon,0);get('tsukiBankEnd').value=m+'-'+month(d.getDate());account.value=acc;state.page=0;refresh();};return b;}));
+   history.dataset.signature=signature;
+  }
+  const query=get('tsukiBankSearch').value.toLowerCase(),direction=get('tsukiBankDirection').value,amountFilter=get('tsukiBankAmount').value;
+  const view=scoped.filter(b=>(state.tab==='all'||(state.tab==='done'?['照合済','除外'].includes(status(b)):!['照合済','除外'].includes(status(b))))&&(!direction||(direction==='in'?Number(b.incoming)>0:Number(b.outgoing)>0))&&(!amountFilter||(Number(b.incoming)>0||Number(b.outgoing)>0))&&(!query||[b.description,b.bankAccount,b.incoming,b.outgoing].some(x=>String(x||'').toLowerCase().includes(query))));
+  // Original renderer always owns DOM, including its inline reconciliation widgets.
+  const tbodyRows=[...rows.querySelectorAll(':scope > tr')],original=all.slice().sort((a,b)=>recordDate(b).localeCompare(recordDate(a)));
+  const byId=new Map(original.map((b,i)=>[key(b),tbodyRows[i]]));
+  let ordered=view.map(b=>byId.get(key(b))).filter(Boolean);
+  if(!window.TsukinowaBusinessUI?.isEnabled?.())ordered=tbodyRows.filter(r=>query?r.textContent.toLowerCase().includes(query):true);
+  const show=new Set(ordered.slice(state.page*Number(get('tsukiBankPageSize').value),(state.page+1)*Number(get('tsukiBankPageSize').value)));
+  const pages=Math.max(1,Math.ceil(ordered.length/Number(get('tsukiBankPageSize').value)));
+  state.page=Math.min(state.page,pages-1);
+  for(const row of tbodyRows)row.hidden=!show.has(row);
+  get('tsukiBankPaginationLabel').textContent=ordered.length+' 件';get('tsukiBankPage').textContent=(state.page+1)+' / '+pages;
+  get('tsukiBankPrev').disabled=state.page===0;get('tsukiBankNext').disabled=state.page>=pages-1;
+  tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.bankTab===state.tab));
+ }
+ tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.bankTab;state.page=0;if(window.TsukinowaBusinessUI?.isEnabled?.())window.accountingBankView?.(state.tab);else window.renderBank();requestAnimationFrame(refresh);});
+ for(const id of ['tsukiBankAccount','tsukiBankStart','tsukiBankEnd','tsukiBankSearch','tsukiBankDirection','tsukiBankAmount','tsukiBankPageSize'])get(id).addEventListener('input',()=>{state.page=0;refresh();});
+ get('tsukiBankPrev').onclick=()=>{state.page=Math.max(0,state.page-1);refresh();};
+ get('tsukiBankNext').onclick=()=>{state.page++;refresh();};
+ get('tsukiBankImportButton').onclick=()=>{extra.open=true;importBox.scrollIntoView({behavior:'smooth',block:'center'});get('bankFile')?.focus();};
+ get('tsukiBankOpenCandidates').onclick=()=>{detail.open=true;detail.scrollIntoView({behavior:'smooth',block:'nearest'});};
+ new MutationObserver(()=>requestAnimationFrame(refresh)).observe(rows,{childList:true});
+ requestAnimationFrame(refresh);
+});
+
 // Preview only on desktop. Original A4/PDF markup and rendering stay unchanged.
 document.addEventListener('DOMContentLoaded',()=>{
   if(matchMedia('(min-width: 801px)').matches)
