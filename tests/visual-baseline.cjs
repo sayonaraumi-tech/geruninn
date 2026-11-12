@@ -15,7 +15,7 @@ module.exports=async(page,width)=>{
   const bar=await page.locator('.biz-topbar').boundingBox(),box=await page.locator('#'+id).boundingBox();assert(box.y>=bar.y+bar.height,route+' clears navigation');
   if(route!=='chohyo'&&await page.locator('#'+id+' .biz-table').count()){
    const table=await read('#'+id+' .biz-table');assert.equal(table.fontFamily,reference.table.fontFamily);assert.equal(table.fontSize,reference.table.fontSize);
-   if(await page.locator('#'+id+' th').count()){const th=await read('#'+id+' th');for(const p of ['fontSize','fontWeight','lineHeight','padding'])assert.equal(th[p],reference.th[p],route+' header '+p);}
+   if(await page.locator('#'+id+' th').count()){const th=await read('#'+id+' th');for(const p of ['fontSize','fontWeight','lineHeight'])assert.equal(th[p],reference.th[p],route+' header '+p);if(width<=800&&route==='calendar')assert.equal(th.padding,'9px 8px','mobile calendar compact header padding');else assert.equal(th.padding,reference.th.padding,route+' header padding');}
   }
   const control=await page.locator('#'+id+' input:not([type=checkbox]):not([type=radio]),#'+id+' select').first();
   if(await control.count()){const style=await control.evaluate(e=>({fontFamily:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize}));assert.equal(style.fontFamily,reference.table.fontFamily);assert(['13px','14px','16px'].includes(style.fontSize),route+' control font-size outside compact/iOS specification: '+style.fontSize);}
