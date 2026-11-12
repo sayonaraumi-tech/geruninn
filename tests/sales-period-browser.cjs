@@ -33,6 +33,35 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
    const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
    const meta={width,pages:{},isDemo:true,changesToProduction:false};
    for(const [route,id]of Object.entries(routes)){
+
+     if(route==='expenses'&&width>=801){
+       await page.evaluate(()=>{
+         const current=TsukinowaAccountingUI.getData(),snapshot={};
+         for(const [kind,rows]of Object.entries(current))snapshot[kind]=(rows||[]).map(record=>({id:record.id,payload:{...record}}));
+         window.__expenseDemoSnapshot=snapshot;
+         const examples=[
+           ['11-12','ENEOS 板橋SS','ガソリン','車両費','法人銀行デビット',6430,'card-csv'],
+           ['11-10','カインズホーム','資材','材料仕入','クレジットカード',117645,'card-csv'],
+           ['11-07','クロス商事','資材','材料仕入','銀行振込',336276,'bank-csv'],
+           ['11-05','パーキング南池袋','駐車料金','旅費交通費','現金',1200,'cash-csv'],
+           ['11-03','セブンイレブン','消耗品','消耗品費','法人銀行デビット',7980,'card-csv'],
+           ['11-02','東京電力','事務所電気代','水道光熱費','銀行振込',18460,'bank-csv'],
+           ['11-01','ワタナベ建材','外注費','外注費','クレジットカード',250000,'card-csv'],
+           ['11-14','NTT','通信費','通信費','口座振替',14520,'bank-csv'],
+           ['11-17','材料購入','領収書','材料仕入','現金',8950,'cash-csv'],
+           ['11-20','パーキング','現場駐車場','旅費交通費','現金',2400,'cash-csv']
+         ];
+         const expenses=Array.from({length:37},(_,i)=>{
+           const [d,vendor,description,category,paymentMethod,amount,sourceType]=examples[i%examples.length];
+           return {id:'visual-exp-'+i,expenseDate:'2026-'+d,amount:amount+(i>=10?i:0),vendor,description,category,paymentMethod,sourceType,bankAccount:'デモ',createdAt:{seconds:1}};
+         });
+         snapshot.expenses=expenses.map(e=>({id:e.id,payload:e}));
+         TsukinowaAccountingUI.hydrate(snapshot);
+         document.getElementById('expenseMonth').value='2026-11';
+         renderExpenses();
+       });
+     }
+
      await page.evaluate(r=>bizSwitchPage(r),route);
      await page.evaluate(()=>scrollTo(0,0));
      assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
