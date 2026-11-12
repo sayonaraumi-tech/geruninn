@@ -64,24 +64,29 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);const beforeOriginal=await page.evaluate(()=>JSON.stringify([...testRecords]));const saves=await page.evaluate(()=>pdfSaves);await page.evaluate(()=>doPrint());await page.waitForFunction(n=>pdfSaves===n,saves+1);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimate.id);assert.equal(await page.locator('#customerName').isDisabled(),false);assert.equal(await page.evaluate(()=>collectFormState().calendarEventId),await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).id));assert.equal(await page.evaluate(()=>collectFormState().salesDate),'2026-10-20');
  await require('./estimate-issued-history-browser.cjs')(page);
- // Independent browser regression: imported cash without a customer appears in the actual sales table.
+ // Google calendar's cash label is not receipt evidence. A formal cash receipt
+ // must create the sole posted cash sale/payment, including on mobile.
  const cashResult=await page.evaluate(async()=>{
   const event={googleEventId:'browser-unnamed',googleCalendarId:'shared',date:'2026-10-05',start:'2026-10-05T09:00:00+09:00',end:'2026-10-05T10:00:00+09:00',location:'文京区',title:'クロス張り替え、14000、文京区、km、現金'};
   const run=title=>testService.execute({type:'calendar',operationId:crypto.randomUUID(),event:{...event,title}});
   const list=n=>[...testRecords].filter(([p])=>p.includes('/'+n+'/')).map(([,r])=>r.payload);
-  const docs=JSON.stringify(list('documents')),numbers=JSON.stringify([...testRecords].filter(([p])=>p.includes('/operations/documentNumber_'))),pdf=pdfSaves;
-  await run(event.title);await run(event.title);
-  const sale=()=>list('sales').find(s=>s.googleEventId===event.googleEventId),id=sale().id;
-  await run('山田様、'+event.title);const named=sale().customer;await run(event.title);const unnamed=sale().customer;
-  const pay=()=>list('payments').filter(p=>p.saleId===id),ledger=()=>list('cashLedger').filter(p=>p.linkedPaymentId===pay()[0].id);
-  const payments=JSON.stringify(pay()),cash=JSON.stringify(list('cashLedger'));
-  await run(event.title.replace('14000','15000'));await run(event.title.replace('、現金',''));
-  return {named,unnamed,id,sale:sale(),payments:pay(),cashCount:ledger().length,preserved:payments===JSON.stringify(pay())&&cash===JSON.stringify(list('cashLedger')),noDocuments:docs===JSON.stringify(list('documents'))&&numbers===JSON.stringify([...testRecords].filter(([p])=>p.includes('/operations/documentNumber_')))&&pdf===pdfSaves,count:list('sales').filter(s=>s.googleEventId===event.googleEventId).length};
+  const initialSales=list('sales').length,initialPayments=list('payments').length,initialCash=list('cashLedger').length;
+  const link=await run(event.title);await run('山田様、'+event.title);await run(event.title.replace('14000','15000'));await run(event.title);
+  const scheduleOnly=list('sales').length===initialSales&&list('payments').length===initialPayments&&list('cashLedger').length===initialCash;
+  const saved=await testService.execute({type:'saveDocument',operationId:crypto.randomUUID(),expectedRevision:0,snapshot:{documentId:'browser-cash-receipt',docType:'receipt',customerName:'山田様',invoiceDate:event.date,receiptTotal:14000,paymentMethod:'現金',tadashi:'クロス張り替え代',calendarEventId:link.id}});
+  await run(event.title);
+  const sale=list('sales').find(s=>s.id===saved.saleId),payments=list('payments').filter(p=>p.saleId===saved.saleId);
+  const cash=list('cashLedger').filter(c=>c.linkedPaymentId===payments[0]?.id);
+  return {scheduleOnly,saleId:saved.saleId,sale,payments,cashCount:cash.length,salesAdded:list('sales').length-initialSales,paymentsAdded:list('payments').length-initialPayments,cashAdded:list('cashLedger').length-initialCash};
  });
- assert.equal(cashResult.named,'山田様');assert.equal(cashResult.unnamed,'現金客');assert.equal(cashResult.count,1);assert.equal(cashResult.sale.amount,14000);assert(cashResult.sale.accountingReviewRequired);assert.equal(cashResult.payments.length,1);assert.equal(cashResult.payments[0].method,'現金');assert.equal(cashResult.payments[0].confirmation,'cash-received');assert.equal(cashResult.cashCount,1);assert(cashResult.preserved);assert(cashResult.noDocuments);
- await page.waitForFunction(id=>bizState.sales.some(s=>s.id===id),cashResult.id);await page.evaluate(()=>{bizSwitchPage('sales');document.getElementById('salesMonth').value='2026-10';renderSales();});
- const cashRow=page.locator('#salesRows tr').filter({hasText:'現金客'});assert.equal(await cashRow.count(),1);assert.match(await cashRow.innerText(),/要確認/);assert.match(await cashRow.innerText(),/14,000/);assert.equal(await cashRow.getByRole('button',{name:'入金',exact:true}).count(),0);
- console.log(`PASS ${width}px unnamed cash: one sale/payment/mirror, customer add/remove, amount/cash review, no documents/PDF/number, sales table settled`);
+ assert(cashResult.scheduleOnly);
+ assert.equal(cashResult.salesAdded,1);assert.equal(cashResult.paymentsAdded,1);assert.equal(cashResult.cashAdded,1);
+ assert.equal(cashResult.payments[0].confirmation,'cash-received');assert.equal(cashResult.cashCount,1);
+ await page.waitForFunction(id=>bizState.sales.some(s=>s.id===id),cashResult.saleId);
+ await page.evaluate(()=>{bizSwitchPage('sales');document.getElementById('salesMonth').value='2026-10';renderSales();});
+ const cashRow=page.locator(`#salesRows tr[data-sale-id="${cashResult.saleId}"]`);
+ assert.equal(await cashRow.count(),1);assert.match(await cashRow.innerText(),/入金済/);assert.doesNotMatch(await cashRow.innerText(),/要確認/);
+ console.log(`PASS ${width}px Google cash schedule-only, formal receipt one sale/payment/mirror, sales status paid`);
  // Real calendar detail confirmation, with isolated records and no live Calendar requests.
  const manualId=await page.evaluate(async()=>{const id='manual-confirm';await testClient.put('calendarLinks',id,{id,googleEventId:id,date:'2026-10-19',title:'太陽様 クロス張り替え、14000、文京区、km、現金'},{operationId:'seed-manual',expectedRevision:0});return id;});
  await page.waitForFunction(id=>bizState.calendar.some(e=>e.id===id),manualId);await page.evaluate(id=>openEventModal(id),manualId);
