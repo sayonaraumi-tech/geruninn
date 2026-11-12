@@ -116,18 +116,74 @@
   body.tsuki-ui #pageSales > #paymentRegistrationForm {
     grid-column: 2; grid-row: 2; min-width: 0;
   }
-  body.tsuki-ui #pageExpenses > .biz-section:nth-child(2) {
-    grid-column: 2; grid-row: 2; min-width: 0;
-  }
-  body.tsuki-ui #pageExpenses > .biz-section:nth-child(3) {
-    grid-column: 1; grid-row: 2; min-width: 0;
-  }
-  body.tsuki-ui #pageExpenses > .biz-section:nth-child(n+4) {
-    grid-column: 1 / -1; min-width: 0;
-  }
   body.tsuki-ui #pageSales :is(.biz-table-wrap,#salesRegisterTable),
   body.tsuki-ui #pageExpenses .biz-table-wrap { max-width: 100%; overflow-x: auto; }
   body.tsuki-ui #paymentRegistrationForm .biz-form-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+
+
+/* Desktop-only 支出・現金. One workspace and the original accounting modules:
+   no new records, import commands, PDF rules or mobile selectors. */
+@media screen and (min-width:801px){
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop.active{
+  display:block;width:100%;max-width:none;padding:16px clamp(18px,1.25vw,28px) 30px;background:#f6f6f6;
+ }
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:15px;
+ }
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop>.biz-title h1{font-size:30px;font-weight:850;line-height:1.3;}
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop .biz-title .biz-muted{display:inline;color:#666;font-size:14px;margin-left:15px;}
+ body.tsuki-ui #pageExpenses.tsuki-expense-desktop .tsuki-exp-period{display:flex;align-items:center;gap:7px;white-space:nowrap;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-period>label{font-weight:700;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-period input[type=month]{width:157px;max-width:157px;height:40px;font-size:15px;font-weight:700;border:1px solid #dedede;border-radius:8px;padding:6px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-period .biz-btn{height:37px;min-width:36px;border-radius:8px;font-size:19px;padding:5px 9px;background:#fff;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-period #tsukiExpCaption{font-size:14px;font-weight:700;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-monthly{border-radius:8px;padding:9px 20px;background:linear-gradient(#dfb752,#b17a0e);font-weight:750;color:#fff;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:15px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpi{min-width:0;min-height:114px;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:14px 21px;border-radius:15px;background:#fff;border:1px solid #e3e3e3;box-shadow:0 3px 8px #00000010;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpi.selected{background:#fffaf0;border-color:#b9963f;box-shadow:0 2px 8px #bc9e531d;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpi-label{font-size:19px;font-weight:800;color:#111;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpi strong{font-size:28px;font-weight:850;color:#141414;line-height:1.15;font-variant-numeric:tabular-nums;white-space:nowrap;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-kpi small{font-size:14px;color:#666;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-workspace{display:grid;grid-template-columns:306px minmax(0,1fr);align-items:stretch;gap:16px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar{margin:0;padding:13px 14px;border-radius:14px;background:#fff;min-height:550px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar h2{font-size:17px;font-weight:800;margin:5px 0 9px;color:#171717;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar>button{display:block;width:100%;min-height:39px;background:#fff;color:#141414;font-size:14px;font-weight:650;border:1px solid #dedede;border-radius:8px;text-align:left;padding:8px 12px;margin:7px 0;box-shadow:0 1px 4px #0000000d;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar>button:hover{background:#fff5df;border-color:#c69c41;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar>button.active{background:#fff1d3;border-color:#f0daac;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar hr{margin:14px 0 12px;border:0;border-top:1px solid #e9e9e9;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar>label{display:flex;flex-direction:column;gap:5px;margin-top:10px;font-weight:700;font-size:12px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-sidebar select{min-height:34px;width:100%;padding:6px 8px;border:1px solid #ddd;border-radius:7px;background:#fff;font-size:13px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main{min-width:0;background:#fff;border:1px solid #e3e3e3;border-radius:15px;padding:13px 14px 18px;box-shadow:0 3px 9px #0000000a;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-tabs{display:flex;gap:0;border-bottom:1px solid #e9e9e9;margin:-2px -4px 11px;padding:0;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-tabs button{min-width:178px;border-radius:9px 9px 0 0;padding:11px 18px;border:1px solid #dedede;background:#fbfbfb;color:#161616;font-weight:800;font-size:17px;cursor:pointer;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-tabs button.active{background:linear-gradient(#e0b54d,#b17b11);color:#fff;border-color:#bd8f2a;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar{display:flex;align-items:center;justify-content:space-between;gap:13px;margin-bottom:12px;}
+ body.tsuki-ui #pageExpenses #tsukiExpSearch{width:min(350px,48%);min-height:38px;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar label{display:flex;align-items:center;gap:8px;font-size:12px;white-space:nowrap;color:#444;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar select{width:82px;min-height:34px;border-radius:7px;border:1px solid #ddd;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main>.biz-section{margin:0;padding:0;border:0;border-radius:0;box-shadow:none;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main>.biz-section>.biz-section-head[hidden]{display:none!important;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table{font-size:13px;white-space:normal;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table th{font-size:12px;font-weight:800;background:#f5f5f5;color:#252525;white-space:nowrap;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table td{font-size:13px;line-height:1.35;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main #expenseRows tr[hidden]{display:none!important;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main #expenseRows .biz-btn{min-height:27px;padding:4px 7px;font-size:11px;margin:1px 2px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-main .biz-table-wrap{overflow-x:auto;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-pager{display:flex;align-items:center;justify-content:space-between;border-top:1px solid #ececec;margin-top:13px;padding-top:12px;font-weight:700;font-size:13px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-pager>div{display:flex;align-items:center;gap:12px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-pager .biz-btn{min-width:34px;padding:5px 9px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-cash-panel[hidden],body.tsuki-ui #pageExpenses .tsuki-exp-main>.biz-section[hidden],body.tsuki-ui #pageExpenses .tsuki-exp-table-toolbar[hidden],body.tsuki-ui #pageExpenses .tsuki-exp-pager[hidden]{display:none!important;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-cash-panel>.biz-section{margin:12px 0;padding:12px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-reveal{margin-top:15px;border-top:1px solid #eee;padding-top:10px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-reveal>details{margin-top:8px;border:1px solid #e5e5e5;border-radius:9px;overflow:hidden;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-reveal>details>summary{padding:10px 14px;cursor:pointer;font-size:13px;font-weight:750;background:#fafafa;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-reveal>details>.biz-section{margin:0;border:0;border-radius:0;box-shadow:none;}
+ @media screen and (min-width:801px) and (max-width:1120px){
+  body.tsuki-ui #pageExpenses .tsuki-exp-workspace{grid-template-columns:245px minmax(0,1fr);}
+  body.tsuki-ui #pageExpenses .tsuki-exp-kpi strong{font-size:23px;}
+  body.tsuki-ui #pageExpenses .tsuki-exp-kpi{padding:11px;}
+ }
 }
 
 /* Reference image: four concise financial KPIs and three visual summaries.
