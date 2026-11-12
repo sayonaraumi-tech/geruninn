@@ -370,3 +370,50 @@
    min-height:34px;justify-content:center;font-size:11px;
  }
 }
+
+/* Calendar: preserve the same underlying event controls on a narrow screen. */
+@media screen and (max-width:800px){
+ body.tsuki-ui #pageCalendar .tsuki-cal-title{display:grid;gap:10px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-subtitle{font-size:12px;font-weight:600;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-toolbar{display:flex;flex-wrap:wrap;gap:6px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-toolbar .biz-btn,body.tsuki-ui #pageCalendar .tsuki-cal-menu>summary{min-height:42px;padding:8px 10px;font-size:12px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-menu{position:relative;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-menu>summary{list-style:none;cursor:pointer;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-menu-list{position:absolute;top:100%;left:0;z-index:10;background:white;border:1px solid #ddd;border-radius:8px;min-width:240px;box-shadow:0 4px 12px #0002;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-menu-list button{display:block;width:100%;border:0;background:#fff;padding:12px;text-align:left;font-size:13px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-onoda{background:#fff6df;border-color:#b99755;color:#815500;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-new{background:#b58a32;color:white;}
+ body.tsuki-ui #pageCalendar .tsuki-month-panel{margin:0;}
+ body.tsuki-ui #pageCalendar .tsuki-month-controls{justify-content:center;gap:4px;}
+ body.tsuki-ui #pageCalendar .tsuki-month-controls strong{min-width:130px;}
+ body.tsuki-ui #pageCalendar .tsuki-month-days,body.tsuki-ui #pageCalendar .tsuki-month-weekdays{gap:1px;}
+ body.tsuki-ui #pageCalendar .tsuki-month-day{min-height:53px;gap:1px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-cell-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:2px;border-radius:4px;font-size:9px;}
+ body.tsuki-ui #pageCalendar .tsuki-kind-work{background:#fff0bc;color:#855e00;}
+ body.tsuki-ui #pageCalendar .tsuki-kind-estimate{background:#e4f0ff;color:#1655a3;}
+ body.tsuki-ui #pageCalendar .tsuki-kind-survey{background:#e5f4e9;color:#246b4e;}
+ body.tsuki-ui #pageCalendar .tsuki-kind-other{background:#eee;color:#555;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-utilities{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:9px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-utilities label{display:flex;align-items:center;gap:3px;font-size:11px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-utilities input[type=month]{max-width:135px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-utilities input#calendarKeyword{width:145px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-utilities .biz-btn{min-height:38px;font-size:12px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-filters{display:flex;flex-wrap:wrap;gap:4px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-filters button{padding:6px 9px;border-radius:18px;border:1px solid #ddd;background:#fff;font-size:12px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-filters button.active{background:#b58a32;border-color:#b58a32;color:white;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event{display:grid;grid-template-columns:75px minmax(0,1fr);gap:8px;padding:12px 0;border-bottom:1px solid #eee;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event-time{background:#faf1df;padding:9px 4px;text-align:center;border-radius:7px;font-weight:700;font-size:12px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event-main{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event-main strong{font-size:13px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event-main .tsuki-cal-kind{font-size:11px;width:max-content;border-radius:9px;padding:2px 7px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event-actions{grid-column:2;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-event-actions button{min-height:38px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-original-table{margin-top:9px;font-size:11px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-recent-row{display:grid;grid-template-columns:60px 52px minmax(0,1fr);gap:6px;align-items:center;width:100%;background:#fff;border:0;border-bottom:1px solid #eee;padding:9px 0;text-align:left;font-size:12px;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-recent-row strong{overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-detail-body dl{margin:0;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-detail-body dl>div{display:grid;grid-template-columns:68px 1fr;gap:8px;padding:8px 0;border-bottom:1px solid #eee;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-detail-body dt{font-weight:700;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-detail-body dd{margin:0;overflow-wrap:anywhere;}
+ body.tsuki-ui #pageCalendar .tsuki-cal-detail-body .biz-btn{margin-top:10px;}
+}
