@@ -387,3 +387,175 @@
    display:grid;
  }
 }
+
+
+/* HOME reference v2: visual-only refinements against user-supplied 1648x928 image.
+   Scoped to dashboard being active. Does not alter other business pages or print/PDF. */
+@media screen and (min-width:801px){
+ body.tsuki-ui:has(#pageDashboard.active){background:#f5f5f5;color:#121212;font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;}
+ body.tsuki-ui:has(#pageDashboard.active) .biz-topbar{
+  height:56px;padding:0 clamp(16px,1.9vw,32px);gap:16px;
+  background:linear-gradient(#171819,#0e0f10);box-shadow:none;color:#fff;
+ }
+ body.tsuki-ui:has(#pageDashboard.active) .biz-brand{
+  display:flex;align-items:center;gap:12px;font-size:clamp(16px,1.3vw,23px);font-weight:800;
+  letter-spacing:0;color:#fff;line-height:1.1;
+ }
+ body.tsuki-ui:has(#pageDashboard.active) .biz-brand::before{
+  content:"";width:34px;height:34px;border-radius:50%;flex:none;
+  background:linear-gradient(135deg,#ffe7a6,#b77912);
+  -webkit-mask:radial-gradient(circle at 65% 36%,transparent 0 49%,#000 51%);
+  mask:radial-gradient(circle at 65% 36%,transparent 0 49%,#000 51%);
+ }
+ body.tsuki-ui:has(#pageDashboard.active) .biz-brand::after{
+  content:"geruninn   │   業務記帳システム";font-size:clamp(11px,.92vw,15px);font-weight:700;
+  color:#ececec;white-space:pre;margin-left:2px;
+ }
+ body.tsuki-ui:has(#pageDashboard.active) .biz-brand small{display:none;}
+ body.tsuki-ui:has(#pageDashboard.active) #bizNav{justify-content:space-around;min-width:0;gap:3px;}
+ body.tsuki-ui:has(#pageDashboard.active) #bizNav button{
+  padding:9px clamp(6px,.86vw,14px);font-size:clamp(11px,.92vw,15px);font-weight:700;
+  border-radius:7px;color:#f4f4f4;
+ }
+ body.tsuki-ui:has(#pageDashboard.active) #bizNav button.active{
+  background:linear-gradient(#d8b451,#a87916);color:#fff;box-shadow:inset 0 1px #e9cc83,0 2px 4px #0002;
+ }
+ body.tsuki-ui:has(#pageDashboard.active) #bizSyncState{display:none;}
+ body.tsuki-ui:has(#pageDashboard.active) #bizCloudAccountButton{
+  min-height:30px;padding:5px 9px;border-radius:7px;font-size:11px;background:#242424;color:#fff;border:1px solid #555;
+ }
+ body.tsuki-ui:has(#pageDashboard.active) #bizUserLabel{white-space:nowrap;font-weight:700;color:#eee;}
+ body.tsuki-ui #pageDashboard.active{
+  max-width:none;width:100%;padding:18px clamp(18px,1.8vw,32px) 28px;
+  row-gap:20px;column-gap:12px;background:#f5f5f5;
+ }
+ body.tsuki-ui #pageDashboard>.tsuki-home-title{align-self:center;padding:0;margin:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-heading{display:flex;align-items:center;gap:15px;min-width:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-heading>svg{display:block;width:48px;height:48px;color:#b58213;flex-shrink:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-heading h1{font-size:clamp(24px,1.9vw,32px);font-weight:900;letter-spacing:-.5px;line-height:1.2;white-space:nowrap;color:#0d0d0d;}
+ body.tsuki-ui #pageDashboard #dashPeriod{font-size:10px;color:#777;white-space:nowrap;margin-left:10px;align-self:end;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-title .biz-actions{display:none;}
+ body.tsuki-ui #pageDashboard>.home-period{align-self:center;}
+ body.tsuki-ui #pageDashboard .home-period .tsuki-home-period-top{display:flex;align-items:center;gap:9px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-period-caption{font-size:14px;font-weight:800;margin-right:4px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-month-display{
+  background:#fff;border:1px solid #d6d6d6;border-radius:9px;min-height:44px;
+  padding:7px 17px;min-width:168px;text-align:left;font-size:19px;font-weight:800;color:#111;cursor:pointer;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-month-display::after{content:"⌄";float:right;font-size:22px;line-height:19px;margin-left:12px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-month-step{
+  min-width:41px;min-height:43px;border-radius:9px;border:1px solid #d8d8d8;
+  background:#fff;color:#121212;font-size:29px;line-height:26px;cursor:pointer;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-period-segments{display:flex;gap:4px;align-items:center;margin-left:18px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-period-segments button{
+  min-height:43px;padding:8px 16px;border:1px solid #ddd;background:#fff;
+  border-radius:10px;font-size:15px;font-weight:800;color:#111;cursor:pointer;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-period-segments button[data-tsuki-active="true"]{
+  background:linear-gradient(#d5ad46,#ac7a0a);border-color:#c18c1a;color:#fff;
+ }
+ body.tsuki-ui #pageDashboard>.home-period .biz-form-grid{
+  position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;
+ }
+ body.tsuki-ui #pageDashboard>.home-period:has(#homePeriodMode option[value="custom"]:checked) .biz-form-grid{
+  position:static;left:auto;width:auto;height:auto;overflow:visible;display:flex;margin-top:8px;
+ }
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary{gap:20px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{
+  min-height:139px;border-radius:17px;padding:16px 19px;align-items:flex-start;gap:19px;
+  background:linear-gradient(125deg,#fff,#fbfbfb);box-shadow:0 5px 12px #00000013;
+ }
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .tsuki-kpi-sales{
+  background:linear-gradient(115deg,#fff9ec,#fffdf7);border:1.5px solid #bb8616;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-symbol{width:59px;min-width:59px;margin-top:3px;color:#b47b08;font-size:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-symbol svg{display:block;width:51px;height:51px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card h3{
+  margin:0 0 4px;font-size:clamp(18px,1.45vw,24px);color:#090909;font-weight:900;white-space:nowrap;
+ }
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-kpi{
+  font-size:clamp(22px,1.94vw,33px);font-weight:900;color:#080808;white-space:nowrap;letter-spacing:-.8px;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-change{
+  margin-top:8px;font-size:clamp(11px,1.05vw,17px);font-weight:800;color:#087b18;white-space:nowrap;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-change.negative{color:#bf3f32;}
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-change.is-neutral{color:#606875;font-weight:600;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals{grid-template-columns:1.36fr 1fr;gap:20px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals>.biz-section{
+  border-radius:18px;min-height:295px;padding:15px 20px 17px;
+  background:#fff;box-shadow:0 5px 12px #00000012;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-card-title{
+  display:flex;align-items:center;gap:10px;font-size:clamp(17px,1.42vw,23px);font-weight:900;
+  color:#0c0c0c;white-space:nowrap;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-card-title svg{display:block;width:31px;height:31px;color:#b67d06;flex-shrink:0;}
+ body.tsuki-ui #pageDashboard .tsuki-home-card-title small{font-size:13px;font-weight:600;}
+ body.tsuki-ui #pageDashboard .tsuki-home-card-title #tsukiHomeExpenseCaption{margin-left:2px;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-legend{
+  font-size:14px;color:#222;font-weight:600;gap:22px;margin:0 14px 6px;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-chart-legend span:first-child{color:#a57a19;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-body{display:grid;grid-template-columns:48px minmax(0,1fr);height:203px;gap:7px;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-axis{
+  display:flex;flex-direction:column;justify-content:space-between;text-align:right;padding-bottom:21px;
+  font-size:12px;color:#383838;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-chart-bars{
+  height:202px;background:repeating-linear-gradient(to bottom,transparent 0,transparent calc(25% - 1px),#dadde1 calc(25% - 1px),#dadde1 25%);
+  gap:7px;align-items:end;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-chart-columns{border-bottom:1px solid #dadde1;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-column{border-radius:2px 2px 0 0;}
+ body.tsuki-ui #pageDashboard .tsuki-chart-month{color:#131313;font-size:12px;font-weight:700;}
+ body.tsuki-ui #pageDashboard .tsuki-home-donut{gap:24px;min-height:214px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-ring{flex-basis:210px;width:210px;height:210px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-ring::before{inset:46px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-ring span{font-size:15px;color:#0a0a0a;line-height:1.5;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-legend{gap:9px;}
+ body.tsuki-ui #pageDashboard .tsuki-donut-legend>div{
+  grid-template-columns:17px minmax(0,1fr) 55px;font-size:15px;font-weight:700;
+  padding:4px 0;border-bottom:1px solid #eee;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-donut-legend i{width:17px;height:17px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom{grid-template-columns:1.16fr .93fr .87fr;gap:16px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom>.biz-section{
+  border-radius:17px;min-height:250px;padding:14px 18px 15px;
+  box-shadow:0 5px 12px #00000012;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-section-heading{align-items:center;}
+ body.tsuki-ui #pageDashboard .tsuki-home-section-heading .biz-btn{
+  color:#ad7b10;font-weight:800;border:none;background:transparent;font-size:13px;padding:5px 0;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table th{
+  background:#f4f4f4;color:#171717;font-size:13px;font-weight:800;white-space:nowrap;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table td{font-size:13px;font-weight:600;color:#111;}
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table th,
+ body.tsuki-ui #pageDashboard .tsuki-home-recent-table .biz-table td{padding:7px 9px;height:34px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-preview-alerts p{
+  margin:0;background:#fff;border:1px solid #e0e1e3;border-radius:11px;
+  padding:13px 13px;border-left:1px solid #e0e1e3;font-weight:700;font-size:14px;
+  color:#772b15;box-shadow:0 2px 5px #00000008;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-preview-alerts p::before{content:"!";display:inline-grid;place-items:center;width:19px;height:19px;margin-right:11px;color:white;background:#df5e45;border-radius:50%;font-weight:900;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts{gap:10px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{
+  min-height:55px;border-radius:12px;font-size:16px;font-weight:800;color:#0c0c0c;
+  box-shadow:0 2px 4px #00000012;
+ }
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button:focus-visible,
+ body.tsuki-ui #pageDashboard .tsuki-home-period-top button:focus-visible{outline:2px solid #b78013;outline-offset:2px;}
+}
+@media screen and (min-width:801px) and (max-width:1350px){
+ body.tsuki-ui:has(#pageDashboard.active) .biz-brand::after{content:"geruninn";font-size:12px;}
+ body.tsuki-ui:has(#pageDashboard.active) #bizNav button{padding:9px 6px;font-size:12px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-period-segments{margin-left:2px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-month-display{min-width:130px;font-size:14px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-symbol{min-width:44px;width:44px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-kpi-symbol svg{width:42px;height:42px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{gap:10px;padding:13px;}
+ body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{font-size:12px;}
+}
