@@ -1,0 +1,101 @@
+/* Desktop-only visual migration for the nine business screens.
+ * Keep all accounting/receipt logic, PDF preview and mobile layouts untouched.
+ * Uses the shared tokens from PR #39. No document/PDF selectors. */
+@media screen and (min-width: 801px) {
+  body:has(#bizNav) { background: var(--tsuki-canvas, #F2F3F5); color: var(--tsuki-text, #202124); font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif); }
+  #bizNav { gap: 2px; }
+  #bizNav button { border-radius: 5px; padding: 9px 11px; font-size: 13px; }
+  #bizNav button.active { background: #35312a; color: #e5c784; box-shadow: inset 0 -2px 0 var(--tsuki-accent, #B5964C); }
+  #bizNav button:focus-visible { outline: 2px solid var(--tsuki-accent, #B5964C); outline-offset: -2px; }
+
+  /* Every desktop business page shares one compact workspace grid. */
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings).biz-page {
+    width: min(100%, 1480px); max-width: 1480px; margin-inline: auto;
+    padding: 16px 20px 36px; color: var(--tsuki-text, #202124);
+    font-size: var(--tsuki-size-body, 14px);
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-title {
+    margin-bottom: 12px; align-items: center; gap: 8px 16px;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-title h1 {
+    font-size: var(--tsuki-size-title, 22px); font-weight: 700; line-height: 1.35;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section {
+    margin-top: 10px; padding: 12px 16px; border-radius: 8px;
+    border: 1px solid var(--tsuki-divider, #E0E2E6);
+    background: var(--tsuki-surface, #FFFFFF); box-shadow: none;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section-head {
+    margin-bottom: 8px; gap: 8px 12px; padding-bottom: 7px;
+    border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-section h2 {
+    font-size: var(--tsuki-size-section, 17px); font-weight: 600;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-muted {
+    font-size: var(--tsuki-size-small, 12px); color: var(--tsuki-muted, #666B73);
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-actions { gap: 6px; }
+
+  /* Controls: retain original classes, event handlers, disabled state and IDs. */
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-btn {
+    min-height: 36px; padding: 6px 12px; border-radius: 6px;
+    font-size: 14px; font-weight: 600; border-color: var(--tsuki-divider, #E0E2E6);
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-btn.primary {
+    background: var(--tsuki-accent, #B5964C); border-color: var(--tsuki-accent, #B5964C);
+    color: #171717; box-shadow: none;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-field :is(input:not([type="checkbox"]),select,textarea),
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .sales-filters :is(input,select) {
+    min-height: 36px; padding: 6px 9px; border-radius: 6px;
+    border: 1px solid var(--tsuki-divider, #E0E2E6); font-size: 14px;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) :is(.biz-btn,input,select,textarea):focus-visible {
+    outline: 2px solid var(--tsuki-accent, #B5964C); outline-offset: 2px;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-form-grid { gap: 8px 12px; }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageChohyo,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-field label { font-size: 12px; margin-bottom: 4px; }
+
+  /* Data density, numeric columns, sticky headers, accessible scrolling. */
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table-wrap { max-width: 100%; overflow-x: auto; }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table {
+    width: 100%; border-collapse: collapse; font-size: 14px;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table :is(th,td) {
+    padding: 8px 10px; height: 40px; border-bottom: 1px solid var(--tsuki-divider, #E0E2E6);
+    vertical-align: middle;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-table th {
+    background: var(--tsuki-canvas, #F2F3F5); color: var(--tsuki-muted, #666B73);
+    font-size: 13px; font-weight: 600;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) :is(.biz-money,.tsuki-amount) {
+    text-align: right !important; font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  :is(#pageDashboard,#pageCalendar,#pageEstimates,#pageSavedDocs,#pageSales,#pageExpenses,#pageBank,#pageSettings) .biz-badge {
+    border-radius: 5px; font-size: 12px; padding: 3px 7px; font-weight: 600;
+  }
+
+  /* Home: compact KPI strip, not stacked decorative cards. */
+  #pageDashboard .biz-grid { gap: 8px; }
+  #pageDashboard .biz-card {
+    border-radius: 7px; padding: 12px 14px; box-shadow: none;
+    border: 1px solid var(--tsuki-divider, #E0E2E6);
+  }
+  #pageDashboard .biz-card h3 { margin-bottom: 4px; font-size: 12px; }
+  #pageDashboard .biz-kpi { font-size: 23px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  #pageDashboard .home-secondary { margin-top: 8px; }
+
+  /* Page-specific: compact filters and register actions. */
+  #pageCalendar .biz-form-grid { align-items: end; }
+  #pageEstimates .biz-section-head, #pageSavedDocs .biz-section-head { align-items: center; }
+  #pageSales .sales-filters { padding: 8px 10px; gap: 8px; background: var(--tsuki-canvas, #F2F3F5); }
+  #pageSales .sales-register { overflow: visible; }
+  #pageSales .sales-register :is(th,td) { font-variant-numeric: tabular-nums; }
+  #pageExpenses .biz-form-grid, #pageBank .biz-form-grid, #pageSettings .biz-form-grid { align-items: end; }
+
+  /* Document editor: only its business-page chrome, NEVER invoice/preview/PDF DOM. */
+  #pageChohyo.biz-page { background: transparent; }
+  #pageChohyo .biz-title { margin-bottom: 10px; }
+}
