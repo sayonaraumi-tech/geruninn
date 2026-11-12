@@ -225,16 +225,16 @@ function renderHomeCharts(d,period,m){
  if(!chart||!donut||!alerts)return;
  const end=new Date(period.end+'T12:00:00');
  const months=[];
- for(let offset=5;offset>=0;offset--){
+ for(let offset=10;offset>=0;offset--){
   const date=new Date(end.getFullYear(),end.getMonth()-offset,1);
   const month=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
   const monthly=A.aggregate(d,A.periodFilter({month}));
-  months.push({label:String(date.getMonth()+1)+'月',incoming:Math.max(0,Number(monthly.income)||0),expense:Math.max(0,Number(monthly.expenseTotal)||0)});
+  months.push({label:String(date.getMonth()+1)+'月',incoming:Math.max(0,Number(monthly.sales)||0),expense:Math.max(0,Number(monthly.expenseTotal)||0)});
  }
  const peak=Math.max(1,...months.flatMap(x=>[x.incoming,x.expense]));
- chart.innerHTML='<div class="tsuki-chart-legend"><span>■ 入金</span><span>■ 支出</span></div><div class="tsuki-chart-bars">'+months.map(x=>
+ chart.innerHTML='<div class="tsuki-chart-legend"><span>■ 売上</span><span>■ 支出</span></div><div class="tsuki-chart-bars">'+months.map(x=>
   '<div class="tsuki-chart-month"><div class="tsuki-chart-columns">'+
-  '<div class="tsuki-chart-column is-income" style="height:'+Math.max(1,Math.round(x.incoming/peak*100))+'%" title="'+esc(x.label+' 入金 '+money(x.incoming))+'"></div>'+
+  '<div class="tsuki-chart-column is-income" style="height:'+Math.max(1,Math.round(x.incoming/peak*100))+'%" title="'+esc(x.label+' 売上 '+money(x.incoming))+'"></div>'+
   '<div class="tsuki-chart-column is-expense" style="height:'+Math.max(1,Math.round(x.expense/peak*100))+'%" title="'+esc(x.label+' 支出 '+money(x.expense))+'"></div>'+
   '</div><span>'+esc(x.label)+'</span></div>').join('')+'</div>';
  const entries=Object.entries(m.categories||{}).filter(([,v])=>Number(v)>0).sort((a,b)=>b[1]-a[1]).slice(0,6);
@@ -253,6 +253,15 @@ root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth
  let p;try{p=homePeriod();}catch(e){el('dashPeriod').textContent=e.message;return;}const d=homeData(),m=A.aggregate(d,p);el('dashPeriod').textContent=p.start+' ～ '+p.end;for(const [id,k] of [['kpiSales','sales'],['kpiPayments','income'],['kpiExpenses','expenseTotal'],['kpiReceivable','receivables'],['kpiDifference','cashFlowDifference']])el(id).textContent=money(m[k]);el('kpiAttention').textContent=m.attention;for(const [id,label] of [['kpiSales','売上'],['kpiPayments','入金'],['kpiExpenses','支出']])el(id).previousElementSibling.textContent=label;
  el('attentionList').replaceChildren(...m.reminders.map(message=>{const p=document.createElement('p');p.textContent=message;return p;}));if(!m.reminders.length)el('attentionList').textContent='確認事項はありません。';
  el('homeLedger').innerHTML=table(['日付','区分','取引先','内容','支払方法','金額','状態'],homeRows(d,p).map(r=>{const v=homePresentation(r,d),status=(r.homeStatus||r.status.replace(/^照合済/,'入金済').split(' / ').filter(v=>!['銀行未照合','照合済','引落照合待ち'].includes(v)).join(' / ')).replace(/未入金/g,'入金待ち'),textCell=x=>'<td><span class="home-text" title="'+esc(x)+'">'+esc(x)+'</span></td>';return '<tr>'+cell(r.date)+'<td><span class="home-kind" data-kind="'+esc(v.type)+'" title="'+esc(v.hint)+'">'+esc(v.type)+'</span></td>'+[v.customer,v.description,r.method].map(textCell).join('')+'<td class="home-amount '+v.direction+'" title="'+esc(v.hint)+'">'+(v.direction==='in'?'＋':v.direction==='out'?'−':'')+esc(money(v.amount))+'</td><td><span class="home-status '+(/要確認|未入金|待ち/.test(status)?'pending':'')+'">'+esc(status)+'</span></td></tr>';}).join(''));
+ const recent=el('tsukiHomeRecent');
+ if(recent){
+  const recentRows=homeRows(d,p).slice(0,5);
+  recent.innerHTML=recentRows.length?table(['日付','取引内容','区分','金額','状態'],recentRows.map(r=>{
+   const v=homePresentation(r,d),status=(r.homeStatus||r.status||'').replace(/^照合済/,'入金済');
+   return '<tr>'+cell(r.date)+cell(esc(v.customer||v.description||''))+cell(esc(v.type))+
+    '<td class="biz-money">'+esc(money(v.amount))+'</td><td>'+esc(status)+'</td></tr>';
+  }).join('')):'<p class="biz-muted">期間内の取引はありません。</p>';
+ }
  renderHomeCharts(d,p,m);
  el('homeBreakdown').innerHTML=table(['内訳','金額'],[...Object.entries(m.categories).filter(([,v])=>v).map(([k,v])=>['支出 / '+(!k||k==='undefined'?'内容要確認':k),v]),...m.incomeChannels.map(c=>['入金経路 / '+c.channel+(c.platformName?' / '+c.platformName:''),c.amount])].map(([k,v])=>'<tr>'+cell(k)+cell(money(v))+'</tr>').join(''));root.renderYearEnd?.();};
 root.TsukinowaAccountingUI.homePeriod=homePeriod;root.TsukinowaAccountingUI.homeData=homeData;
