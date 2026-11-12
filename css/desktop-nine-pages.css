@@ -401,16 +401,6 @@
   display:flex;align-items:center;gap:12px;font-size:clamp(16px,1.3vw,23px);font-weight:800;
   letter-spacing:0;color:#fff;line-height:1.1;
  }
- body.tsuki-ui:has(#pageDashboard.active) .biz-brand::before{
-  content:"";width:34px;height:34px;border-radius:50%;flex:none;
-  background:linear-gradient(135deg,#ffe7a6,#b77912);
-  -webkit-mask:radial-gradient(circle at 65% 36%,transparent 0 49%,#000 51%);
-  mask:radial-gradient(circle at 65% 36%,transparent 0 49%,#000 51%);
- }
- body.tsuki-ui:has(#pageDashboard.active) .biz-brand::after{
-  content:"geruninn   │   業務記帳システム";font-size:clamp(11px,.92vw,15px);font-weight:700;
-  color:#ececec;white-space:pre;margin-left:2px;
- }
  body.tsuki-ui:has(#pageDashboard.active) .biz-brand small{display:none;}
  body.tsuki-ui:has(#pageDashboard.active) #bizNav{justify-content:space-around;min-width:0;gap:3px;}
  body.tsuki-ui:has(#pageDashboard.active) #bizNav button{
@@ -550,7 +540,6 @@
  body.tsuki-ui #pageDashboard .tsuki-home-period-top button:focus-visible{outline:2px solid #b78013;outline-offset:2px;}
 }
 @media screen and (min-width:801px) and (max-width:1350px){
- body.tsuki-ui:has(#pageDashboard.active) .biz-brand::after{content:"geruninn";font-size:12px;}
  body.tsuki-ui:has(#pageDashboard.active) #bizNav button{padding:9px 6px;font-size:12px;}
  body.tsuki-ui #pageDashboard .tsuki-home-period-segments{margin-left:2px;}
  body.tsuki-ui #pageDashboard .tsuki-home-month-display{min-width:130px;font-size:14px;}
