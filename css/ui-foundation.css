@@ -201,8 +201,8 @@
    display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px;
  }
  body.tsuki-ui #pageCalendar .tsuki-month-weekdays { text-align: center; color: var(--tsuki-muted,#666); font-size: 12px; padding-bottom: 6px; }
- body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(6) { color: #2563b0; }
- body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(7) { color: #bb3333; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(7) { color: #2563b0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(1) { color: #bb3333; }
  body.tsuki-ui #pageCalendar .tsuki-month-day,
  body.tsuki-ui #pageCalendar .tsuki-month-blank {
    display: flex; flex-direction: column; align-items: center; justify-content: center;
