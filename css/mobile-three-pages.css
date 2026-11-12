@@ -252,3 +252,33 @@
     content: "帳票履歴"; font-size: 13px;
   }
 }
+
+/* Mobile invoice editor follows the approved compact vertical reference.
+ * Preserve every existing field, button, source document and PDF template.
+ * Move injected save/discard controls after the form without moving DOM. */
+@media screen and (max-width:800px) {
+ body.tsuki-ui #pageChohyo.editor.app-page.active {
+   display:flex;flex-direction:column;gap:8px;width:100%;max-width:100%;
+ }
+ body.tsuki-ui #pageChohyo>.editor-card {width:100%;margin:0;min-width:0;}
+ body.tsuki-ui #pageChohyo>.editor-card:first-of-type {order:0;}
+ body.tsuki-ui #pageChohyo>#itemsCard {order:2;}
+ body.tsuki-ui #pageChohyo>.tsuki-document-extra {order:3;}
+ body.tsuki-ui #pageChohyo>.tsuki-document-actions {order:4;}
+ body.tsuki-ui #pageChohyo>button[data-formal-edit] {order:6;min-height:44px;width:100%;}
+ body.tsuki-ui #pageChohyo>button[data-formal-edit].primary {order:5;}
+ body.tsuki-ui #pageChohyo>#confirmedHistoryCard {order:8;}
+ body.tsuki-ui #pageChohyo>#previewArea {order:9;}
+ body.tsuki-ui #pageChohyo .editor-card h2 {font-size:17px;line-height:1.4;}
+ body.tsuki-ui #pageChohyo .editor-card h3 {font-size:14px;}
+ body.tsuki-ui #pageChohyo .editor-card .tabs {display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;background:transparent;padding:0;}
+ body.tsuki-ui #pageChohyo .tabs .tab{min-height:46px;border:1px solid #e8e7e3;border-radius:7px;background:#fff;font-size:13px;}
+ body.tsuki-ui #pageChohyo .tabs .tab.active{color:#fff;background:linear-gradient(135deg,#d4b574,#9c7a2e);}
+ body.tsuki-ui #pageChohyo .tabs .tab[data-type="estimate"]{order:1;}
+ body.tsuki-ui #pageChohyo .tabs .tab[data-type="invoice"]{order:2;}
+ body.tsuki-ui #pageChohyo .tabs .tab[data-type="receipt"]{order:3;}
+ body.tsuki-ui #pageChohyo .tabs .tab[data-type="onoda"]{order:4;grid-column:1/-1;min-height:36px;font-size:12px;}
+ body.tsuki-ui #pageChohyo .form-row {margin-bottom:8px;}
+ body.tsuki-ui #pageChohyo .form-group input,
+ body.tsuki-ui #pageChohyo .form-group select {min-height:44px;}
+}
