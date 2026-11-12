@@ -3968,6 +3968,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   const byId=new Map(tbodyRows.map(row=>[row.querySelector('details[data-bank-detail]')?.dataset.bankDetail,row]).filter(([id])=>id));
   let ordered=view.map(b=>byId.get(key(b))).filter(Boolean);
   if(!window.TsukinowaBusinessUI?.isEnabled?.())ordered=tbodyRows.filter(r=>query?r.textContent.toLowerCase().includes(query):true);
+  if(!byId.size&&tbodyRows.length){tbodyRows.forEach(row=>row.hidden=false);get('tsukiBankPaginationLabel').textContent='0 件';get('tsukiBankPage').textContent='1 / 1';get('tsukiBankPrev').disabled=true;get('tsukiBankNext').disabled=true;return;}
   const show=new Set(ordered.slice(state.page*Number(get('tsukiBankPageSize').value),(state.page+1)*Number(get('tsukiBankPageSize').value)));
   const pages=Math.max(1,Math.ceil(ordered.length/Number(get('tsukiBankPageSize').value)));
   state.page=Math.min(state.page,pages-1);
