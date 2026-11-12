@@ -394,7 +394,7 @@
 @media screen and (min-width:801px){
  body.tsuki-ui:has(#pageDashboard.active){background:#f5f5f5;color:#121212;font-family:"Noto Sans JP","Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;}
  body.tsuki-ui:has(#pageDashboard.active) .biz-topbar{
-  height:56px;padding:0 clamp(16px,1.9vw,32px);gap:16px;
+  height:52px;padding:0 clamp(16px,1.9vw,32px);gap:16px;
   background:linear-gradient(#171819,#0e0f10);box-shadow:none;color:#fff;
  }
  body.tsuki-ui:has(#pageDashboard.active) .biz-brand{
@@ -427,7 +427,7 @@
  body.tsuki-ui:has(#pageDashboard.active) #bizUserLabel{white-space:nowrap;font-weight:700;color:#eee;}
  body.tsuki-ui #pageDashboard.active{
   max-width:none;width:100%;padding:18px clamp(18px,1.8vw,32px) 28px;
-  row-gap:20px;column-gap:12px;background:#f5f5f5;
+  row-gap:12px;column-gap:12px;background:#f5f5f5;
  }
  body.tsuki-ui #pageDashboard>.tsuki-home-title{align-self:center;padding:0;margin:0;}
  body.tsuki-ui #pageDashboard .tsuki-home-heading{display:flex;align-items:center;gap:15px;min-width:0;}
@@ -564,14 +564,14 @@
 /* HOME screenshot reference alignment, visible content only. */
 @media screen and (min-width:801px){
  body.tsuki-ui #pageDashboard.active #dashPeriod{display:none;}
- body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{min-height:140px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-card{min-height:130px;}
  body.tsuki-ui #pageDashboard>.tsuki-home-primary .biz-kpi::before{content:"¥";margin-right:1px;}
- body.tsuki-ui #pageDashboard>.tsuki-home-visuals>.biz-section{min-height:299px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-visuals>.biz-section{min-height:275px;}
  body.tsuki-ui #pageDashboard .tsuki-chart-axis{position:relative;}
  body.tsuki-ui #pageDashboard .tsuki-chart-axis::before{
   content:"（万円）";position:absolute;top:-21px;left:-2px;font-size:12px;white-space:nowrap;color:#333;
  }
- body.tsuki-ui #pageDashboard>.tsuki-home-bottom>.biz-section{min-height:287px;}
+ body.tsuki-ui #pageDashboard>.tsuki-home-bottom>.biz-section{min-height:260px;}
  body.tsuki-ui #pageDashboard>.tsuki-home-bottom h2.tsuki-home-card-title{font-size:21px;font-weight:900;}
  body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button{
   display:flex;align-items:center;justify-content:center;gap:10px;font-size:16px;
@@ -586,4 +586,4 @@
  body.tsuki-ui #pageDashboard .tsuki-home-shortcuts button svg{width:21px;height:21px;}
 }
 
-@media screen and (min-width:801px){body.tsuki-ui #pageDashboard.active{padding-top:10px;}}
+@media screen and (min-width:801px){body.tsuki-ui #pageDashboard.active{padding-top:7px;}}
