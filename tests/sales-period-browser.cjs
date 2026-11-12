@@ -19,6 +19,18 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
      await page.evaluate(r=>bizSwitchPage(r),route);
      await page.evaluate(()=>scrollTo(0,0));
      assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
+     if(route==='dashboard' && width===1280){
+       assert.equal(await page.locator('#pageDashboard .tsuki-home-primary .biz-card').count(),4);
+       assert.equal(await page.locator('#tsukiHomeChart .tsuki-chart-month').count(),6);
+       assert(await page.locator('#tsukiHomeDonut .tsuki-donut-ring').count()===1);
+     }
+     if(route==='chohyo' && width===1280){
+       const a=await page.locator('#pageChohyo > .editor-card').first().boundingBox();
+       const b=await page.locator('#itemsCard').boundingBox();
+       const c=await page.locator('#previewArea').boundingBox();
+       assert(a&&b&&c&&a.x<b.x&&b.x<c.x,'document must use three distinct edit/detail/preview columns');
+       assert(await page.locator('#previewArea').isVisible(),'actual original A4 preview must be visible');
+     }
      if(route==='calendar'){
        const dayCells=page.locator('#tsukiMonthDays button.tsuki-month-day');
        assert((await dayCells.count())>=28,'month calendar missing day buttons');
