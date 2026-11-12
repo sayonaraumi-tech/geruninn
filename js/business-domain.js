@@ -256,7 +256,11 @@ function createService(client,{now=()=>new Date()}={}){
     if(saving)Object.assign(s,{calendarEventId});
     const document={...p,snapshot:saving?s:p.snapshot,saleId,paymentId,calendarEventId,googleEventId,calendarId,paymentDate};
     const sourceType=method==='現金'?'receipt-cash':'receipt';
-    const nextSale=invoiceReceipt?(saving?a:{...a,calendarEventId,googleEventId,calendarId}):{...(a||{}),id:saleId,sourceType,sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:formalContent(s),projectCategory:projectCategory(s),amount,salesDate:date,saleDate:date,invoiceDate:'',paymentMethod:method,calendarEventId,googleEventId,calendarId};
+    // A formal cash receipt with matching sale/payment/calendar evidence supersedes
+    // stale review flags inherited from Google calendar cash projections. Do not
+    // clear flags on invoice anchors, bank payments, or unresolved conflicts.
+    const clearedCashReview=method==='現金'&&!invoiceReceipt?{accountingReviewRequired:false,reviewRequired:false,reviewReason:''}:{};
+    const nextSale=invoiceReceipt?(saving?a:{...a,calendarEventId,googleEventId,calendarId}):{...(a||{}),id:saleId,sourceType,sourceId:id,documentId:id,documentStatus:'active',customer:s.customerName,content:formalContent(s),projectCategory:projectCategory(s),amount,salesDate:date,saleDate:date,invoiceDate:'',paymentMethod:method,calendarEventId,googleEventId,calendarId,...clearedCashReview};
     const nextPayment={...(payment?.payload||{}),id:paymentId,paymentId,saleId,documentId:id,sourceId:id,sourceType,amount,paymentDate,date:paymentDate,method,confirmation:method==='現金'?'cash-received':'bank-confirmed',platformName:s.platformName||payment?.payload.platformName||'',memo:payment?.payload.memo||'領収書から登録'};
     // A complete graph is a true no-op, including Google flags after successful sync.
     const same=(x,y)=>core.canonical(x??null)===core.canonical(y??null);
@@ -540,7 +544,11 @@ function receiptAccountingNeedsRepair(row,rows){
  const invoiceReceipt=sale&&s.saleId===p.saleId&&sale.documentId&&sale.documentId!==row.id&&!['receipt','receipt-cash','calendar-cash','calendar-manual'].includes(sale.sourceType);
  const validAmount=sale&&total(s)===p.amount&&(sale.amount===p.amount||sale.amount>p.amount&&invoiceReceipt);
  const validCalendar=link&&A.live(link)&&link.receiptSaleId===p.saleId&&link.googleEventId&&link.officialAmount===sale?.amount&&(invoiceReceipt?link.linkedReceiptId&&(!link.linkedInvoiceId||link.linkedInvoiceId===sale.documentId):link.linkedReceiptId===row.id&&link.status==='領収済'&&link.date===date&&link.customerName===s.customerName&&link.title?.includes('領収済'));
- return !(sale&&A.live(sale)&&validAmount&&payment&&A.confirmed(payment)&&!payment.deletedAt&&payment.saleId===p.saleId&&payment.documentId===row.id&&payment.amount===p.amount&&payment.method===s.paymentMethod&&payment.paymentDate===(s.paymentDate||p.paymentDate||date)&&validCalendar&&(s.paymentMethod!=='現金'||cash&&!cash.deletedAt&&cash.amount===p.amount&&cash.date===payment.paymentDate));
+ // Existing cash receipts with otherwise complete accounting may still carry an
+ // inherited review flag. Require the normal full receipt reconciliation before
+ // clearing it; never infer settlement from the customer or amount alone.
+ const staleCashReview=s.paymentMethod==='現金'&&!invoiceReceipt&&sale?.sourceType==='receipt-cash'&&sale.documentId===row.id&&(sale.accountingReviewRequired||sale.reviewRequired);
+ return !!staleCashReview||!(sale&&A.live(sale)&&validAmount&&payment&&A.confirmed(payment)&&!payment.deletedAt&&payment.saleId===p.saleId&&payment.documentId===row.id&&payment.amount===p.amount&&payment.method===s.paymentMethod&&payment.paymentDate===(s.paymentDate||p.paymentDate||date)&&validCalendar&&(s.paymentMethod!=='現金'||cash&&!cash.deletedAt&&cash.amount===p.amount&&cash.date===payment.paymentDate));
 }
 function formalDocumentNeedsRepair(row,rows){
  const p=row.payload,s=p.snapshot||{};
