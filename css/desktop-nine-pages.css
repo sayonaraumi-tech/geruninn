@@ -135,9 +135,9 @@
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop .biz-title .biz-muted{display:inline;color:#666;font-size:14px;margin-left:15px;}
  body.tsuki-ui #pageExpenses.tsuki-expense-desktop .tsuki-exp-period{display:flex;align-items:center;gap:7px;white-space:nowrap;}
  body.tsuki-ui #pageExpenses .tsuki-exp-period>label{font-weight:700;}
- body.tsuki-ui #pageExpenses .tsuki-exp-period input[type=month]{width:157px;max-width:157px;height:40px;font-size:15px;font-weight:700;border:1px solid #dedede;border-radius:8px;padding:6px;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-period input[type=month]{width:157px;max-width:157px;height:40px;font-size:14px;font-weight:700;border:1px solid #dedede;border-radius:8px;padding:6px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-period .biz-btn{height:37px;min-width:36px;border-radius:8px;font-size:19px;padding:5px 9px;background:#fff;}
- body.tsuki-ui #pageExpenses .tsuki-exp-period #tsukiExpCaption{font-size:14px;font-weight:700;}
+ body.tsuki-ui #pageExpenses .tsuki-exp-period #tsukiExpCaption{display:none;}
  body.tsuki-ui #pageExpenses .tsuki-exp-monthly{border-radius:8px;padding:9px 20px;background:linear-gradient(#dfb752,#b17a0e);font-weight:750;color:#fff;}
  body.tsuki-ui #pageExpenses .tsuki-exp-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:15px;}
  body.tsuki-ui #pageExpenses .tsuki-exp-kpi{min-width:0;min-height:114px;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:14px 21px;border-radius:15px;background:#fff;border:1px solid #e3e3e3;box-shadow:0 3px 8px #00000010;}
