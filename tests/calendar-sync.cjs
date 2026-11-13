@@ -44,7 +44,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.goto(base);await page.waitForTimeout(200);
   assert.equal(await page.evaluate(()=>localStorage.getItem('tsukinowa_unrelated_preserved')),'yes');
   assert.equal(await page.evaluate(()=>loadConfirmedHistory()[0].customerName),'既存顧客');
-  await page.evaluate(()=>bizSwitchPage('calendar'));
+  await page.evaluate(()=>bizSwitchPage('calendar'));if(await page.locator('#pageCalendar .tsuki-cal-original-table summary').count())await page.locator('#pageCalendar .tsuki-cal-original-table summary').click();
   assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-09');
   assert.equal(await page.locator('#pageCalendar #icsFile, #pageCalendar #googleCalendarSelect, #pageCalendar #googleCalendarStatus').count(),0);
   assert.equal(await page.locator('#googleCalendarReconnect').isVisible(),false);
@@ -52,11 +52,11 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   await page.clock.setFixedTime(new Date('2026-10-01T03:00:00Z'));
   await page.evaluate(()=>bizCalendarCheckMonth());
   assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-10');
-  assert.match(await page.locator('#calendarRows').innerText(),/まだ取り込まれていません/);
+  assert.match(await page.locator('#calendarRows').textContent(),/まだ取り込まれていません/);
   assert.equal(await page.evaluate(()=>JSON.stringify(bizState)),preserved);
   await page.locator('#calendarMonth').fill('2026-09');
   await page.locator('#calendarMonth').dispatchEvent('change');
-  assert.match(await page.locator('#calendarRows').innerText(),/有休/);
+  assert.match(await page.locator('#calendarRows').textContent(),/有休/);
   await page.evaluate(()=>bizRefreshAll());
   assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-09');
   await page.evaluate(()=>bizGoogleConnect());
@@ -68,7 +68,7 @@ const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://lo
   const beforeOctober=await page.evaluate(()=>JSON.stringify(bizState.calendar));
   await page.locator('#googleCalendarSync').click();await page.waitForFunction(()=>!bizGoogleSyncing);
   assert.equal(await page.evaluate(()=>JSON.stringify(bizState.calendar)),beforeOctober);
-  assert.match(await page.locator('#calendarRows').innerText(),/まだ取り込まれていません/);
+  assert.match(await page.locator('#calendarRows').textContent(),/まだ取り込まれていません/);
   assert(requests.some(u=>u.searchParams.get('timeMin')==='2026-10-01T00:00:00+09:00'&&u.searchParams.get('timeMax')==='2026-11-01T00:00:00+09:00'));
   requests.length=0;
 

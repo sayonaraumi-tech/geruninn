@@ -1,0 +1,228 @@
+@media screen {
+  .tsuki-ui .tsuki-shell {
+    background-color: var(--tsuki-canvas);
+  }
+
+  .tsuki-ui .tsuki-topbar,
+  .tsuki-ui .tsuki-workspace {
+    box-sizing: border-box;
+    padding: var(--tsuki-space-4);
+    font: var(--tsuki-weight-regular) var(--tsuki-size-body)/var(--tsuki-line-height) var(--tsuki-font);
+  }
+
+  .tsuki-ui .tsuki-topbar {
+    background-color: var(--tsuki-nav);
+    color: var(--tsuki-surface);
+  }
+
+  .tsuki-ui .tsuki-workspace {
+    background-color: var(--tsuki-surface);
+    color: var(--tsuki-text);
+  }
+
+  .tsuki-ui .tsuki-page-title,
+  .tsuki-ui .tsuki-section-title {
+    margin: 0 0 var(--tsuki-space-2);
+    line-height: var(--tsuki-heading-line-height);
+  }
+
+  .tsuki-ui .tsuki-page-title {
+    font-size: var(--tsuki-size-title);
+    font-weight: var(--tsuki-weight-bold);
+  }
+
+  .tsuki-ui .tsuki-section-title {
+    font-size: var(--tsuki-size-section);
+    font-weight: var(--tsuki-weight-semibold);
+  }
+
+  .tsuki-ui .tsuki-help {
+    color: var(--tsuki-muted);
+    font-size: var(--tsuki-size-small);
+  }
+
+  .tsuki-ui .tsuki-table-scroll {
+    max-inline-size: 100%;
+    overflow-x: auto;
+  }
+
+  .tsuki-ui .tsuki-table {
+    inline-size: 100%;
+    border-collapse: collapse;
+    color: var(--tsuki-text);
+    font: var(--tsuki-weight-regular) var(--tsuki-size-body)/var(--tsuki-line-height) var(--tsuki-font);
+  }
+
+  .tsuki-ui .tsuki-table > :is(thead, tbody, tfoot) > tr {
+    block-size: var(--tsuki-table-row-height);
+  }
+
+  .tsuki-ui .tsuki-table > :is(thead, tbody, tfoot) > tr > :is(th, td) {
+    padding: var(--tsuki-space-2) var(--tsuki-space-3);
+    border-block-end: 1px solid var(--tsuki-divider);
+    text-align: start;
+    vertical-align: middle;
+  }
+
+  .tsuki-ui .tsuki-table > thead > tr > th {
+    background-color: var(--tsuki-canvas);
+    font-size: var(--tsuki-size-table-heading);
+    font-weight: var(--tsuki-weight-semibold);
+  }
+
+  .tsuki-ui .tsuki-amount,
+  .tsuki-ui .tsuki-table > :is(thead, tbody, tfoot) > tr > .tsuki-amount {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    font-weight: var(--tsuki-weight-semibold);
+  }
+
+  .tsuki-ui .tsuki-button,
+  .tsuki-ui .tsuki-input {
+    box-sizing: border-box;
+    min-block-size: var(--tsuki-control-height);
+    border: 1px solid var(--tsuki-control-border);
+    border-radius: var(--tsuki-radius);
+    background-color: var(--tsuki-surface);
+    color: var(--tsuki-text);
+    font: var(--tsuki-weight-regular) var(--tsuki-size-body)/var(--tsuki-line-height) var(--tsuki-font);
+  }
+
+  .tsuki-ui .tsuki-button {
+    padding: var(--tsuki-space-1) var(--tsuki-space-3);
+    font-weight: var(--tsuki-weight-semibold);
+    cursor: pointer;
+  }
+
+  .tsuki-ui .tsuki-button:hover:not(:disabled) {
+    background-color: var(--tsuki-canvas);
+  }
+
+  .tsuki-ui .tsuki-button--primary {
+    border-color: var(--tsuki-focus);
+    background-color: var(--tsuki-accent);
+  }
+
+  .tsuki-ui .tsuki-button--primary:hover:not(:disabled) {
+    background-color: var(--tsuki-accent-hover);
+  }
+
+  .tsuki-ui .tsuki-input {
+    max-inline-size: 100%;
+    padding: var(--tsuki-space-1) var(--tsuki-space-2);
+  }
+
+  .tsuki-ui textarea.tsuki-input {
+    resize: vertical;
+  }
+
+  .tsuki-ui .tsuki-input[aria-invalid="true"] {
+    border-color: var(--tsuki-danger-text);
+  }
+
+  .tsuki-ui :is(.tsuki-button, .tsuki-input):disabled {
+    background-color: var(--tsuki-canvas);
+    color: var(--tsuki-muted);
+    opacity: 1;
+    cursor: default;
+  }
+
+  .tsuki-ui :is(.tsuki-button, .tsuki-input, .tsuki-table-scroll):focus-visible {
+    outline: 2px solid var(--tsuki-focus);
+    outline-offset: 2px;
+  }
+
+  .tsuki-ui .tsuki-topbar :is(.tsuki-button, .tsuki-input):focus-visible {
+    outline-color: var(--tsuki-accent);
+  }
+
+  .tsuki-ui .tsuki-status {
+    display: inline-block;
+    padding: var(--tsuki-space-1) var(--tsuki-space-2);
+    border-radius: var(--tsuki-radius);
+    background-color: var(--tsuki-canvas);
+    color: var(--tsuki-muted);
+    font: var(--tsuki-weight-semibold) var(--tsuki-size-small)/var(--tsuki-line-height) var(--tsuki-font);
+  }
+
+  .tsuki-ui .tsuki-status--success {
+    background-color: var(--tsuki-success-bg);
+    color: var(--tsuki-success-text);
+  }
+
+  .tsuki-ui .tsuki-status--warning {
+    background-color: var(--tsuki-warning-bg);
+    color: var(--tsuki-warning-text);
+  }
+
+  .tsuki-ui .tsuki-status--danger {
+    background-color: var(--tsuki-danger-bg);
+    color: var(--tsuki-danger-text);
+  }
+}
+
+/* Real screen tables across all nine pages inherit one corporate typeface.
+ * Keep the A4 .invoice/PDF typographic styles untouched. */
+@media screen {
+  body.tsuki-ui .biz-page .biz-table {
+    font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif);
+  }
+}
+
+/* Reuse the same JP typeface for form controls and tabular text, leaving the
+ * original A4 invoice/PDF elements outside the screen form styling. */
+@media screen {
+  body.tsuki-ui .biz-page :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+    font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif) !important;
+  }
+}
+
+/* The 帳票 editor uses .editor.app-page instead of .biz-page. Apply only to
+ * edit controls; the A4 .invoice preview retains its original Mincho design. */
+@media screen {
+  body.tsuki-ui #pageChohyo :is(input:not([type=checkbox]):not([type=radio]),select,textarea) {
+    font-family: var(--tsuki-font, "Noto Sans JP", "Hiragino Sans", sans-serif) !important;
+  }
+}
+
+/* V1.0 month view: read-only calendar presentation based on already synchronized
+ * schedule records. Selecting a date only filters existing rows; no write. */
+@media screen {
+ body.tsuki-ui #pageCalendar .tsuki-month-panel { margin-top: 12px; min-width: 0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-controls {
+   display: flex; align-items: center; justify-content: center; gap: 10px;
+   margin-bottom: 10px;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-controls strong { font-size: 15px; min-width: 105px; text-align: center; }
+ body.tsuki-ui #pageCalendar .tsuki-month-controls .biz-btn { min-height: 36px; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays,
+ body.tsuki-ui #pageCalendar .tsuki-month-days {
+   display: grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap: 4px;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays { text-align: center; color: var(--tsuki-muted,#666); font-size: 12px; padding-bottom: 6px; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(6) { color: #2563b0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-weekdays span:nth-child(7) { color: #bb3333; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day,
+ body.tsuki-ui #pageCalendar .tsuki-month-blank {
+   display: flex; flex-direction: column; align-items: center; justify-content: center;
+   min-width: 0; min-height: 58px; gap: 3px; border: 1px solid var(--tsuki-divider,#e0e2e6);
+   border-radius: 6px; background: var(--tsuki-surface,#fff);
+   font: 600 13px/1.3 var(--tsuki-font,sans-serif);
+   color: var(--tsuki-text,#252525); cursor: pointer; box-shadow: none;
+ }
+ body.tsuki-ui #pageCalendar .tsuki-month-blank { background: var(--tsuki-canvas,#f5f5f3); border-color: transparent; cursor: default; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.saturday { color: #2563b0; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.sunday { color: #bb3333; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day small { font: 600 10px/1.1 var(--tsuki-font,sans-serif); color: #956c22; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.has-work { border-left: 3px solid var(--tsuki-accent,#b99755); }
+ body.tsuki-ui #pageCalendar .tsuki-month-day.selected { background: #fff6df; outline: 2px solid var(--tsuki-accent,#b99755); outline-offset: -2px; }
+ body.tsuki-ui #pageCalendar .tsuki-month-day:focus-visible { outline: 3px solid #b99755; }
+ @media (max-width:800px) {
+   body.tsuki-ui #pageCalendar .tsuki-month-weekdays,
+   body.tsuki-ui #pageCalendar .tsuki-month-days { gap: 2px; }
+   body.tsuki-ui #pageCalendar .tsuki-month-day,
+   body.tsuki-ui #pageCalendar .tsuki-month-blank { min-height: 47px; font-size: 12px; border-radius: 4px; }
+   body.tsuki-ui #pageCalendar .tsuki-month-controls { gap: 6px; }
+ }
+}
