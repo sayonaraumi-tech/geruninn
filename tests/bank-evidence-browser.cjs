@@ -21,11 +21,20 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  });
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().settings.length===2);
  await page.evaluate(()=>bizSwitchPage('bank'));
+ // Desktop keeps the CSV form collapsed until the import button is clicked.
+ if(width>=801)await page.getByRole('button',{name:'銀行明細を取込（CSV）',exact:true}).click();
+ const importButton=page.locator('#pageBank .bank-import').getByRole('button',{name:'読込',exact:true});
  const csv='取引日,摘要,入金,出金,残高\n2026-10-31,振込 ダイナスト（ド,1594900,,2000000\n2026-10-30,振込手数料,,100,405000\n2026-10-28,Visaデビット利用 AMAZON TID:46301325931956,,1172,612949';
- await page.locator('#bankAccountName').fill('GMOあおぞら');await page.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await page.evaluate(()=>importBankCsv());
+ await page.locator('#bankAccountName').fill('GMOあおぞら');await page.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await importButton.click();
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.length===3&&TsukinowaAccountingUI.getData().payments.length===1);
  await page.evaluate(()=>accountingBankView('all'));assert.equal(await page.locator('#bankRows tr').count(),3);assert.match(await page.locator('#bankRows').innerText(),/照合済/);assert(!((await page.locator('#bankRows').innerText()).includes('カード決済まとめ候補')));
- await page.locator('#bankAccountName').fill('メイン口座');await page.evaluate(()=>importBankCsv());await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().bankTransactions.length),3);
+ await page.locator('#bankAccountName').fill('メイン口座');
+ // Wait for this import to enqueue its work before checking that sync drained.
+ await page.locator('#bankImportStatus').evaluate(el=>{el.textContent='';});
+ await importButton.click();
+ await page.waitForFunction(()=>document.getElementById('bankImportStatus').textContent.startsWith('3件を確認しました。')&&TsukinowaBusinessUI.getSync().getQueue().length===0);
+ assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().bankTransactions.length),3);
+ assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().payments.length),1);
  // Historical duplicate IDs are display-only grouped after reviewed account alias.
  await page.evaluate(async()=>{const b=TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.outgoing===1172);await testService.execute({type:'migrateAccounting',collection:'bankTransactions',id:'legacy-duplicate',payload:{...b,bankTxnId:'legacy-duplicate',bankAccount:'メイン口座'},operationId:crypto.randomUUID()});});
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.length===4);await page.evaluate(()=>accountingBankView('all'));assert.equal(await page.locator('#bankRows tr').count(),3);assert.match(await page.locator('#bankRows').innerText(),/原記録保持/);
