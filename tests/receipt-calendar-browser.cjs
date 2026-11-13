@@ -36,7 +36,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   window.savedReceipt=mode==='legacy'?{snapshot:testRecords.get('companies/tsukinowa/documents/receipt').payload.snapshot}:await testService.execute({type:'saveDocument',operationId:'save',expectedRevision:0,snapshot:receipt});
  },{mode,formalType});
  await page.waitForFunction(()=>bizState.calendar.length===1&&bizState.sales.length===1&&bizState.payments.length===(testFormalType==='receipt'?1:0));
- await page.evaluate(()=>{document.getElementById('calendarMonth').value='2026-10';bizSwitchPage('calendar');TsukinowaBusinessUI.patchPending();});
+ await page.evaluate(()=>{document.getElementById('calendarMonth').value='2026-10';bizSwitchPage('calendar');TsukinowaBusinessUI.patchPending();});if(await page.locator('#pageCalendar .tsuki-cal-original-table summary').count())await page.locator('#pageCalendar .tsuki-cal-original-table summary').click();
  const status=formalType==='receipt'?'領収済':'請求済',amount=formalType==='receipt'?12000:72600,date=formalType==='receipt'?'2026-10-23':'2026-10-30';
  assert.match(await page.locator('#calendarRows').innerText(),new RegExp(status));assert.equal(posts.length,0);assert.equal(patches.length,0);
  assert(await page.evaluate(()=>bizState.calendar[0].googleCreatePending));assert.equal(await page.evaluate(()=>bizOutstanding(bizState.sales[0])),formalType==='receipt'?0:72600);

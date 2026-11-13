@@ -7,7 +7,7 @@ let serveOldWorker=false;
 const server=http.createServer((req,res)=>{
  const name=new URL(req.url,'http://localhost').pathname,file=path.join(root,name==='/'?'index.html':name);
  if(name==='/sw.js'&&serveOldWorker){res.setHeader('Content-Type','text/javascript');return res.end(fs.readFileSync(file,'utf8').replace(/const CACHE='[^']+';/,`const CACHE='${oldCache}';`));}
- try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
+ try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
 });
 const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
 const mobileRoutes=['calendar','estimates','chohyo','savedDocs'];
@@ -28,13 +28,34 @@ async function checkPage(page,route){
    await context.route('**/js/firebase-driver.js',r=>r.fulfill({contentType:'text/javascript',body:fakeDriver}));
    await context.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:true,companyId:'tsukinowa',firebase:{apiKey:'test',authDomain:'test.firebaseapp.com',projectId:'test',appId:'test'}}}));
    await page.goto(base);
+   // Design tokens must be attached to the *real* application, not just
+   // an isolated style-guide fixture. Print/PDF media remains unaffected.
+   assert.deepEqual(await page.locator('body').evaluate(el=>{
+     const styles=getComputedStyle(el);
+     return [styles.getPropertyValue('--tsuki-nav').trim(),styles.getPropertyValue('--tsuki-accent').trim(),styles.getPropertyValue('--tsuki-size-body').trim()];
+   }),['#171717','#B5964C','0.875rem']);
+   if(width===390){
+     for(const route of ['calendar','chohyo','savedDocs']){
+       const button=page.locator('#bizNav [data-page="'+route+'"]');
+       assert.equal(await button.evaluate(el=>getComputedStyle(el).position),'fixed');
+       assert(await button.isVisible());
+       await button.click();
+       await checkPage(page,route);
+       assert.match(await button.getAttribute('class')||'',/active/);
+     }
+     assert.equal(await page.locator('#bizNav [data-page="sales"]').isVisible(),false);
+     // The original HOME and 見積履歴 routes must remain accessible.
+     assert(await page.locator('#bizNav [data-page="estimates"]').isVisible());
+     await page.locator('#bizNav [data-page="estimates"]').click();
+     await checkPage(page,'estimates');
+   }
    await page.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});
    await page.evaluate(()=>bizSwitchPage('bank'));assert.match(await page.locator('#bankRows').innerText(),/ログイン/);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.evaluate(()=>bizSwitchPage('calendar'));
    await page.locator('#bizCloudAccountButton').click();
    await page.locator('#cloudEmail').fill(role+'@example.com');await page.locator('#cloudPassword').fill('test');await page.locator('#cloudLogin').click();
    await page.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});
    await page.locator('#cloudDialog').press('Escape');
-   if(role==='admin'&&width===1280){await page.locator('#bizNav [data-page="dashboard"]').click();await page.getByRole('button',{name:'年度',exact:true}).click();assert.equal(await page.locator('#homePeriodMode').inputValue(),'year');await page.getByRole('button',{name:'決算・エクスポート',exact:true}).click();await page.locator('#homeExportPanel summary').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.getByRole('button',{name:'月次',exact:true}).click();}
+   if(role==='admin'&&width===1280){await page.locator('#bizNav [data-page="dashboard"]').click();await page.getByRole('button',{name:'年次',exact:true}).click();await page.locator('#pageDashboard .tsuki-home-details > summary').click();assert.equal(await page.locator('#homePeriodMode').inputValue(),'year');await page.getByRole('button',{name:'決算・エクスポート',exact:true}).click();await page.locator('#homeExportPanel summary').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.locator('#homeSettlement').getByRole('button',{name:'月次',exact:true}).click();}
    if(role==='staff'){assert.equal(await page.locator('#cloudExport').isVisible(),false);for(const fn of ['exportBackup','yearEndExport','importBackup']){const dialog=page.waitForEvent('dialog');const attempt=page.evaluate(fn=>window[fn]('年間集計.csv'),fn);const denied=await dialog;assert(denied.message().includes('管理者'));await denied.dismiss();await attempt;}}
    const visibleRoutes=role==='staff'?mobileRoutes:width===390?['dashboard',...mobileRoutes]:Object.keys(routes);const allowed=visibleRoutes;
    assert.equal(await page.locator('#pageMonthly,#bizNav [data-page="monthly"],#pageProjects,#pageSuppliers,#supplierNav,#bizNav [data-page="projects"],#bizNav [data-page="suppliers"]').count(),0);

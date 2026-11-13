@@ -28,10 +28,11 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>{bizSwitchPage('expenses');expDate.value='2026-10-02';expCategory.value='旅費交通費';expMethod.value='現金';expAmount.value=100;expVendor.value='手工';expMemo.value='現金';return addExpense();});await idle();
  assert.equal((await snapshot()).cash.length,1);
  const csv='日付,科目,支払方法,金額,取引先,内容・備考\n2026-10-02,旅費交通費,現金,100,手工,現金\n2026-10-02,消耗品費,法人銀行デビット,6060,ビックカメラ,備品\n2026-10-02,交通費,代表者立替（交通系IC）,200,駅,電車\n2026-10-02,通信費,銀行振込,1000,電話会社,10月\n2026-10-02,地代家賃,口座振替,2000,家主,家賃\n2026-10-02,その他,銀行振込,3000,候補店,候補';
+ await desktop.locator('#pageExpenses .tsuki-exp-reveal > details').first().locator('summary').click();
  await desktop.locator('#expenseFile').setInputFiles({name:'expenses.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/6件.*12,260.*重複候補 1件.*エラー 0件/);
  await desktop.locator('#expenseImportCommit').click();await desktop.waitForFunction(()=>document.getElementById('expenseImportPreview').textContent==='5件を同期キューに保存しました。重複はスキップします。');await idle();await desktop.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.length===6);assert.equal((await snapshot()).expenses.length,6);assert.equal((await snapshot()).cash.length,1);
  await desktop.evaluate(()=>accountingPreviewExpenses());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/重複候補 6件/);assert(await desktop.locator('#expenseImportCommit').isDisabled());
- assert.equal(await desktop.locator('#pageExpenses > .biz-section').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
+ assert.equal(await desktop.locator('#pageExpenses #expenseRows, #pageExpenses #cashRows, #pageExpenses #expenseImportCommit, #pageExpenses #expAmount, #pageExpenses #expenseCategoryRules').count(),5);assert.equal(await desktop.locator('#accountingMigrateButton').count(),0);
  await desktop.evaluate(()=>bizSwitchPage('bank'));
  const bankCsv='日付,摘要,入金,出金,取引ID\n2026-10-04,電話会社,,1000,high\n2026-10-04,不明摘要,,3000,candidate\n2026-10-04,未登録,,4000,unmatched\n2026-10-04,VISA カード利用代金,,6060,card';
  await desktop.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(bankCsv)});await desktop.evaluate(()=>importBankCsv());await idle();
@@ -52,6 +53,8 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await desktop.evaluate(()=>bizSwitchPage('expenses'));
  // Invalid preview disables commit and cannot enqueue a partial batch.
  await desktop.locator('#expenseFile').setInputFiles({name:'bad.csv',mimeType:'text/csv',buffer:Buffer.from('日付,科目,支払方法,金額,取引先,内容・備考\n2026-02-30,その他,現金,1,A,B')});await desktop.evaluate(()=>accountingPreviewExpenses());assert(await desktop.locator('#expenseImportCommit').isDisabled());assert.match(await desktop.locator('#expenseImportPreview').innerText(),/エラー 1件/);
+ await desktop.locator('#pageExpenses .tsuki-exp-reveal > details').nth(1).locator('summary').click();
+ await desktop.locator('#pageExpenses .tsuki-exp-reveal > details').nth(2).locator('summary').click();
  // Explicit learning uses the same authenticated expense transaction and syncs settings.
  await desktop.evaluate(()=>{expDate.value='2026-10-10';expCategory.value='通信費';expMethod.value='銀行振込';expAmount.value=123;expVendor.value='ＡＢＣ 店';expMemo.value='学習確認';expenseLearnCategory.checked=false;expCategory.dispatchEvent(new Event('change'));if(!expenseLearnCategory.checked)throw Error('manual category confirmation must enable learning');return addExpense();});await idle();
  await desktop.waitForFunction(()=>document.getElementById('expenseCategoryRules').textContent.includes('ＡＢＣ 店'));
@@ -71,7 +74,15 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   const bytes=fs.readFileSync(await download.path()),rows=require('../js/accounting').parseCSV(bytes.toString('utf8').slice(1));
   assert.deepEqual([...bytes.subarray(0,3)],[239,187,191]);assert.equal(download.suggestedFilename(),'expenses_'+month+'.csv');
   assert.deepEqual(rows[0],['支出日','科目','取引先','内容','支払方法','金額','状態','領収書参照']);
-  assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),visible.map(r=>[...r.slice(0,4),r[4].split(' / ')[0],r[5].replaceAll(',','')]));
+  const canonical=await page.evaluate(month=>TsukinowaAccounting.expenseRegister(TsukinowaAccountingUI.getData().expenses||[],month).map(e=>[e.expenseDate,e.category,e.vendor,e.description,e.paymentMethod,String(e.amount)]),month);
+  assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),canonical,'CSV contents must remain tied to actual accounting records, not reordered screen columns');
+  if(page.viewportSize().width>=801){
+   const headings=await page.locator('#expenseRows').evaluate(t=>[...t.closest('table').querySelectorAll('thead th')].map(th=>th.textContent));
+   assert.deepEqual(headings.slice(1),['取引日','摘要・取引先','カテゴリ','支払方法','金額','取込元','状態','操作']);
+   assert.equal(visible.length,canonical.length);
+  }else{
+   assert.deepEqual(rows.slice(1).map(r=>r.slice(0,6)),visible.map(r=>[...r.slice(0,4),r[4].split(' / ')[0],r[5].replaceAll(',','')]));
+  }
   const summary=await page.evaluate(month=>TsukinowaAccounting.monthly(TsukinowaAccountingUI.homeData(),month).expenseTotal,month);
   assert.equal(rows.slice(1).reduce((n,r)=>n+Number(r[5]),0),summary);
   assert(await page.locator('#expenseFile').count());assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
