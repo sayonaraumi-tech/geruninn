@@ -32,19 +32,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
-      - name: Capture 9 desktop and mobile UI pages from isolated test data
-        if: matrix.suite == 'local'
-        env:
-          PREVIEW_DIR: ui-preview
-          UI_SCREENSHOT_ONLY: '1'
-        run: node tests/sales-period-browser.cjs
-      - name: Upload real UI screenshots for approval
-        if: matrix.suite == 'local' && always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: ui-v1-screenshots
-          path: ui-preview
-          if-no-files-found: ignore
       - run: pnpm test:release:${{ matrix.suite }}
       - name: Collect failure diagnostics
         if: failure()

@@ -18,7 +18,7 @@ module.exports=async(page)=>{
    const cells=[...row.cells],buttons=[...row.querySelectorAll('button')],tops=buttons.map(b=>b.getBoundingClientRect().top);
    return {tops,buttons:buttons.length,nowrap:[0,3,4,5,6].every(i=>getComputedStyle(cells[i]).whiteSpace==='nowrap'),font:getComputedStyle(cells[0]).fontSize,fit:buttons.every(b=>b.scrollWidth<=b.clientWidth),height:row.getBoundingClientRect().height};
   }));
-  for(const m of metrics){assert.equal(m.buttons,3);assert.equal(new Set(m.tops).size,1);assert(m.nowrap);assert(m.fit);assert.equal(m.font,width>=801?'14px':'13px','V1.0 compact estimate history font');assert(m.height<90);}
+  for(const m of metrics){assert.equal(m.buttons,3);assert.equal(new Set(m.tops).size,1);assert(m.nowrap);assert(m.fit);assert.equal(m.font,'13px');assert(m.height<90);}
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   if(width===1920)assert(await page.locator('#pageEstimates .biz-table-wrap').evaluate(e=>e.scrollWidth<=e.clientWidth));
   if(width===390)assert(await page.locator('#pageEstimates .biz-table-wrap').evaluate(e=>e.scrollWidth>e.clientWidth));

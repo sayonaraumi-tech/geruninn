@@ -50,7 +50,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  assert.equal(await page.locator('#bankDuplicateReview button').first().isDisabled(),true);
  assert.match(await page.locator('#bankDuplicateReview').innerText(),/review-duplicate.*review-keeper/);
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().expenses.length===13);
- await page.evaluate(()=>{bizSwitchPage('dashboard');homeMonth.value='2026-10';renderDashboard();document.querySelector('#pageDashboard .tsuki-home-details').open=true;});
+ await page.evaluate(()=>{bizSwitchPage('dashboard');homeMonth.value='2026-10';renderDashboard();});
  assert.equal(await page.locator('#kpiSales').innerText(),'110,000');assert.equal(await page.locator('#kpiPayments').innerText(),'110,000');
  const home=await page.locator('#homeLedger').innerText();assert.match(home,/支払済/);assert.match(home,/入金済/);assert.match(home,/立替未精算/);assert(!home.includes('精算済'));
  await page.screenshot({path:path.join(root,'../payment-path-home-'+width+'.png'),fullPage:true});if(width===390){await page.locator('#homeLedger .biz-table-wrap').evaluate(e=>e.scrollLeft=e.scrollWidth);await page.screenshot({path:path.join(root,'../payment-path-status-'+width+'.png'),fullPage:true});}

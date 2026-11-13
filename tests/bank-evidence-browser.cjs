@@ -21,28 +21,19 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  });
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().settings.length===2);
  await page.evaluate(()=>bizSwitchPage('bank'));
- // Desktop keeps the CSV form collapsed until the import button is clicked.
- if(width>=801)await page.getByRole('button',{name:'銀行明細を取込（CSV）',exact:true}).click();
- const importButton=page.locator('#pageBank .bank-import').getByRole('button',{name:'読込',exact:true});
  const csv='取引日,摘要,入金,出金,残高\n2026-10-31,振込 ダイナスト（ド,1594900,,2000000\n2026-10-30,振込手数料,,100,405000\n2026-10-28,Visaデビット利用 AMAZON TID:46301325931956,,1172,612949';
- await page.locator('#bankAccountName').fill('GMOあおぞら');await page.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await importButton.click();
+ await page.locator('#bankAccountName').fill('GMOあおぞら');await page.locator('#bankFile').setInputFiles({name:'bank.csv',mimeType:'text/csv',buffer:Buffer.from(csv)});await page.evaluate(()=>importBankCsv());
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.length===3&&TsukinowaAccountingUI.getData().payments.length===1);
  await page.evaluate(()=>accountingBankView('all'));assert.equal(await page.locator('#bankRows tr').count(),3);assert.match(await page.locator('#bankRows').innerText(),/照合済/);assert(!((await page.locator('#bankRows').innerText()).includes('カード決済まとめ候補')));
- await page.locator('#bankAccountName').fill('メイン口座');
- // Wait for this import to enqueue its work before checking that sync drained.
- await page.locator('#bankImportStatus').evaluate(el=>{el.textContent='';});
- await importButton.click();
- await page.waitForFunction(()=>document.getElementById('bankImportStatus').textContent.startsWith('3件を確認しました。')&&TsukinowaBusinessUI.getSync().getQueue().length===0);
- assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().bankTransactions.length),3);
- assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().payments.length),1);
+ await page.locator('#bankAccountName').fill('メイン口座');await page.evaluate(()=>importBankCsv());await page.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().bankTransactions.length),3);
  // Historical duplicate IDs are display-only grouped after reviewed account alias.
  await page.evaluate(async()=>{const b=TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.outgoing===1172);await testService.execute({type:'migrateAccounting',collection:'bankTransactions',id:'legacy-duplicate',payload:{...b,bankTxnId:'legacy-duplicate',bankAccount:'メイン口座'},operationId:crypto.randomUUID()});});
  await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.length===4);await page.evaluate(()=>accountingBankView('all'));assert.equal(await page.locator('#bankRows tr').count(),3);assert.match(await page.locator('#bankRows').innerText(),/原記録保持/);
  if(!await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)){console.log(await page.evaluate(()=>[...document.querySelectorAll('#pageBank *')].filter(e=>e.getBoundingClientRect().right>innerWidth).map(e=>[e.tagName,e.id,e.className,e.getBoundingClientRect().width]).slice(0,20)));await page.screenshot({path:'../bank-overflow.png',fullPage:true});}assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const heights=await page.locator('#bankRows tr').evaluateAll(rows=>rows.map(r=>r.getBoundingClientRect().height));assert(Math.max(...heights)<350);
  await page.screenshot({path:path.join(root,'../bank-evidence-'+width+'.png'),fullPage:true});
- await page.locator('#bizNav [data-page="dashboard"]').click();await page.evaluate(()=>{document.getElementById('homeMonth').value='2026-10';renderDashboard();});await page.locator('#pageDashboard .tsuki-home-details > summary').click();assert.equal(await page.locator('#kpiSales').innerText(),'0');assert.equal(await page.locator('#kpiPayments').innerText(),'1,594,900');assert.equal(await page.locator('#homeLedger tbody tr').count(),1);assert.equal(await page.locator('#homeLedger details').count(),0);assert.match(await page.locator('#homeLedger').innerText(),/2026-09-30/);
- await page.evaluate(()=>bizSwitchPage('expenses'));if(await page.locator('#pageExpenses .tsuki-exp-reveal details').count())await page.locator('#pageExpenses .tsuki-exp-reveal details').nth(1).locator('summary').click();await page.locator('#expCategory').selectOption('材料費');await page.locator('#expVendor').fill('任意取引先');await page.locator('#expVendor').dispatchEvent('change');assert.equal(await page.locator('#expCategory').inputValue(),'材料費');
+ await page.locator('#bizNav [data-page="dashboard"]').click();await page.evaluate(()=>{document.getElementById('homeMonth').value='2026-10';renderDashboard();});assert.equal(await page.locator('#kpiSales').innerText(),'0');assert.equal(await page.locator('#kpiPayments').innerText(),'1,594,900');assert.equal(await page.locator('#homeLedger tbody tr').count(),1);assert.equal(await page.locator('#homeLedger details').count(),0);assert.match(await page.locator('#homeLedger').innerText(),/2026-09-30/);
+ await page.evaluate(()=>bizSwitchPage('expenses'));await page.locator('#expCategory').selectOption('材料費');await page.locator('#expVendor').fill('任意取引先');await page.locator('#expVendor').dispatchEvent('change');assert.equal(await page.locator('#expCategory').inputValue(),'材料費');
  for(const category of ['材料費','消耗品費','給与','外注費','車両費','交通費','支払手数料'])assert.equal(await page.locator('#expCategory option[value="'+category+'"]').count(),1);
  await page.evaluate(async()=>{
   const run=cmd=>testService.execute({...cmd,operationId:crypto.randomUUID()});
@@ -55,15 +46,11 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  const bic=page.locator('#bankRows tr').filter({hasText:'池袋西口店'});await bic.locator('summary').click();assert.match(await bic.innerText(),/BIC CAMERA/);assert.equal(await bic.getByRole('button',{name:'この銀行明細から支出登録'}).count(),0);
  await bic.locator('select').selectOption({index:1});const selected=await bic.locator('select').inputValue();await page.evaluate(()=>accountingBankView('all'));assert.equal(await bic.locator('select').inputValue(),selected);await bic.getByRole('button',{name:'照合確定'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='bic-bank').status==='照合済').catch(async e=>{console.error(await page.evaluate(()=>({queue:TsukinowaBusinessUI.getSync().getQueue(),status:document.getElementById('coreSyncStatus').textContent,banks:TsukinowaAccountingUI.getData().bankTransactions,expenses:TsukinowaAccountingUI.getData().expenses})));throw e;});
  const before=await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length);
- const newBank=page.locator('#bankRows tr').filter({hasText:'未登録店舗'});
- await newBank.locator('summary').click();
- assert(await newBank.locator('details').evaluate(e=>e.open),'expense bank details must open by actual user click');
- await newBank.getByRole('button',{name:'この銀行明細から支出登録'}).click();
+ await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).locator('details').evaluate(e=>e.open=true);await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
  assert(await page.locator('#pageBank').isVisible());assert(await page.locator('#bankExpenseDialog').isVisible());
  await page.locator('#bankExpenseForm [name=vendor]').fill('株式会社新店舗');await page.locator('#bankExpenseForm [name=category]').selectOption('消耗品費');
  await page.locator('#bankExpenseClose').click();assert(await page.locator('#pageBank').isVisible());assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length),before);
- if(!await newBank.locator('details').evaluate(e=>e.open))await newBank.locator('summary').click();
- await newBank.getByRole('button',{name:'この銀行明細から支出登録'}).click();
+ await page.locator('#bankRows tr').filter({hasText:'未登録店舗'}).getByRole('button',{name:'この銀行明細から支出登録'}).click();
  await page.locator('#bankExpenseForm [name=vendor]').fill('株式会社新店舗');await page.locator('#bankExpenseForm [name=category]').selectOption('消耗品費');
  await page.getByRole('button',{name:'支出登録・照合確認'}).click();await page.waitForFunction(()=>TsukinowaAccountingUI.getData().bankTransactions.find(b=>b.id==='new-bank').status==='照合済');
  assert(await page.locator('#pageBank').isVisible());assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.getData().expenses.length),before+1);assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));

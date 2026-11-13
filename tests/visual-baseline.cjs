@@ -15,10 +15,10 @@ module.exports=async(page,width)=>{
   const bar=await page.locator('.biz-topbar').boundingBox(),box=await page.locator('#'+id).boundingBox();assert(box.y>=bar.y+bar.height,route+' clears navigation');
   if(route!=='chohyo'&&await page.locator('#'+id+' .biz-table').count()){
    const table=await read('#'+id+' .biz-table');assert.equal(table.fontFamily,reference.table.fontFamily);assert.equal(table.fontSize,reference.table.fontSize);
-   if(await page.locator('#'+id+' th').count()){const th=await read('#'+id+' th');for(const p of ['fontSize','fontWeight','lineHeight'])assert.equal(th[p],reference.th[p],route+' header '+p);if(width<=800&&route==='calendar')assert.equal(th.padding,'9px 8px','mobile calendar compact header padding');else assert.equal(th.padding,reference.th.padding,route+' header padding');}
+   if(await page.locator('#'+id+' th').count()){const th=await read('#'+id+' th');for(const p of ['fontSize','fontWeight','lineHeight','padding'])assert.equal(th[p],reference.th[p],route+' header '+p);}
   }
   const control=await page.locator('#'+id+' input:not([type=checkbox]):not([type=radio]),#'+id+' select').first();
-  if(await control.count()){const style=await control.evaluate(e=>({fontFamily:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize}));assert.equal(style.fontFamily,reference.table.fontFamily,route+' form font must equal shared UI font');assert(['13px','14px','16px'].includes(style.fontSize),route+' control font-size outside compact/iOS specification: '+style.fontSize);}
+  if(await control.count()){const style=await control.evaluate(e=>({fontFamily:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize}));assert.equal(style.fontFamily,reference.table.fontFamily);assert.equal(style.fontSize,'13px');}
   report[route]={table:await page.locator('#'+id+' .biz-table').count()?await read('#'+id+' .biz-table'):null};
   if(process.env.PREVIEW_DIR)await page.screenshot({path:path.join(process.env.PREVIEW_DIR,route+'-'+width+'.png'),fullPage:true});
  }
@@ -27,7 +27,7 @@ module.exports=async(page,width)=>{
  await page.evaluate(()=>document.getElementById('cloudDialog').close());
  await page.evaluate(()=>bizSwitchPage('sales'));
  const cells=await page.locator('#salesRegisterTable tbody tr').first().locator('td').first().evaluate(e=>({fontSize:getComputedStyle(e).fontSize,padding:getComputedStyle(e).padding,rowHeight:e.parentElement.getBoundingClientRect().height}));
- assert.equal(cells.fontSize,width>=801?'14px':'13px','V1.0 sales row size');assert.equal(cells.padding,width>=801?'8px 10px':'10px 9px','V1.0 sales row spacing');
+ assert.equal(cells.fontSize,'13px');assert.equal(cells.padding,'10px 9px');
  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),before,'visual navigation must not modify records');
  if(process.env.PREVIEW_DIR)fs.writeFileSync(path.join(process.env.PREVIEW_DIR,'visual-metrics-'+width+'.json'),JSON.stringify({reference,pages:report,salesCell:cells},null,2));
  console.log('PASS all nine pages / shared type and controls / header density / dialog / no overflow / unchanged records / '+width);

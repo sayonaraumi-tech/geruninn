@@ -63,7 +63,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await page.screenshot({path:path.join(root,'../cleanup-before-'+width+'.png')});
  const before=await env.withSecurityRulesDisabled(async c=>{const {getDocs,collection}=require('firebase/firestore');const out={};for(const n of ['sales','payments','bankTransactions','calendarLinks'])out[n]=(await getDocs(collection(c.firestore(),'companies/tsukinowa/'+n))).docs.map(d=>({id:d.id,...d.data()}));return out;});
  for(const id of ['old','void','duplicate','cancelled']){
-  const archivedRow=page.locator(`#allSavedDocsList [data-document-id="${id}"]`);await archivedRow.locator('summary').click();await archivedRow.getByRole('button',{name:'履歴から削除',exact:true}).click();await page.waitForFunction(id=>!loadConfirmedHistory().some(d=>d.documentId===id),id);
+  await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).getByRole('button',{name:'履歴から削除',exact:true}).click();await page.waitForFunction(id=>!loadConfirmedHistory().some(d=>d.documentId===id),id);
   assert.equal(await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).count(),0);
  }
  await page.evaluate(()=>{setDocType('invoice');renderConfirmedHistory();});assert.equal(await page.locator('#confirmedHistoryList').getByRole('button',{name:'履歴から削除',exact:true}).count(),0);

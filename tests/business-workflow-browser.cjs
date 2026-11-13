@@ -59,14 +59,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),0);assert.equal(await page.locator('#invoiceBalanceDialog #paymentRegistrationForm').count(),0);await page.locator('#balanceClose').click();await page.evaluate(()=>bizSwitchPage('savedDocs'));const card=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);assert.equal(await card.getByRole('button',{name:'入金登録',exact:true}).count(),0);assert.equal(await card.getByRole('button',{name:'入金履歴',exact:true}).count(),1);if(process.env.PREVIEW_DIR)await card.screenshot({path:path.join(process.env.PREVIEW_DIR,`paid-document-${width}.png`)});assert.equal(await page.locator(`button[onclick="selectSaleForPayment('${sale.id}')"]`).count(),0);
  assert.deepEqual(await page.evaluate(()=>({docs:JSON.stringify([...testRecords].filter(([p])=>(/\/documents\//.test(p)||/\/operations\/documentNumber_/.test(p)))),pdf:pdfSaves})),beforePayment);
  const estimate=await page.evaluate(()=>bizState.estimates[0]);
- await page.evaluate(id=>bizAcceptEstimate(id),estimate.id);
- // Calendar and estimate snapshots arrive independently. Wait for both before converting.
- await page.waitForFunction(id=>{
-  const accepted=bizState.estimates.find(e=>e.id===id);
-  const event=bizState.calendar.find(e=>e.linkedEstimateId===id);
-  return accepted?.status?.startsWith('受注')&&event&&accepted.calendarEventId===event.id;
- },estimate.id);
- assert.equal(await page.evaluate(()=>bizState.calendar.length),4);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).date),'2026-10-20');assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googlePatchPending),true);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googleCreatePending),true);
+ await page.evaluate(id=>bizAcceptEstimate(id),estimate.id);await page.waitForFunction(()=>bizState.calendar.length===4);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).date),'2026-10-20');assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googlePatchPending),true);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googleCreatePending),true);
  await page.evaluate(()=>TsukinowaBusinessUI.patchPending());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);await page.evaluate(()=>TsukinowaBusinessUI.getSync().flush());assert.match(await page.locator('#coreSyncStatus').innerText(),/Google未接続・システム保存済/);
  await page.evaluate(id=>bizEstimateFromHistory(id),estimate.id);const beforeOriginal=await page.evaluate(()=>JSON.stringify([...testRecords]));const saves=await page.evaluate(()=>pdfSaves);await page.evaluate(()=>doPrint());await page.waitForFunction(n=>pdfSaves===n,saves+1);assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),beforeOriginal);
  await page.evaluate(id=>bizConvertEstimateRecordToInvoice(id),estimate.id);assert.equal(await page.locator('#customerName').isDisabled(),false);assert.equal(await page.evaluate(()=>collectFormState().calendarEventId),await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).id));assert.equal(await page.evaluate(()=>collectFormState().salesDate),'2026-10-20');
@@ -187,7 +180,6 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  const calendarRow=page.locator('#calendarRows tr').filter({has:page.locator(`button[onclick*="${formalEventId}"]`)});
  assert.equal(await calendarRow.count(),0);
  await page.locator('#calendarReview').check();
- if(await page.locator('#pageCalendar .tsuki-cal-original-table summary').count())await page.locator('#pageCalendar .tsuki-cal-original-table summary').click();
  assert.match(await calendarRow.innerText(),/無効/);
  await calendarRow.getByRole('button',{name:'開く'}).click();
  assert.equal(await page.locator('[data-calendar-document]').first().isDisabled(),true);

@@ -1021,12 +1021,8 @@ dialog h2{font-size:15px}
 .biz-actions{align-items:center}
 @media(max-width:600px){.sales-filters{padding:10px}.sales-filters label{flex-basis:calc(50% - 10px)}.biz-section-head>.biz-actions{width:100%}.editor h2{font-size:19px}}
 </style>
-<link rel="stylesheet" href="./css/design-tokens.css">
-<link rel="stylesheet" href="./css/ui-foundation.css">
-<link rel="stylesheet" href="./css/desktop-nine-pages.css">
-<link rel="stylesheet" href="./css/mobile-three-pages.css">
 </head>
-<body class="tsuki-ui">
+<body>
 <div class="biz-topbar">
   <div class="biz-brand">月輪合同会社<small>業務連動・帳票・記帳</small></div>
   <div class="biz-nav" id="bizNav">
@@ -1064,84 +1060,41 @@ dialog h2{font-size:15px}
 </dialog>
 
 <div id="pageDashboard" class="biz-page app-page active">
- <div class="biz-title tsuki-home-title"><div class="tsuki-home-heading"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 23 24 7l19 16M10 20v21h28V20M20 41V29h9v12"/></svg><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()" aria-label="画面を更新">更新</button></div></div>
- <div class="biz-section home-period"><div class="tsuki-home-period-top"><span class="tsuki-home-period-caption">期間</span><button type="button" class="tsuki-home-month-display" id="tsukiHomeMonthDisplay" onclick="document.getElementById('homeMonth').showPicker?.()" aria-label="表示月を選択">対象月</button><button type="button" class="tsuki-home-month-step" onclick="tsukiHomeShiftMonth(-1)" aria-label="前の月">‹</button><button type="button" class="tsuki-home-month-step" onclick="tsukiHomeShiftMonth(1)" aria-label="次の月">›</button><div class="tsuki-home-period-segments"><button type="button" data-tsuki-period="month" onclick="tsukiHomeSetPeriod('month')">月次</button><button type="button" data-tsuki-period="year" onclick="tsukiHomeSetPeriod('year')">年次</button><button type="button" data-tsuki-period="custom" onclick="tsukiHomeSetPeriod('custom')">指定期間</button></div></div><div class="biz-form-grid">
- <div class="biz-field"><label for="homePeriodMode">期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
+ <div class="biz-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
+ <div class="biz-section home-period"><div class="biz-form-grid">
+ <div class="biz-field"><label for="homePeriodMode">対象期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
  <div class="biz-field" id="homeMonthField"><label for="homeMonth">対象月</label><input type="month" id="homeMonth" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeYearField" hidden><label for="homeYear">年度開始年（10月）</label><input type="number" min="2000" max="9998" id="homeYear" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeStartField" hidden><label for="homeStart">開始日</label><input type="date" id="homeStart" onchange="renderDashboard()"></div>
  <div class="biz-field" id="homeEndField" hidden><label for="homeEnd">終了日</label><input type="date" id="homeEnd" onchange="renderDashboard()"></div>
  </div></div>
- <div class="biz-grid tsuki-home-primary" aria-label="経営指標">
-  <div class="biz-card tsuki-kpi-sales"><div class="tsuki-home-kpi-symbol"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 40h34M11 35v-9M21 35V19M31 35V12M41 35V6"/></svg></div><div><h3>売上</h3><div class="biz-kpi" id="kpiSales">0</div><div class="tsuki-home-kpi-change" id="tsukiHomeSalesChange"></div></div></div>
-  <div class="biz-card"><div class="tsuki-home-kpi-symbol"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="19" cy="12" rx="13" ry="5"/><path d="M6 12v9c0 3 6 6 13 6 3 0 6-.5 8-1.5M6 21v9c0 3 6 6 13 6 4 0 7-1 9-2"/><ellipse cx="31" cy="25" rx="12" ry="5"/><path d="M19 25v10c0 3 5 6 12 6s12-3 12-6V25M19 30c0 3 5 6 12 6s12-3 12-6"/></svg></div><div><h3>入金</h3><div class="biz-kpi" id="kpiPayments">0</div><div class="tsuki-home-kpi-change" id="tsukiHomePaymentsChange"></div></div></div>
-  <div class="biz-card"><div class="tsuki-home-kpi-symbol"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16 34 5v9M5 16h34a4 4 0 0 1 4 4v21H5a4 4 0 0 1-4-4V20a4 4 0 0 1 4-4Z"/><path d="M29 27h14v9H29a4 4 0 0 1 0-9Z"/></svg></div><div><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">0</div><div class="tsuki-home-kpi-change" id="tsukiHomeExpensesChange"></div></div></div>
-  <div class="biz-card"><div class="tsuki-home-kpi-symbol"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4h18l7 8v30H12a3 3 0 0 1-3-3V7a3 3 0 0 1 3-3Z"/><path d="M29 4v10h9M17 22h14M17 30h14"/></svg></div><div><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div><div class="tsuki-home-kpi-change" id="tsukiHomeReceivableCount"></div></div></div>
+ <div class="biz-grid">
+  <div class="biz-card"><h3>売上</h3><div class="biz-kpi" id="kpiSales">0</div></div>
+  <div class="biz-card"><h3>入金</h3><div class="biz-kpi" id="kpiPayments">0</div></div>
+  <div class="biz-card"><h3>未収金</h3><div class="biz-kpi" id="kpiReceivable">0</div></div>
+  <div class="biz-card"><h3>支出</h3><div class="biz-kpi" id="kpiExpenses">0</div></div>
  </div>
- <div class="tsuki-home-visuals" aria-label="月別収支と支出構成">
-   <section class="biz-section tsuki-home-trend"><h2 class="tsuki-home-card-title"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 40h36M11 35v-8M20 35V18M29 35V10M38 35V5"/></svg> 月別収支推移</h2><div id="tsukiHomeChart" class="tsuki-home-chart"></div></section>
-   <section class="biz-section tsuki-home-categories"><h2 class="tsuki-home-card-title"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M25 4a20 20 0 1 1-20 20h20Z"/><path d="M20 3A21 21 0 0 0 3 20h17Z"/></svg> 支出内訳 <small id="tsukiHomeExpenseCaption"></small></h2><div id="tsukiHomeDonut" class="tsuki-home-donut"></div></section>
- </div>
- <div class="tsuki-home-bottom">
-   <section class="biz-section tsuki-home-recent"><div class="tsuki-home-section-heading"><h2 class="tsuki-home-card-title"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="7" width="36" height="34" rx="4"/><path d="M14 18h20M14 27h12"/></svg> 最近の入出金 <small>（直近5件）</small></h2><button class="biz-btn" onclick="bizSwitchPage('sales')">売上・入金 ›</button></div><div id="tsukiHomeRecent" class="tsuki-home-recent-table"></div></section>
-   <section class="biz-section tsuki-home-reminders"><div class="tsuki-home-section-heading"><h2 class="tsuki-home-card-title"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="m24 5 20 36H4Z"/><path d="M24 18v10M24 34h.1"/></svg> 銀行照合・確認事項</h2><button class="biz-btn" onclick="bizSwitchPage('bank')">銀行照合 ›</button></div><div id="tsukiHomePreviewAlerts" class="tsuki-home-preview-alerts"></div></section>
-   <section class="biz-section tsuki-home-quick"><h2 class="tsuki-home-card-title"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M28 4 10 27h13l-3 17 19-26H26Z"/></svg> よく使う操作</h2><div class="tsuki-home-shortcuts">
-     <button type="button" onclick="bizSwitchPage('chohyo');setDocType('estimate')"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M13 5h16l7 7v30H13zM29 5v9h8M18 22h13M18 28h13M18 34h10"/></svg><span>見積書作成</span></button>
-     <button type="button" onclick="bizSwitchPage('chohyo');setDocType('invoice')"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M13 5h16l7 7v30H13zM29 5v9h8M18 23h13M18 30h13"/></svg><span>請求書作成</span></button>
-     <button type="button" onclick="bizSwitchPage('chohyo');setDocType('receipt')"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><rect x="8" y="9" width="31" height="31" rx="3"/><path d="M15 17h18M15 25h18M24 30v6M20 34h8"/></svg><span>領収書作成</span></button>
-     <button type="button" onclick="bizSwitchPage('sales')"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M7 39h34M11 35V24M21 35V18M31 35V11M41 35V6"/></svg><span>売上登録</span></button>
-     <button type="button" onclick="bizSwitchPage('expenses')"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><rect x="6" y="11" width="36" height="28" rx="4"/><path d="M6 20h36M14 30h13"/></svg><span>支出登録</span></button>
-     <button type="button" onclick="bizSwitchPage('bank')"><svg viewBox="0 0 48 48" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"><path d="M5 41h38M8 21 24 7l16 14M12 21v20M20 41V23h8v18M36 41V21"/></svg><span>銀行照合</span></button>
-   </div></section>
- </div>
- <p class="biz-muted tsuki-home-note">売上・入金・支出は既存台帳から集計。未収金は期間末残高です。収支差額は会計上の利益ではありません。</p>
- <details class="tsuki-home-details"><summary>詳細集計・月次収支台帳</summary>
- <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額（現金基準）</h3><div class="biz-kpi" id="kpiDifference">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <div class="biz-grid home-secondary"><div class="biz-card"><h3>収支差額</h3><div class="biz-kpi" id="kpiDifference">0</div></div><div class="biz-card"><h3>要確認</h3><div class="biz-kpi" id="kpiAttention">0</div></div></div>
+ <p class="biz-muted">収支差額＝確認済み入金−支出。会計上の利益ではありません。未収金は期間末残高です。</p>
  <div class="biz-section"><div class="biz-section-head"><h2>月次収支台帳</h2></div><div id="homeLedger"></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>期間内訳</h2></div><div id="homeBreakdown"></div></div>
  <div id="homeSettlement" class="biz-section"></div>
  <div class="biz-section"><div class="biz-section-head"><h2>要確認</h2></div><div id="attentionList" class="biz-alert">確認事項はありません。</div></div>
- </details>
 </div>
 
 <div id="pageCalendar" class="biz-page app-page">
- <div class="biz-title tsuki-cal-title">
-  <div><h1>日程</h1></div>
-  <div class="tsuki-cal-toolbar">
-   <details class="tsuki-cal-menu" id="tsukiOnodaMenu"><summary class="biz-btn tsuki-cal-onoda">小野田直接導入 ▾</summary>
-    <div class="tsuki-cal-menu-list"><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;importOnodaFromCalendar()">日程を取り込み（工事・見積）</button><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;bizSwitchPage('chohyo');setDocType('onoda')">取込結果を確認</button><button type="button" onclick="document.getElementById('tsukiOnodaMenu').open=false;bizSwitchPage('settings')">取込設定</button></div>
-   </details>
-   <button type="button" id="googleCalendarSync" class="biz-btn" onclick="bizGoogleSyncMonth()">Google日程を同期</button>
-   <button type="button" class="biz-btn tsuki-cal-new" onclick="window.open('https://calendar.google.com/calendar/u/0/r/eventedit','_blank','noopener')">＋ 予定登録</button>
-  </div>
- </div>
- <div class="biz-section tsuki-cal-month-section">
-  <div class="tsuki-month-panel" aria-label="施工月間カレンダー">
-   <div class="tsuki-month-controls">
-    <button type="button" class="biz-btn" onclick="tsukiShiftCalendarMonth(-1)" aria-label="前の月">‹</button>
-    <button type="button" class="biz-btn" onclick="tsukiShiftCalendarMonth(1)" aria-label="次の月">›</button>
-    <strong id="tsukiCalendarCaption"></strong>
-    <button type="button" class="biz-btn" onclick="document.getElementById('calendarMonth').value=bizNowMonth();tsukiSelectCalendarDay('');renderCalendarEvents()">今月</button>
-   </div>
-   <div class="tsuki-month-weekdays" aria-hidden="true"><span>日</span><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span></div>
-   <div id="tsukiMonthDays" class="tsuki-month-days" role="group" aria-label="月間日程"></div>
-  </div>
-  <div class="tsuki-cal-utilities">
-   <label for="calendarMonth">対象月 <input type="month" id="calendarMonth" onchange="window.tsukiCalendarSelectedDay='';renderCalendarEvents()"></label>
-   <label for="calendarKeyword">検索 <input id="calendarKeyword" placeholder="現場名・小野田など" oninput="renderCalendarEvents()"></label>
-   <button type="button" class="biz-btn" id="tsukiCalendarShowAll" onclick="tsukiSelectCalendarDay('')">全日程</button>
-   <label class="tsuki-cal-review"><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 要確認</label>
+ <div class="biz-title"><div><h1>日程</h1></div></div>
+ <div class="biz-section">
+  <div class="biz-form-grid">
+   <div class="biz-field"><label for="calendarMonth">対象月</label><input type="month" id="calendarMonth" onchange="renderCalendarEvents()"></div>
+   <div class="biz-field"><label>&nbsp;</label><button id="googleCalendarSync" class="biz-btn ok" style="width:100%" onclick="bizGoogleSyncMonth()">Google日程を同期</button></div>
+   <div class="biz-field span2"><label for="calendarKeyword">検索 / 絞り込み</label><input id="calendarKeyword" placeholder="例：小野田" oninput="renderCalendarEvents()"></div>
   </div>
   <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
  </div>
- <div class="biz-section tsuki-cal-list-section">
-  <div class="biz-section-head"><h2 id="tsukiCalendarListTitle">同期済み日程</h2>
-
-  </div>
-  <div id="tsukiCalendarCards" class="tsuki-cal-event-cards" aria-live="polite"></div>
-  <details class="tsuki-cal-original-table"><summary>同期日程一覧を表示</summary><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></details>
- </div>
+ <div class="biz-section"><div class="biz-section-head"><h2>同期済み日程</h2><label><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
 </div>
+
 
 <div id="pageEstimates" class="biz-page app-page">
  <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">正式請求書の発行前はここで管理します。発行後の入金確認は売上・入金台帳へ。元の見積書・取消／訂正帳票は保存帳票から確認できます。</div></div></div>
@@ -1153,9 +1106,8 @@ dialog h2{font-size:15px}
 <div id="pageSavedDocs" class="biz-page app-page">
  <div class="biz-title"><div><h1>保存帳票</h1><div class="biz-muted">保存済みの見積書・請求書・領収書・小野田請求を一覧表示します。呼び出し・再ダウンロードしても同じ帳票IDとして扱い、売上・入金を重複登録しません。</div></div></div>
  <div class="biz-section">
-  <div class="biz-section-head"><h2>保存済み帳票</h2><div class="biz-actions"><label class="tsuki-saved-type-label">種類<select id="tsukiSavedDocType" onchange="renderAllSavedDocs()"><option value="">すべて</option><option value="estimate">見積書</option><option value="invoice">請求書</option><option value="receipt">領収書</option><option value="onoda">小野田請求</option></select></label><input id="savedDocSearch" placeholder="顧客名・番号・種類" oninput="renderAllSavedDocs()"></div></div>
+  <div class="biz-section-head"><h2>保存済み帳票</h2><div class="biz-actions"><input id="savedDocSearch" placeholder="客户名・番号・種類" oninput="renderAllSavedDocs()"></div></div>
   <div id="allSavedDocsList"></div>
-  <div id="tsukiSavedDocDetail" class="tsuki-saved-detail" hidden aria-label="帳票詳細"></div>
  </div>
 </div>
 
@@ -1176,14 +1128,11 @@ dialog h2{font-size:15px}
 <div id="pageBank" class="biz-page app-page">
  <div class="biz-title"><div><h1>銀行照合</h1><div class="biz-muted">GMO あおぞらのCSVを読み込み、請求入金と既存支出を照合します。銀行明細だけで費用は追加しません。</div></div></div>
  <div class="biz-section bank-import"><div class="biz-section-head"><h2>CSV取込</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>銀行CSV</label><input type="file" id="bankFile" accept=".csv,text/csv"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="importBankCsv()">読込</button></div></div></div>
- <div class="biz-section tsuki-bank-transactions"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
- <div class="biz-section tsuki-bank-candidates"><div class="biz-section-head"><h2>システム候補</h2></div><p id="tsukiBankCandidateLabel" class="biz-muted">銀行取引を選択すると、既存の売上・支出候補を表示します。</p><div id="tsukiBankCandidateMirror"></div></div>
- <div class="biz-section tsuki-bank-operations"><div class="biz-section-head"><h2>照合操作</h2></div><p id="tsukiBankOperationLabel" class="biz-muted">未選択</p><div id="tsukiBankOperationMirror"></div></div>
+ <div class="biz-section"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
 </div>
 
 <div id="pageSettings" class="biz-page app-page">
- <div class="biz-title"><div><h1>設定</h1><div class="biz-muted">既存の会社情報・接続・分類・アカウント設定を変更せずに整理して表示します。</div></div></div>
- <nav id="tsukiSettingsNav" class="biz-section tsuki-settings-nav" aria-label="設定項目"></nav>
+ <div class="biz-title"><div><h1>Google Calendar API 接続設定</h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
  <div class="biz-section">
   <div class="biz-section-head"><h2>Google Calendar 接続</h2><div id="googleCalendarStatus" class="biz-badge warn">未接続</div></div>
   <div class="biz-form-grid">
@@ -1248,9 +1197,9 @@ dialog h2{font-size:15px}
 </div>
 
 <div class="editor app-page" id="pageChohyo">
-  <div class="editor-card tsuki-document-customer">
-    <h2>帳票作成</h2>
-    <div class="subtitle">月輪合同会社｜見積書・請求書・領収書</div>
+  <div class="editor-card">
+    <h2>🎨 帳票システム P1 — 金色 × 漆黒</h2>
+    <div class="subtitle">月輪合同会社 - 請求書 / 見積書 / 領収書</div>
 
     <div class="tabs">
       <button class="tab active" data-type="invoice" onclick="setDocType('invoice')">請求書</button>
@@ -1305,12 +1254,12 @@ dialog h2{font-size:15px}
   </div>
 
   <div class="editor-card" id="itemsCard">
-    <h3>工事明細（数量 × 単価 = 金額）</h3>
+    <h3>🔨 工事内容（数量 × 単価 = 金額）</h3>
     <div id="itemsList"></div>
     <button class="btn-add" onclick="addItem()">＋ 新增一行</button>
   </div>
 
-  <div class="editor-card tsuki-document-extra">
+  <div class="editor-card">
     <div id="onodaCarryover" hidden>
       <h3>未入金残高（任意）</h3>
       <div class="form-row"><label for="carryoverMonth">対象月</label><input id="carryoverMonth" placeholder="8月分" maxlength="40" oninput="recalc()"></div>
@@ -1337,7 +1286,7 @@ dialog h2{font-size:15px}
     </div>
   </div>
 
-  <div class="editor-card tsuki-document-actions">
+  <div class="editor-card">
     <button id="onodaRegenerate" class="biz-btn" type="button" hidden onclick="importOnodaFromCalendar({month:document.getElementById('invoiceDate').value.slice(0,7)||currentMonthKey()})">最新日程で月次再生成</button>
     <button class="btn-preview" onclick="togglePreview()">👁 预览</button>
     <button class="btn-print" onclick="doPrint()">📄 PDFをダウンロード（保存）</button>
@@ -3479,8 +3428,8 @@ bizOnDocumentConfirmed=function(state){
 // PWA v2 保存帳票一覧：再呼出・再DLは同一 historyId を維持する。
 function renderAllSavedDocs(){
   const box=document.getElementById('allSavedDocsList'); if(!box)return;
-  const q=(document.getElementById('savedDocSearch')?.value||'').toLowerCase(),type=document.getElementById('tsukiSavedDocType')?.value||'';
-  const rows=loadConfirmedHistory().filter(r=>{const text=[docTypeLabel(r.docType),r.customerName,r.invoiceNo,r.invoiceDate,historySummary(r)].join(' ').toLowerCase();return (!type||r.docType===type)&&(!q||text.includes(q))});
+  const q=(document.getElementById('savedDocSearch')?.value||'').toLowerCase();
+  const rows=loadConfirmedHistory().filter(r=>{const text=[docTypeLabel(r.docType),r.customerName,r.invoiceNo,r.invoiceDate,historySummary(r)].join(' ').toLowerCase();return !q||text.includes(q)});
   if(!rows.length){box.innerHTML='<div style="padding:18px;text-align:center;color:#999;border:1px dashed #d8dde3;border-radius:10px;">保存済み帳票はありません。</div>';return;}
   box.innerHTML=rows.map(r=>{
     const idx=loadConfirmedHistory().findIndex(x=>x.historyId===r.historyId);
@@ -3489,42 +3438,9 @@ function renderAllSavedDocs(){
     return `<div style="border:1px solid #e0e3e8;border-radius:10px;padding:12px 14px;margin-bottom:9px;background:#fafbfc;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
       <div><div style="font-weight:700;">${bizEsc(docTypeLabel(r.docType))} ｜ ${bizEsc(r.customerName||'名称未入力')} ｜ ${bizMoney(amount)}</div>
       <div style="font-size:12px;color:#777;margin-top:5px;">${bizEsc(r.invoiceDate||'')} ｜ ${bizEsc(r.invoiceNo||'')} ｜ ID: ${bizEsc(r.historyId||'')} ｜ 保存 ${bizEsc(saved)}</div></div>
-      <div class="biz-actions"><button class="biz-btn" onclick="tsukiShowSavedDocDetail(${idx})">詳細</button><button class="biz-btn" onclick="openSavedDoc(${idx})">開く</button><button class="biz-btn primary" onclick="redownloadSavedDoc(${idx})">再ダウンロード</button></div>
+      <div class="biz-actions"><button class="biz-btn" onclick="openSavedDoc(${idx})">開く</button><button class="biz-btn primary" onclick="redownloadSavedDoc(${idx})">再ダウンロード</button></div>
     </div>`;
   }).join('');
-}
-// Saved document detail is a view of the existing immutable history.
-function tsukiShowSavedDocDetail(index){
- const state=loadConfirmedHistory()[index],box=document.getElementById('tsukiSavedDocDetail');if(!state||!box)return;
- const amount=state.docType==='receipt'?Number(state.receiptTotal||0):bizCalcDocumentTotal(state);
- box.hidden=false;
- box.innerHTML='<div class="tsuki-saved-detail-heading"><h3>'+bizEsc(docTypeLabel(state.docType)+' 詳細')+'</h3><button class="biz-btn" type="button" onclick="document.getElementById(\'tsukiSavedDocDetail\').hidden=true">閉じる</button></div>'+
- '<p><strong>'+bizEsc(state.customerName||'名称未入力')+'</strong></p>'+
- '<p>'+bizEsc(state.invoiceDate||'')+'　'+bizEsc(state.invoiceNo||'')+'</p>'+
- '<div class="tsuki-saved-detail-amount">'+bizEsc(bizMoney(amount))+'</div>'+
- '<p class="biz-muted">'+bizEsc(historySummary(state))+'</p>'+
- '<div class="tsuki-saved-detail-actions"><button class="biz-btn" type="button" onclick="openSavedDoc('+index+')">編集・確認</button>'+
- '<button class="biz-btn" type="button" onclick="redownloadSavedDoc('+index+')">PDFダウンロード</button>'+
- (state.docType==='estimate'&&(!state.documentStatus||state.documentStatus==='active')&&state.sourceType!=='historicalPdfImport'?'<button class="biz-btn primary" type="button" onclick="openSavedDoc('+index+');requestEstimateInvoice()">請求書に変換</button>'+
- '<button class="biz-btn" type="button" onclick="tsukiEstimateReceiptDraft('+index+')">領収書に変換</button>':'')+'</div>';
- if(matchMedia('(max-width: 800px)').matches)box.scrollIntoView({behavior:'smooth',block:'start'});
-}
-// Conversion only prepares a new *unsaved* receipt draft. It does not confirm
-// a cash payment, overwrite an estimate, or write to the accounting ledger.
-function tsukiEstimateReceiptDraft(index){
- const state=loadConfirmedHistory()[index];if(!state||state.docType!=='estimate'||(state.documentStatus&&state.documentStatus!=='active')||state.sourceType==='historicalPdfImport')return;
- const total=bizCalcDocumentTotal(state);
- if(!Number.isFinite(total)||total<=0)return alert('見積金額を確認してください。');
- if(!confirm('領収書の下書きを作成します。実際の入金を確認してから正式保存してください。よろしいですか？'))return;
- setDocType('receipt');
- document.getElementById('customerName').value=state.customerName||'';
- document.getElementById('invoiceDate').value=todayISO();
- document.getElementById('receiptTotal').value=String(total);
- document.getElementById('paymentMethod').value='銀行振込';
- document.getElementById('remarks').value=state.remarks||'';
- document.getElementById('tadashi').value=(state.items||[]).map(x=>x.content||'').filter(Boolean).slice(0,3).join('・').slice(0,70);
- recalc();bizSwitchPage('chohyo');
- alert('領収書の下書きです。入金日・支払方法・金額を確認してから正式保存してください。見積書は変更していません。');
 }
 function bizRestoreDocumentLinks(state){
   const e=bizState.calendar.find(x=>x.id===state.calendarEventId || (state.historyId && (x.linkedInvoiceId===state.historyId || x.linkedReceiptId===state.historyId)));
@@ -3557,62 +3473,9 @@ function bizCalendarReviewReason(e, documents){
   }
   return '';
 }
-
-function tsukiCalendarKindOf(e){
- const text=String((e.title||'')+' '+(e.projectCategory||'')+' '+(e.description||''));
- if(/見積|下見/.test(text))return 'estimate';
- if(/調査|現地確認|現調/.test(text))return 'survey';
- if(/工事|施工|クロス|補修|張替|床/.test(text)||e.projectId)return 'work';
- return 'other';
-}
 function renderCalendarEvents(){
   bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=document.getElementById('calendarReview').checked,documents=bizCalendarDocumentStates();const rows=bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
-  tsukiRenderMonthCalendar(m,rows);
-  const selected=window.tsukiCalendarSelectedDay||'';
-  const visible=selected&&selected.startsWith(m)?rows.filter(e=>e.date===selected):rows;
-  const label=document.getElementById('tsukiCalendarListTitle');
-  if(label)label.textContent=selected&&selected.startsWith(m)?selected.replace(/-/g,'/')+(matchMedia('(max-width:800px)').matches?' の施工日程':' の予定'):'同期済み日程';
-  tbody.innerHTML=visible.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">'+(selected?'選択した日付に日程はありません。':'対象月の日程はまだ取り込まれていません。')+'</td></tr>';
-  const cards=document.getElementById('tsukiCalendarCards');
-  if(cards)cards.innerHTML=visible.map(e=>{
-    const title=bizEsc(e.customerName||e.title||'(無題)'),loc=bizEsc(e.location||e.area||''),time=bizEsc(TsukinowaBusiness.calendarTime(e.start)||'時刻未設定');
-    return '<article class="tsuki-cal-event"><div class="tsuki-cal-event-time">'+time+'</div><div class="tsuki-cal-event-main"><strong>'+title+'</strong>'+(loc?'<div class="tsuki-cal-location">'+loc+'</div>':'')+(e.description?'<small>'+bizEsc(e.description)+'</small>':'')+'</div><div class="tsuki-cal-event-actions"><button type="button" class="biz-btn" data-tsuki-open="'+bizEsc(e.id)+'">開く</button></div></article>';
-  }).join('')||'<p class="biz-muted">予定はありません。</p>';
-  if(cards)cards.querySelectorAll('[data-tsuki-open]').forEach(b=>b.addEventListener('click',()=>openEventModal(b.dataset.tsukiOpen)));
-}
-function tsukiShiftCalendarMonth(step){
- const input=document.getElementById('calendarMonth');if(!input)return;
- const m=/^(\d{4})-(\d{2})$/.exec(input.value||bizNowMonth());if(!m)return;
- const date=new Date(Number(m[1]),Number(m[2])-1+step,1);
- input.value=date.getFullYear()+'-'+String(date.getMonth()+1).padStart(2,'0');
- window.tsukiCalendarSelectedDay='';renderCalendarEvents();
-}
-function tsukiSelectCalendarDay(date){
- window.tsukiCalendarSelectedDay=date||'';renderCalendarEvents();
-}
-function tsukiRenderMonthCalendar(month,rows){
- const target=document.getElementById('tsukiMonthDays');if(!target)return;
- const match=/^(\d{4})-(\d{2})$/.exec(month);if(!match){target.replaceChildren();return;}
- const year=Number(match[1]),mon=Number(match[2]),start=new Date(year,mon-1,1);
- const days=new Date(year,mon,0).getDate(),compact=matchMedia('(max-width:800px)').matches,prefix=compact?(start.getDay()+6)%7:start.getDay();
- const countByDate=new Map();for(const e of rows)countByDate.set(e.date,(countByDate.get(e.date)||0)+1);
- const caption=document.getElementById('tsukiCalendarCaption');if(caption)caption.textContent=year+'年'+mon+'月';
- const fragment=document.createDocumentFragment();
- for(let slot=0;slot<Math.ceil((prefix+days)/7)*7;slot++){
-  const day=slot-prefix+1,cell=document.createElement('button');cell.type='button';
-  if(day<1||day>days){cell.className='tsuki-month-blank';cell.disabled=true;cell.setAttribute('aria-hidden','true');fragment.appendChild(cell);continue;}
-  const date=month+'-'+String(day).padStart(2,'0'),n=countByDate.get(date)||0,weekday=slot%7;
-  cell.className='tsuki-month-day'+(compact?(weekday===5?' saturday':weekday===6?' sunday':''):(weekday===6?' saturday':weekday===0?' sunday':''))+(window.tsukiCalendarSelectedDay===date?' selected':'')+(n?' has-work':'');
-  cell.setAttribute('aria-label',date+' '+n+'件');cell.setAttribute('aria-pressed',String(window.tsukiCalendarSelectedDay===date));
-  const number=document.createElement('span');number.textContent=String(day);cell.appendChild(number);
-  if(n){const count=document.createElement('small');count.textContent=String(n)+'件';cell.appendChild(count);
-   const events=rows.filter(e=>e.date===date).slice(0,2);
-   if(!compact)events.forEach(e=>{const chip=document.createElement('span');chip.className='tsuki-cal-cell-chip tsuki-kind-'+tsukiCalendarKindOf(e);chip.textContent=e.customerName||e.title||'予定';chip.title=e.title||'';cell.appendChild(chip);});
-  }
-  cell.addEventListener('click',()=>tsukiSelectCalendarDay(date));fragment.appendChild(cell);
- }
- target.replaceChildren(fragment);
- const all=document.getElementById('tsukiCalendarShowAll');if(all)all.disabled=!window.tsukiCalendarSelectedDay;
+  tbody.innerHTML=rows.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">対象月の日程はまだ取り込まれていません。</td></tr>';
 }
 // 新規帳票へ移った時は必要に応じてリンクを解除するヘルパー
 function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCurrentProjectId='';const b=document.getElementById('bizLinkedSource');if(b)b.style.display='none'}
@@ -3656,349 +3519,15 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
 <script src="./js/outstanding-ui.js"></script>
 <script src="./js/historical-import-ui.js"></script>
 <script src="./js/accounting-ui.js"></script>
-<script>
-// Desktop settings menu points only to sections that actually exist.
-// No new configuration fields and no database changes.
-document.addEventListener('DOMContentLoaded',()=>{
- const page=document.getElementById('pageSettings'),nav=document.getElementById('tsukiSettingsNav');
- if(!page||!nav)return;
- function refresh(){
-  const sections=[...page.children].filter(el=>el.classList?.contains('biz-section')&&el!==nav);
-  const signature=sections.map(el=>el.querySelector('.biz-section-head h2,summary')?.textContent?.trim()||'').join('|');
-  if(nav.dataset.sections===signature)return;
-  nav.dataset.sections=signature;nav.replaceChildren();
-  for(const [i,section] of sections.entries()){
-   const text=section.querySelector('.biz-section-head h2,summary')?.textContent?.trim();
-   if(!text)continue;
-   const button=document.createElement('button');button.type='button';button.className='biz-btn';
-   button.textContent=text;button.addEventListener('click',()=>section.scrollIntoView({block:'start',behavior:'smooth'}));nav.append(button);
-  }
- }
- refresh();new MutationObserver(refresh).observe(page,{childList:true});
-});
-// Desktop-only reconciliation workspace. Controls forward directly to the
-// original bank row handlers: no new accounting commands or matching logic.
-document.addEventListener('DOMContentLoaded',()=>{
- const rows=document.getElementById('bankRows');
- const label=document.getElementById('tsukiBankCandidateLabel');
- const candidate=document.getElementById('tsukiBankCandidateMirror');
- const operations=document.getElementById('tsukiBankOperationMirror');
- const operationLabel=document.getElementById('tsukiBankOperationLabel');
- if(!rows||!candidate||!operations)return;
- let selectedId='';
- function refresh(){
-   const detail=[...rows.querySelectorAll('details[data-bank-detail]')].find(d=>d.dataset.bankDetail===selectedId);
-   const tr=detail?.closest('tr');
-   rows.querySelectorAll('tr').forEach(r=>r.classList.toggle('tsuki-bank-selected',r===tr));
-   candidate.replaceChildren();operations.replaceChildren();
-   if(!tr){
-     label.textContent='銀行取引を選択すると、既存の売上・支出候補を表示します。';
-     operationLabel.textContent='未選択';return;
-   }
-   const cells=[...tr.cells];
-   label.textContent=(cells[0]?.textContent||'')+'｜'+(cells[1]?.textContent||'');
-   operationLabel.textContent=(cells[2]?.textContent||cells[3]?.textContent||'')+'｜'+(cells[5]?.textContent||'');
-   const hint=document.createElement('p');hint.className='biz-muted';hint.textContent=detail.querySelector('.bank-candidate')?.textContent||'候補なし';
-   candidate.append(hint);
-   const controls=detail.querySelector('.bank-controls');
-   if(!controls)return;
-   for(const source of controls.querySelectorAll('select')){
-     const mirror=source.cloneNode(true);mirror.removeAttribute('id');mirror.removeAttribute('onchange');
-     mirror.setAttribute('aria-label','この銀行取引の既存照合候補');
-     mirror.value=source.value;
-     mirror.addEventListener('change',()=>{source.value=mirror.value;source.dispatchEvent(new Event('change',{bubbles:true}));});
-     candidate.append(mirror);
-   }
-   for(const original of controls.querySelectorAll('input[type="checkbox"]')){
-     const wrap=document.createElement('label'),mirror=document.createElement('input');mirror.type='checkbox';mirror.checked=original.checked;
-     const text=original.closest('label')?.textContent?.trim()||original.value;
-     mirror.addEventListener('change',()=>{original.checked=mirror.checked;original.dispatchEvent(new Event('change',{bubbles:true}));});
-     wrap.append(mirror,document.createTextNode(text));candidate.append(wrap);
-   }
-   for(const source of controls.querySelectorAll('button')){
-     const mirror=document.createElement('button');mirror.type='button';mirror.className=source.className||'biz-btn';
-     mirror.textContent=source.textContent;mirror.disabled=source.disabled;
-     mirror.addEventListener('click',()=>{source.click();requestAnimationFrame(refresh);});
-     operations.append(mirror);
-   }
-   if(!operations.childElementCount)operationLabel.textContent+='｜この取引に実行可能な操作はありません。';
- }
- rows.addEventListener('click',event=>{
-   const tr=event.target.closest('tr'),detail=tr?.querySelector('details[data-bank-detail]');
-   if(detail){selectedId=detail.dataset.bankDetail;requestAnimationFrame(refresh);}
- });
- const observer=new MutationObserver(()=>requestAnimationFrame(refresh));
- observer.observe(rows,{childList:true});
-});
-</script>
 <script src="./js/year-end.js"></script>
 <script src="./js/year-end-ui.js"></script>
 <script src="./js/cloud-ui.js"></script>
 <script>
-// Restore the pre-PR45 mobile 日程 DOM. All other mobile pages stay untouched.
-document.addEventListener('DOMContentLoaded',()=>{
- if(!matchMedia('(max-width:800px)').matches)return;
- const calendar=document.getElementById('pageCalendar');
- if(!calendar)return;
- calendar.outerHTML="<div id=\"pageCalendar\" class=\"biz-page app-page\">\n <div class=\"biz-title\"><div><h1>日程</h1></div></div>\n <div class=\"biz-section\">\n  <div class=\"biz-form-grid\">\n   <div class=\"biz-field\"><label for=\"calendarMonth\">対象月</label><input type=\"month\" id=\"calendarMonth\" onchange=\"renderCalendarEvents()\"></div>\n   <div class=\"biz-field\"><label>&nbsp;</label><button id=\"googleCalendarSync\" class=\"biz-btn ok\" style=\"width:100%\" onclick=\"bizGoogleSyncMonth()\">Google日程を同期</button></div>\n   <div class=\"biz-field span2\"><label for=\"calendarKeyword\">検索 / 絞り込み</label><input id=\"calendarKeyword\" placeholder=\"例：小野田\" oninput=\"renderCalendarEvents()\"></div>\n  </div>\n  <button id=\"googleCalendarReconnect\" class=\"biz-btn primary\" hidden onclick=\"bizGoogleConnect()\">Googleに再接続</button>\n  <div class=\"tsuki-month-panel\" aria-label=\"施工月間カレンダー\">\n   <div class=\"tsuki-month-controls\">\n    <button type=\"button\" class=\"biz-btn\" onclick=\"tsukiShiftCalendarMonth(-1)\" aria-label=\"前の月\">‹</button>\n    <strong id=\"tsukiCalendarCaption\"></strong>\n    <button type=\"button\" class=\"biz-btn\" onclick=\"tsukiShiftCalendarMonth(1)\" aria-label=\"次の月\">›</button>\n    <button type=\"button\" class=\"biz-btn\" id=\"tsukiCalendarShowAll\" onclick=\"tsukiSelectCalendarDay('')\">全日程</button>\n   </div>\n   <div class=\"tsuki-month-weekdays\" aria-hidden=\"true\"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>\n   <div id=\"tsukiMonthDays\" class=\"tsuki-month-days\" role=\"group\" aria-label=\"月間日程\"></div>\n  </div>\n </div>\n <div class=\"biz-section\"><div class=\"biz-section-head\"><h2 id=\"tsukiCalendarListTitle\">同期済み日程</h2><label><input id=\"calendarReview\" type=\"checkbox\" onchange=\"renderCalendarEvents()\"> 非表示・要確認の日程</label><div class=\"biz-actions\"><button class=\"biz-btn\" onclick=\"importOnodaFromCalendar()\">小野田明細に取込</button></div></div><div class=\"biz-table-wrap\"><table class=\"biz-table\"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id=\"calendarRows\"></tbody></table></div></div>\n</div>\n";
- bizCalendarCheckMonth();renderCalendarEvents();
-});
-// Desktop-only visual workspace. Existing accounting controls and records are moved,
-// never copied or rewritten; mobile remains on its original document structure.
-document.addEventListener('DOMContentLoaded',()=>{
- if(!matchMedia('(min-width:801px)').matches)return;
- const page=document.getElementById('pageExpenses'),A=window.TsukinowaAccounting;
- if(!page||!A||page.classList.contains('tsuki-expense-desktop'))return;
- const sect=[...page.children].filter(n=>n.classList.contains('biz-section'));
- const byTitle=name=>sect.find(n=>n.querySelector('.biz-section-head h2')?.textContent.trim()===name);
- const register=byTitle('支出登録'),imports=byTitle('支出CSV取込'),ledger=byTitle('支出台帳'),cash=byTitle('現金帳（確認済み実収支）'),adjust=byTitle('現金残高の調整'),rules=byTitle('支出科目の学習ルール');
- if(!register||!imports||!ledger||!cash)return;
- page.classList.add('tsuki-expense-desktop');
- const title=page.querySelector('.biz-title'),desc=title.querySelector('.biz-muted');
- if(desc)desc.textContent='会社カード明細と現金支出を取り込み、経費を管理します。';
- const titleHeading=title.querySelector('h1');if(titleHeading)titleHeading.classList.add('tsuki-exp-heading');
- const get=id=>document.getElementById(id);
- const period=document.createElement('div');period.className='tsuki-exp-period';
- period.innerHTML='<label for="expenseMonth">期間</label><span id="tsukiExpCaption"></span><button type="button" id="tsukiExpPrev" class="biz-btn" aria-label="前の月">‹</button><button type="button" id="tsukiExpNext" class="biz-btn" aria-label="次の月">›</button><span class="tsuki-exp-monthly">月次</span>';
- title.append(period);
- const mInput=get('expenseMonth');mInput.lang='ja-JP';period.querySelector('label').after(mInput);
- const kpis=document.createElement('div');kpis.className='tsuki-exp-kpis';
- kpis.innerHTML=[['支出合計','tsukiExpTotal'],['会社カード支出','tsukiExpCard'],['現金支出','tsukiExpCash'],['現金残高','tsukiExpBalance']].map(([label,id],i)=>'<div class="tsuki-exp-kpi'+(i===0?' selected':'')+'"><div class="tsuki-exp-kpi-label">'+label+'</div><strong id="'+id+'">—</strong><small id="'+id+'Count"></small></div>').join('');
- const shell=document.createElement('div');shell.className='tsuki-exp-workspace';
- const side=document.createElement('aside');side.className='tsuki-exp-sidebar biz-section';
- side.innerHTML='<h2>取込（CSV）</h2><button type="button" class="biz-btn" id="tsukiExpCardImport">会社カード明細を取込</button><button type="button" class="biz-btn" id="tsukiExpCashImport">現金支出（領収書）を取込</button><hr><h2>登録・管理</h2><button type="button" class="biz-btn" id="tsukiExpManual">＋ 支出を手入力で登録</button><button type="button" class="biz-btn" id="tsukiExpShowExpenses">支出一覧</button><button type="button" class="biz-btn" id="tsukiExpShowCash">現金帳（出納）</button><hr><h2>絞り込み</h2><label>支払方法<select id="tsukiExpMethod"><option value="">すべて</option></select></label><label>カテゴリ<select id="tsukiExpCategory"><option value="">すべて</option></select></label><label>取込元<select id="tsukiExpSource"><option value="">すべて</option><option value="csv">CSV</option><option value="other">その他・不明</option></select></label>';
- const main=document.createElement('div');main.className='tsuki-exp-main';
- const tabs=document.createElement('div');tabs.className='tsuki-exp-tabs';tabs.innerHTML='<button type="button" id="tsukiExpTabExpenses" class="active">支出一覧</button><button type="button" id="tsukiExpTabCash">現金帳（出納）</button>';
- const toolbar=document.createElement('div');toolbar.className='tsuki-exp-table-toolbar';toolbar.innerHTML='<input id="tsukiExpSearch" type="search" placeholder="取引日・摘要・取引先で検索"><div class="tsuki-exp-top-filters"><label>支払方法：<select data-exp-mirror="tsukiExpMethod"><option>すべて</option></select></label><label>カテゴリ：<select data-exp-mirror="tsukiExpCategory"><option>すべて</option></select></label><label>取込元：<select data-exp-mirror="tsukiExpSource"><option>すべて</option></select></label></div>';
- const pager=document.createElement('div');pager.className='tsuki-exp-pager';pager.innerHTML='<span id="tsukiExpPagerLabel"></span><div class="tsuki-exp-page-buttons"><button type="button" class="biz-btn" id="tsukiExpPagePrev">‹</button><span id="tsukiExpPageNumber"></span><button type="button" class="biz-btn" id="tsukiExpPageNext">›</button></div><label class="tsuki-exp-page-size">表示件数： <select id="tsukiExpPageSize"><option value="10">10件</option><option value="20">20件</option><option value="50">50件</option></select></label>';
- const heading=ledger.querySelector('.biz-section-head');if(heading){const csvButton=heading.querySelector('#expenseCsvExport');if(csvButton)toolbar.append(csvButton);heading.hidden=true;}
- main.append(tabs,toolbar,ledger,pager);
- const cashPanel=document.createElement('div');cashPanel.className='tsuki-exp-cash-panel';cashPanel.hidden=true;cashPanel.append(cash);if(adjust)cashPanel.append(adjust);main.append(cashPanel);
- const reveal=document.createElement('div');reveal.className='tsuki-exp-reveal';
- const importDisclosure=document.createElement('details');importDisclosure.innerHTML='<summary>CSV取込・確認</summary>';importDisclosure.append(imports);
- const manualDisclosure=document.createElement('details');manualDisclosure.innerHTML='<summary>支出登録フォーム</summary>';manualDisclosure.append(register);
- reveal.append(importDisclosure,manualDisclosure);
- if(rules){const d=document.createElement('details');d.innerHTML='<summary>科目の学習ルール</summary>';d.append(rules);reveal.append(d);}
- main.append(reveal);shell.append(side,main);title.after(kpis,shell);
- const state={tab:'expenses',page:0};
- const mirror=()=>document.querySelectorAll('#pageExpenses [data-exp-mirror]').forEach(select=>{const original=get(select.dataset.expMirror),selected=original.value;select.replaceChildren(...[...original.options].map(option=>new Option(option.text,option.value)));select.value=selected;});
- document.querySelectorAll('#pageExpenses [data-exp-mirror]').forEach(select=>select.addEventListener('change',()=>{const original=get(select.dataset.expMirror);original.value=select.value;original.dispatchEvent(new Event('input',{bubbles:true}));}));const records=()=>{if(window.TsukinowaBusinessUI?.isEnabled?.())return window.TsukinowaAccountingUI?.getData?.()||{};return {expenses:(window.bizState?.expenses||[]).map(e=>({...e,expenseDate:e.expenseDate||e.date,paymentMethod:e.paymentMethod||e.method,description:e.description||e.memo})),cashLedger:window.bizState?.cashLedger||[]};};
- const month=()=>mInput.value||bizNowMonth(),yen=n=>'¥'+Math.round(Number(n)||0).toLocaleString('ja-JP');
- const method=e=>String(e.paymentMethod||e.method||'');
- const source=e=>/csv/i.test(String(e.sourceType||e.importSource||e.source||e.importFile||''))?'csv':'other';
- function refresh(){
-  const [y,m]=month().split('-').map(Number);get('tsukiExpCaption').textContent=y+'年'+m+'月';
-  const data=records(),items=A.expenseRegister(data.expenses||[],month());
-  const card=items.filter(e=>/法人.*カード|デビット|クレジット/.test(method(e)));
-  const cashItems=items.filter(e=>method(e)==='現金');
-  const cashRows=A.cashRows(data.cashLedger||[]);
-  const amounts=[['tsukiExpTotal',items],['tsukiExpCard',card],['tsukiExpCash',cashItems]];
-  for(const [id,set]of amounts){get(id).textContent=yen(set.reduce((a,e)=>a+(+e.amount||0),0));get(id+'Count').textContent=set.length+'件';}
-  get('tsukiExpBalance').textContent=yen(cashRows.at(-1)?.runningBalance||0);get('tsukiExpBalanceCount').textContent='';
-  for(const [id,values]of [['tsukiExpMethod',[...new Set(items.map(method).filter(Boolean))]],['tsukiExpCategory',[...new Set(items.map(e=>e.category).filter(Boolean))]]]){
-   const el=get(id),selection=el.value;el.replaceChildren(new Option('すべて',''),...values.map(v=>new Option(v,v)));el.value=selection;
-  }
-  mirror();
-  const q=get('tsukiExpSearch').value.toLowerCase(),mFilter=get('tsukiExpMethod').value,cFilter=get('tsukiExpCategory').value,sourceFilter=get('tsukiExpSource').value;
-  const trs=[...get('expenseRows').querySelectorAll('tr')];
-  const tableHead=ledger.querySelector('thead tr');
-  if(tableHead&&!tableHead.dataset.expenseDecorated){
-   const labels=['','取引日','摘要・取引先','カテゴリ','支払方法','金額','取込元','状態','操作'];
-   tableHead.replaceChildren(...labels.map((label,i)=>{const th=document.createElement('th');if(i===0){const check=document.createElement('input');check.type='checkbox';check.setAttribute('aria-label','すべて選択');check.addEventListener('change',()=>get('expenseRows').querySelectorAll('input[type=checkbox]').forEach(c=>c.checked=check.checked));th.append(check);}else th.textContent=label;return th;}));
-   tableHead.dataset.expenseDecorated='true';
-  }
-  const expenseKey=e=>String(e.id||e.expenseId||[e.expenseDate,e.vendor,e.amount,e.description].join('|'));
-  items.forEach((expense,i)=>{
-   const key=expenseKey(expense),row=trs.find(t=>t.dataset.expenseRowKey===key)||trs[i];if(!row||row.dataset.expenseDecorated||row.cells.length!==7)return;
-   const [date,category,vendor,description,payment,amount,actions]=[...row.cells];
-   const status=A.expenseStatus(expense),orig=String(expense.sourceType||expense.importSource||expense.source||expense.importFile||'');
-   const checkCell=document.createElement('td'),check=document.createElement('input');
-   check.type='checkbox';check.setAttribute('aria-label',(expense.vendor||'取引')+'を選択');checkCell.append(check);
-   date.textContent=String(expense.expenseDate||'').slice(5).replace('-','/');
-   vendor.textContent=[expense.vendor,expense.description].filter(Boolean).join('（')+(expense.vendor&&expense.description?'）':'');
-   vendor.className='tsuki-exp-description';
-   category.className='tsuki-exp-category';const tag=document.createElement('span');tag.textContent=expense.category||'未分類';
-   tag.className='tsuki-exp-category-pill';category.replaceChildren(tag);
-   payment.textContent=method(expense);amount.classList.add('tsuki-exp-amount');
-   const src=document.createElement('td');src.textContent=/csv/i.test(orig)?'CSV':orig?'その他':'—';
-   const stat=document.createElement('td'),badge=document.createElement('span');
-   badge.className='tsuki-exp-status'+(/支払済|入金済|登録済/.test(status)?' success':'');
-   badge.textContent=status;stat.append(badge);
-   row.replaceChildren(checkCell,date,vendor,category,payment,amount,src,stat,actions);
-   row.dataset.expenseDecorated='true';row.dataset.expenseRowKey=key;
-  });
-  const body=get('expenseRows'),byKey=new Map([...body.querySelectorAll('tr')].map(row=>[row.dataset.expenseRowKey,row]));
-  const ordered=items.map((e,i)=>({e,tr:byKey.get(expenseKey(e))||trs[i]}))
-   .sort((a,b)=>String(b.e.expenseDate||'').localeCompare(String(a.e.expenseDate||''))||String(b.e.id||'').localeCompare(String(a.e.id||'')));
-  const expectedOrder=ordered.map(x=>x.tr).filter(Boolean),existingOrder=[...body.children];
-  if(expectedOrder.length===existingOrder.length&&expectedOrder.some((row,i)=>row!==existingOrder[i]))body.replaceChildren(...expectedOrder);
-  const filtered=ordered.filter(({e})=>
-   (!q||[e.expenseDate,e.category,e.vendor,e.description,method(e)].some(x=>String(x||'').toLowerCase().includes(q)))&&
-   (!mFilter||method(e)===mFilter)&&(!cFilter||e.category===cFilter)&&(!sourceFilter||source(e)===sourceFilter));
-  const size=+get('tsukiExpPageSize').value,totalPages=Math.max(1,Math.ceil(filtered.length/size));state.page=Math.min(state.page,totalPages-1);
-  trs.forEach(t=>t.hidden=true);
-  filtered.slice(state.page*size,(state.page+1)*size).forEach(({tr})=>{if(tr)tr.hidden=false;});
-  get('tsukiExpPagerLabel').textContent='全 '+filtered.length+' 件';get('tsukiExpPageNumber').textContent=(state.page+1)+' / '+totalPages+' ページ';
-  get('tsukiExpPagePrev').disabled=state.page===0;get('tsukiExpPageNext').disabled=state.page>=totalPages-1;
-  const isCash=state.tab==='cash';ledger.hidden=isCash;toolbar.hidden=isCash;pager.hidden=isCash;cashPanel.hidden=!isCash;
-  get('tsukiExpTabExpenses').classList.toggle('active',!isCash);get('tsukiExpTabCash').classList.toggle('active',isCash);
- }
- function setTab(v){state.tab=v;refresh();}
- get('tsukiExpTabExpenses').onclick=()=>setTab('expenses');get('tsukiExpTabCash').onclick=()=>setTab('cash');
- get('tsukiExpShowExpenses').onclick=()=>setTab('expenses');get('tsukiExpShowCash').onclick=()=>setTab('cash');
- get('tsukiExpManual').onclick=()=>{manualDisclosure.open=true;register.scrollIntoView({behavior:'smooth',block:'center'});};
- for(const id of ['tsukiExpCardImport','tsukiExpCashImport'])get(id).onclick=()=>{importDisclosure.open=true;imports.scrollIntoView({behavior:'smooth',block:'center'});get('expenseFile')?.focus();};
- function shift(n){const [y,m]=month().split('-').map(Number),d=new Date(y,m-1+n,1);mInput.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');state.page=0;renderExpenses();refresh();}
- get('tsukiExpPrev').onclick=()=>shift(-1);get('tsukiExpNext').onclick=()=>shift(1);
- for(const id of ['tsukiExpSearch','tsukiExpMethod','tsukiExpCategory','tsukiExpSource','tsukiExpPageSize'])get(id).addEventListener('input',()=>{state.page=0;refresh()});
- get('tsukiExpPagePrev').onclick=()=>{state.page=Math.max(0,state.page-1);refresh()};
- get('tsukiExpPageNext').onclick=()=>{state.page++;refresh()};
- mInput.addEventListener('change',()=>{state.page=0;requestAnimationFrame(refresh)});
- new MutationObserver(()=>requestAnimationFrame(refresh)).observe(get('expenseRows'),{childList:true});
- refresh();
-});
-
-// Desktop 帳票 layout only. This code never edits document values,
-// the .invoice template, tax arithmetic, snapshots, or PDF export.
-document.addEventListener('DOMContentLoaded',()=>{
- if(!matchMedia('(min-width:801px)').matches)return;
- const page=document.getElementById('pageChohyo'),preview=document.getElementById('previewArea');
- const customer=page?.querySelector('.tsuki-document-customer'),items=document.getElementById('itemsCard');
- if(!page||!preview||!customer||!items||page.classList.contains('tsuki-doc-desktop'))return;
- page.classList.add('tsuki-doc-desktop');
- const header=document.createElement('div');header.className='tsuki-doc-page-heading';
- header.innerHTML='<div class="tsuki-doc-heading-left"><h1>帳票（書類作成）</h1><span>見積書・請求書・領収書・小野田の書類を作成します</span></div><div class="tsuki-doc-heading-right"><label for="invoiceDate">作成日</label><button type="button" class="tsuki-doc-save" id="tsukiDocSaveTop">保存（PDF出力）</button></div>';
- page.prepend(header);
- const saveTop=header.querySelector('#tsukiDocSaveTop');
- saveTop.addEventListener('click',()=>doPrint());
- const select=page.querySelector('.tabs');
- if(select){const label=document.createElement('span');label.className='tsuki-doc-type-label';label.textContent='書類種別';select.before(label);}
- const controls=document.createElement('div');controls.className='tsuki-doc-preview-controls';
- controls.innerHTML='<strong id="tsukiDocPreviewTitle">プレビュー</strong><div><label for="tsukiDocZoom">表示倍率</label><select id="tsukiDocZoom"><option value="auto">自動</option><option value="0.65">65%</option><option value="0.8">80%</option><option value="1">100%</option></select><button type="button" id="tsukiDocPrint">印刷</button><button type="button" id="tsukiDocExport">PDF出力</button></div>';
- preview.prepend(controls);
- controls.querySelector('#tsukiDocPrint').addEventListener('click',()=>systemPrint());
- controls.querySelector('#tsukiDocExport').addEventListener('click',()=>doPrint());
- const zoom=controls.querySelector('#tsukiDocZoom');
- function sizePreview(){
-  if(!page.isConnected)return;
-  const invoice=preview.querySelector(':scope > .invoice');
-  if(!invoice)return;
-  const naturalWidth=invoice.offsetWidth||794;
-  const available=Math.max(240,preview.clientWidth-30);
-  const naturalHeight=invoice.offsetHeight||1080;
-  const viewportHeight=Math.max(410,innerHeight-235);
-  const auto=Math.min(0.83,available/naturalWidth,viewportHeight/naturalHeight);
-  const scale=zoom.value==='auto'?auto:Number(zoom.value);
-  preview.style.setProperty('--tsuki-doc-preview-scale',String(scale));
- }
- zoom.addEventListener('change',sizePreview);
- new ResizeObserver(sizePreview).observe(preview);
- const updateTitle=()=>{
-  const active=page.querySelector('.tabs .tab.active');
-  const label=active?.textContent?.trim()||'帳票';
-  controls.querySelector('#tsukiDocPreviewTitle').textContent='プレビュー（'+label+'）';
- };
- new MutationObserver(updateTitle).observe(select||page,{attributes:true,subtree:!!select,attributeFilter:['class']});
- updateTitle();requestAnimationFrame(sizePreview);
-});
-
-// Desktop 銀行照合 visual shell. All bank rows, reconciliation controls and
-// accounting writes remain owned by the original bank renderer.
-document.addEventListener('DOMContentLoaded',()=>{
- if(!matchMedia('(min-width:801px)').matches)return;
- const page=document.getElementById('pageBank'),importBox=page?.querySelector('.bank-import'),transactions=page?.querySelector('.tsuki-bank-transactions'),rows=document.getElementById('bankRows');
- if(!page||!importBox||!transactions||!rows||page.classList.contains('tsuki-bank-desktop'))return;
- page.classList.add('tsuki-bank-desktop');
- const title=page.querySelector('.biz-title');title.querySelector('.biz-muted').textContent='会社口座の入出金明細と既存の帳票・支出を照合します。';
- const headingControls=document.createElement('div');headingControls.className='tsuki-bank-heading-controls';
- headingControls.innerHTML='<label>口座 <select id="tsukiBankAccount"><option value="">すべて</option></select></label><label>期間 <input id="tsukiBankStart" type="date"></label><span>～</span><input id="tsukiBankEnd" type="date" aria-label="終了日">';
- title.append(headingControls);
- const stats=document.createElement('div');stats.className='tsuki-bank-stats';
- stats.innerHTML='<div><span>取込明細数</span><strong id="tsukiBankTotal">0 件</strong></div><div><span>照合済</span><strong id="tsukiBankDone">0 件</strong></div><div><span>未照合</span><strong id="tsukiBankTodo">0 件</strong></div><div><span>照合率</span><strong id="tsukiBankRate">0 %</strong><progress id="tsukiBankProgress" value="0" max="100"></progress></div>';
- title.after(stats);
- const layout=document.createElement('div');layout.className='tsuki-bank-layout';
- const side=document.createElement('aside');side.className='tsuki-bank-sidebar biz-section';
- side.innerHTML='<button type="button" id="tsukiBankImportButton" class="biz-btn primary">銀行明細を取込（CSV）</button><h2>取込履歴</h2><div id="tsukiBankHistory"></div>';
- const right=document.createElement('div');right.className='tsuki-bank-main';
- const tabs=document.createElement('div');tabs.className='tsuki-bank-tabs';
- tabs.innerHTML='<button type="button" data-bank-tab="todo" class="active">照合（未照合）</button><button type="button" data-bank-tab="done">照合済一覧</button><button type="button" data-bank-tab="all">すべて</button>';
- const filters=document.createElement('div');filters.className='tsuki-bank-filter';
- filters.innerHTML='<input id="tsukiBankSearch" type="search" placeholder="摘要・取引先・金額で検索"><label>取引種別：<select id="tsukiBankDirection"><option value="">すべて</option><option value="in">入金</option><option value="out">出金</option></select></label><label>金額：<select id="tsukiBankAmount"><option value="">すべて</option><option value="positive">金額あり</option></select></label><button type="button" id="tsukiBankOpenCandidates" class="biz-btn">候補を確認</button>';
- const pager=document.createElement('div');pager.className='tsuki-bank-pager';
- pager.innerHTML='<label>表示件数：<select id="tsukiBankPageSize"><option>20</option><option>50</option><option>100</option></select></label><span id="tsukiBankPaginationLabel"></span><button type="button" class="biz-btn" id="tsukiBankPrev">‹</button><span id="tsukiBankPage">1 / 1</span><button type="button" class="biz-btn" id="tsukiBankNext">›</button>';
- const detail=document.createElement('details');detail.className='tsuki-bank-extra';
- detail.innerHTML='<summary>照合候補・詳細操作</summary>';
- const candidate=page.querySelector('.tsuki-bank-candidates'),operation=page.querySelector('.tsuki-bank-operations');
- if(candidate)detail.append(candidate);
- if(operation)detail.append(operation);
- const extra=document.createElement('details');extra.className='tsuki-bank-extra';extra.innerHTML='<summary>CSV取込・前渡金・詳細管理</summary>';extra.append(importBox);
- const others=[...page.children].filter(el=>el.classList.contains('biz-section')&&!['bank-import','tsuki-bank-transactions','tsuki-bank-candidates','tsuki-bank-operations'].some(c=>el.classList.contains(c)));
- others.forEach(section=>extra.append(section));
- right.append(tabs,filters,transactions,pager,detail,extra);
- layout.append(side,right);stats.after(layout);
- const state={tab:'todo',page:0},get=id=>document.getElementById(id),data=()=>window.TsukinowaAccountingUI?.getData?.()?.bankTransactions||[];
- const recordDate=b=>String(b.bankTransactionDate||b.date||''),status=b=>String(b.status||((b.matched)?'照合済':'未照合')),active=b=>!b.deletedAt&&!b.cancelled;
- const key=b=>String(b.id||'');
- const today=new Date(),month=y=>String(y).padStart(2,'0');
- const last=new Date(today.getFullYear(),today.getMonth()+1,0);
- get('tsukiBankStart').value=today.getFullYear()+'-'+month(today.getMonth()+1)+'-01';
- get('tsukiBankEnd').value=last.getFullYear()+'-'+month(last.getMonth()+1)+'-'+month(last.getDate());
- function refresh(){
-  const all=data().filter(active);
-  const account=get('tsukiBankAccount'),selected=account.value,accounts=[...new Set(all.map(b=>String(b.bankAccount||'')).filter(Boolean))].sort();
-  if(accounts.length!==account.options.length-1||accounts.some((v,i)=>account.options[i+1]?.value!==v)){account.replaceChildren(new Option('すべて',''),...accounts.map(x=>new Option(x,x)));account.value=selected;}
-  const start=get('tsukiBankStart').value,end=get('tsukiBankEnd').value;
-  const scoped=all.filter(b=>(!account.value||b.bankAccount===account.value)&&(!start||recordDate(b)>=start)&&(!end||recordDate(b)<=end));
-  const done=scoped.filter(b=>['照合済','除外'].includes(status(b))),todo=scoped.filter(b=>!['照合済','除外'].includes(status(b)));
-  get('tsukiBankTotal').textContent=scoped.length+' 件';get('tsukiBankDone').textContent=done.length+' 件';get('tsukiBankTodo').textContent=todo.length+' 件';
-  const rate=scoped.length?Math.round(done.length*1000/scoped.length)/10:0;
-  get('tsukiBankRate').textContent=rate+' %';get('tsukiBankProgress').value=rate;
-  const groups=new Map();
-  for(const b of all){const date=recordDate(b).slice(0,7),acct=String(b.bankAccount||'銀行口座'),k=date+'|'+acct;groups.set(k,(groups.get(k)||0)+1);}
-  const history=get('tsukiBankHistory');
-  const signature=[...groups].sort().map(([k,n])=>k+':'+n).join(';');
-  if(history.dataset.signature!==signature){
-   history.replaceChildren(...[...groups].sort((a,b)=>b[0].localeCompare(a[0])).slice(0,12).map(([k,count])=>{const [m,acc]=k.split('|'),b=document.createElement('button');b.type='button';b.className='tsuki-bank-history-entry';b.textContent=m.replace('-','年')+'月　'+acc+'　'+count+'件';b.onclick=()=>{get('tsukiBankStart').value=m+'-01';const [y,mon]=m.split('-').map(Number),d=new Date(y,mon,0);get('tsukiBankEnd').value=m+'-'+month(d.getDate());account.value=acc;state.page=0;refresh();};return b;}));
-   history.dataset.signature=signature;
-  }
-  const query=get('tsukiBankSearch').value.toLowerCase(),direction=get('tsukiBankDirection').value,amountFilter=get('tsukiBankAmount').value;
-  const view=scoped.filter(b=>(state.tab==='all'||(state.tab==='done'?['照合済','除外'].includes(status(b)):!['照合済','除外'].includes(status(b))))&&(!direction||(direction==='in'?Number(b.incoming)>0:Number(b.outgoing)>0))&&(!amountFilter||(Number(b.incoming)>0||Number(b.outgoing)>0))&&(!query||[b.description,b.bankAccount,b.incoming,b.outgoing].some(x=>String(x||'').toLowerCase().includes(query))));
-  // Original renderer always owns DOM, including its inline reconciliation widgets.
-  const tbodyRows=[...rows.querySelectorAll(':scope > tr')];
-  const byId=new Map(tbodyRows.map(row=>[row.querySelector('details[data-bank-detail]')?.dataset.bankDetail,row]).filter(([id])=>id));
-  let ordered=view.map(b=>byId.get(key(b))).filter(Boolean);
-  if(!window.TsukinowaBusinessUI?.isEnabled?.())ordered=tbodyRows.filter(r=>query?r.textContent.toLowerCase().includes(query):true);
-  if(!byId.size&&tbodyRows.length){tbodyRows.forEach(row=>row.hidden=false);get('tsukiBankPaginationLabel').textContent='0 件';get('tsukiBankPage').textContent='1 / 1';get('tsukiBankPrev').disabled=true;get('tsukiBankNext').disabled=true;return;}
-  const show=new Set(ordered.slice(state.page*Number(get('tsukiBankPageSize').value),(state.page+1)*Number(get('tsukiBankPageSize').value)));
-  const pages=Math.max(1,Math.ceil(ordered.length/Number(get('tsukiBankPageSize').value)));
-  state.page=Math.min(state.page,pages-1);
-  for(const row of tbodyRows)row.hidden=!show.has(row);
-  get('tsukiBankPaginationLabel').textContent=ordered.length+' 件';get('tsukiBankPage').textContent=(state.page+1)+' / '+pages;
-  get('tsukiBankPrev').disabled=state.page===0;get('tsukiBankNext').disabled=state.page>=pages-1;
-  tabs.querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.bankTab===state.tab));
- }
- tabs.querySelectorAll('button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.bankTab;state.page=0;if(window.TsukinowaBusinessUI?.isEnabled?.())window.accountingBankView?.(state.tab);else window.renderBank();requestAnimationFrame(refresh);});
- for(const id of ['tsukiBankAccount','tsukiBankStart','tsukiBankEnd','tsukiBankSearch','tsukiBankDirection','tsukiBankAmount','tsukiBankPageSize'])get(id).addEventListener('input',()=>{state.page=0;refresh();});
- get('tsukiBankPrev').onclick=()=>{state.page=Math.max(0,state.page-1);refresh();};
- get('tsukiBankNext').onclick=()=>{state.page++;refresh();};
- get('tsukiBankImportButton').onclick=()=>{extra.open=true;importBox.scrollIntoView({behavior:'smooth',block:'center'});get('bankFile')?.focus();};
- get('tsukiBankOpenCandidates').onclick=()=>{detail.open=true;detail.scrollIntoView({behavior:'smooth',block:'nearest'});};
- new MutationObserver(()=>requestAnimationFrame(refresh)).observe(rows,{childList:true});
- requestAnimationFrame(refresh);
-});
-
-// Preview only on desktop. Original A4/PDF markup and rendering stay unchanged.
-document.addEventListener('DOMContentLoaded',()=>{
-  if(matchMedia('(min-width: 801px)').matches)
-    document.getElementById('previewArea')?.classList.add('show');
-});
 const switchDocumentRoute=bizSwitchPage;
 bizSwitchPage=function(page,fromHistory=false){
   const oldPage=document.querySelector('#bizNav button.active')?.dataset.page;
   if(page!==oldPage)document.getElementById('previewArea').classList.remove('show');
   const result=switchDocumentRoute(page);
-  if(page==='chohyo' && window.matchMedia('(min-width: 801px)').matches)
-    document.getElementById('previewArea')?.classList.add('show');
   const actual=document.querySelector('#bizNav button.active')?.dataset.page;
   if(!fromHistory&&actual&&actual!==oldPage){const url=new URL(location.href);url.searchParams.set('page',actual);history.pushState({page:actual},'',url);}
   return result;
