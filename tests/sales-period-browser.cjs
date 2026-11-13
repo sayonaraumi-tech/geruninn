@@ -1,6 +1,6 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.css')?'text/css':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
-(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});try{for(const width of (process.env.UI_SCREENSHOT_ONLY==='1'?[390,1280,1648,1672]:[390,1280])){const page=await browser.newPage({viewport:{width,height:width===1672?941:900},serviceWorkers:'block'}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.fulfill({body:''}));await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false}}));await page.goto('http://127.0.0.1:'+server.address().port);
+(async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});try{for(const width of (process.env.UI_SCREENSHOT_ONLY==='1'?[390,1280,1536,1648,1672]:[390,1280])){const page=await browser.newPage({viewport:{width,height:width===1536?864:width===1672?941:900},serviceWorkers:'block'}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>r.fulfill({body:''}));await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false}}));await page.goto('http://127.0.0.1:'+server.address().port);
 
  await page.evaluate(async()=>{
   const records=new Map(),listeners=[];let cb;const driver={initialize:async()=>{},observeAuth:f=>(cb=f,()=>{}),claims:async u=>u.claims,timestamp:()=>({seconds:1}),digest:async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),b=>b.toString(16).padStart(2,'0')).join(''),list:async p=>[...records].filter(([k])=>k.startsWith(p+'/')).map(([k,v])=>({id:k.split('/').at(-1),...v})),listen:(p,many,next)=>{const l={p,next};listeners.push(l);setTimeout(async()=>next(await driver.list(p),{fromCache:false}),0);return()=>listeners.splice(listeners.indexOf(l),1);},transaction:async f=>{for(;;){const reads=new Map(),writes=[];const result=await f({get:async p=>{const old=records.get(p)||null;reads.set(p,old);return old;},set:(p,v)=>writes.push([p,v])});if([...reads].some(([p,v])=>(records.get(p)||null)!==v))continue;for(const [p,v]of writes)records.set(p,v);for(const l of listeners)setTimeout(async()=>l.next(await driver.list(l.p),{fromCache:false}),0);return result;}}};
@@ -8,6 +8,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   window.testRecords=records;window.testClient=client;window.testService=TsukinowaBusiness.createService(client);bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;bizGoogleGrantedScopes=TSUKINOWA_GOOGLE_SCOPE;bizGoogleCalendarId='shared';bizGoogleCalendarsLoaded=true;
  });
 
+ await page.waitForFunction(()=>document.getElementById('coreSyncStatus')?.textContent==='クラウド同期済');
  await page.evaluate(()=>{const wrap=payload=>({id:payload.id,payload});TsukinowaAccountingUI.hydrate({sales:[wrap({id:'partial',salesDate:'2026-08-01',invoiceDate:'2026-08-01',amount:779379,customer:'顧客,"引用"\n改行'}),wrap({id:'paid',salesDate:'2026-09-20',amount:1000,customer:'入金済顧客'}),wrap({id:'unpaid',salesDate:'2026-10-31',amount:2000,customer:'未入金顧客'}),wrap({id:'future',salesDate:'2026-11-01',amount:500})],payments:[wrap({id:'p',saleId:'partial',paymentDate:'2026-08-25',amount:770379,confirmation:'bank-confirmed'}),wrap({id:'paid-p',saleId:'paid',paymentDate:'2026-10-01',amount:1000,confirmation:'bank-confirmed'}),wrap({id:'final',saleId:'partial',paymentDate:'2026-11-01',amount:9000,confirmation:'bank-confirmed'}),wrap({id:'pending',saleId:'unpaid',paymentDate:'2026-10-31',amount:2000,confirmation:'pending-bank'})]});bizSwitchPage('sales');document.getElementById('homePeriodMode').value='custom';document.getElementById('homeStart').value='';});
 
  if(process.env.UI_SCREENSHOT_ONLY==='1'){
@@ -32,6 +33,58 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
    const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
    const meta={width,pages:{},isDemo:true,changesToProduction:false};
    for(const [route,id]of Object.entries(routes)){
+
+     if(route==='expenses'&&width>=801){
+       await page.evaluate(()=>{
+         const current=TsukinowaAccountingUI.getData(),snapshot={};
+         for(const [kind,rows]of Object.entries(current))snapshot[kind]=(rows||[]).map(record=>({id:record.id,payload:{...record}}));
+         window.__expenseDemoSnapshot=snapshot;
+         const examples=[
+           ['11-12','ENEOS 板橋SS','ガソリン','車両費','法人銀行デビット',6430,'card-csv'],
+           ['11-10','カインズホーム','資材','材料仕入','クレジットカード',117645,'card-csv'],
+           ['11-07','クロス商事','資材','材料仕入','銀行振込',336276,'bank-csv'],
+           ['11-05','パーキング南池袋','駐車料金','旅費交通費','現金',1200,'cash-csv'],
+           ['11-03','セブンイレブン','消耗品','消耗品費','法人銀行デビット',7980,'card-csv'],
+           ['11-02','東京電力','事務所電気代','水道光熱費','銀行振込',18460,'bank-csv'],
+           ['11-01','ワタナベ建材','外注費','外注費','クレジットカード',250000,'card-csv'],
+           ['11-14','NTT','通信費','通信費','口座振替',14520,'bank-csv'],
+           ['11-17','材料購入','領収書','材料仕入','現金',8950,'cash-csv'],
+           ['11-20','パーキング','現場駐車場','旅費交通費','現金',2400,'cash-csv']
+         ];
+         const expenses=Array.from({length:37},(_,i)=>{
+           const [d,vendor,description,category,paymentMethod,amount,sourceType]=examples[i%examples.length];
+           return {id:'visual-exp-'+i,expenseDate:'2026-11-'+String(i<10?30-i:1+(i-10)%20).padStart(2,'0'),amount:amount+(i>=10?i:0),vendor,description,category,paymentMethod,sourceType,bankAccount:'デモ',createdAt:{seconds:1}};
+         });
+         snapshot.expenses=expenses.map(e=>({id:e.id,payload:e}));
+         TsukinowaAccountingUI.hydrate(snapshot);
+         document.getElementById('expenseMonth').value='2026-11';
+         renderExpenses();
+       });
+     }
+
+     if(route==='bank'&&width>=801){
+       await page.evaluate(()=>{
+         const current=TsukinowaAccountingUI.getData(),snapshot={};
+         for(const [kind,records]of Object.entries(current))snapshot[kind]=(records||[]).map(record=>({id:record.id,payload:{...record}}));
+         const examples=[
+          ['2026-11-12','シンケン（カ）',0,117645,'未照合'],
+          ['2026-11-10','ツカイドウサン（カ）',0,112376,'照合済'],
+          ['2026-11-08','アメニティ（カ）',0,198000,'照合済'],
+          ['2026-11-07','ダイナスト（カ）',0,1594900,'未照合'],
+          ['2026-11-05','ナガタケシンカンリブ',79500,0,'照合済'],
+          ['2026-11-04','ライフアップヨコー（カ）',0,286000,'未照合'],
+          ['2026-11-03','オカベショウジ（カ）',0,240000,'照合済'],
+          ['2026-11-02','GMO振込手数料',0,145,'未照合']
+         ];
+         snapshot.bankTransactions=examples.map(([date,description,incoming,outgoing,status],i)=>{
+          const id='bank-screen-demo-'+i;
+          return {id,payload:{id,bankTxnId:id,bankTransactionDate:date,description,incoming,outgoing,amount:incoming||outgoing,bankAccount:'GMOあおぞら銀行',status,matchType:status==='照合済'?'expense':'',matchId:status==='照合済'?'sample-exp-'+i:'',source:'visual-only',revision:1}};
+         });
+         TsukinowaAccountingUI.hydrate(snapshot);
+         accountingBankView('todo');
+       });
+     }
+
      await page.evaluate(r=>bizSwitchPage(r),route);
      await page.evaluate(()=>scrollTo(0,0));
      assert(await page.locator('#'+id).isVisible(),'UI page not visible: '+route);
@@ -44,7 +97,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        const a=await page.locator('#pageChohyo > .editor-card').first().boundingBox();
        const b=await page.locator('#itemsCard').boundingBox();
        const c=await page.locator('#previewArea').boundingBox();
-       assert(a&&b&&c&&a.x<b.x&&b.x<c.x,'document must use three distinct edit/detail/preview columns; '+JSON.stringify({a,b,c,layout:await page.locator('#pageChohyo').evaluate(el=>({display:getComputedStyle(el).display,columns:getComputedStyle(el).gridTemplateColumns,classes:el.className}))}));
+       assert(a&&b&&c&&Math.abs(a.x-b.x)<3&&a.y<b.y&&a.x<c.x&&Math.abs(a.y-c.y)<3,'document must use a left stacked editor/detail column and right A4 preview; '+JSON.stringify({a,b,c,layout:await page.locator('#pageChohyo').evaluate(el=>({display:getComputedStyle(el).display,columns:getComputedStyle(el).gridTemplateColumns,classes:el.className}))}));
        assert(await page.locator('#previewArea').isVisible(),'actual original A4 preview must be visible');
      }
      if(route==='savedDocs'){
@@ -85,19 +138,20 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
        assert.equal(await page.locator('#tsukiCalendarListTitle').innerText(),'同期済み日程');
      }
      if(width===1280&&(route==='sales'||route==='expenses')){
-       const first=route==='sales'?'#pageSales .sales-register':'#pageExpenses > .biz-section:nth-child(3)';
-       const second=route==='sales'?'#paymentRegistrationForm':'#pageExpenses > .biz-section:nth-child(2)';
+       const first=route==='sales'?'#pageSales .sales-register':'#pageExpenses .tsuki-exp-sidebar';
+       const second=route==='sales'?'#paymentRegistrationForm':'#pageExpenses .tsuki-exp-main';
        const left=await page.locator(first).boundingBox(),right=await page.locator(second).boundingBox();
        assert(left&&right&&left.x<right.x&&Math.abs(left.y-right.y)<4,route+' desktop working areas must be side by side');
      }
      const box=await page.locator('#'+id).boundingBox();
      const details=await page.locator('#'+id).evaluate(e=>({font:getComputedStyle(e).fontFamily,fontSize:getComputedStyle(e).fontSize,background:getComputedStyle(e).backgroundColor}));
      meta.pages[route]={...details,width:box?.width,height:box?.height};
-     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:width>=801&&!(route==='dashboard'&&width===1672)});
+     await page.screenshot({path:path.join(dir,route+'-'+width+'.png'),fullPage:width>=801&&!(width===1536&&(route==='dashboard'||route==='expenses'))&&!(route==='dashboard'&&width===1672)});
      if(route==='bank'&&width===1280){
+       await page.locator('#pageBank .tsuki-bank-extra').first().locator('summary').click();
        const names=['.tsuki-bank-transactions','.tsuki-bank-candidates','.tsuki-bank-operations'];
        const rects=await Promise.all(names.map(n=>page.locator('#pageBank '+n).boundingBox()));
-       assert(rects.every(Boolean)&&rects[0].x<rects[1].x&&rects[1].x<rects[2].x,'bank must have three side-by-side work zones');
+       assert(rects.every(Boolean)&&rects[0].width>0&&rects[1].width>0&&rects[2].width>0,'bank must retain all original transaction, candidate, and operation work zones');
        await page.evaluate(()=>{
          window.__tsukiBankProbe=0;
          document.getElementById('bankRows').innerHTML='<tr><td>2026-11-12</td><td>テスト取引 / GMO</td><td>+100</td><td></td><td><details data-bank-detail="bank-demo"><summary><span class="bank-candidate">売上候補 1件</span>確認・処理</summary><div class="bank-controls"><select id="bankTarget_demo"><option value="">照合先を選択</option><option value="sale-demo">売上 テスト取引</option></select><button type="button" onclick="window.__tsukiBankProbe++">照合確定</button></div></details></td><td>未照合</td></tr>';
