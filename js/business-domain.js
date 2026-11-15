@@ -31,7 +31,7 @@ function onodaTotals(s){
  const month=String(s.carryoverMonth||s.unpaidMonthLabel||'').trim();
  return {taxableSubtotal,nonTaxSubtotal,subtotal,tax,currentAmount,carryoverAmount,carryoverLabel:onodaCarryoverLabel(month),paymentTotal:currentAmount+carryoverAmount};
 }
-function total(s){if(s.docType==='onoda')return onodaTotals(s).currentAmount;if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0;(s.items||[]).forEach(i=>{subtotal+=(Number(i.qty)||0)*(Number(i.price)||0);});subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+subtotal*.1);}
+function total(s){if(s.docType==='onoda')return onodaTotals(s).currentAmount;if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0;(s.items||[]).forEach(i=>{subtotal+=(Number(i.qty)||0)*(Number(i.price)||0);});subtotal+=Number(s.travelFee)||0;const discount=Number(s.discountAmount)||0;if(discount>0)subtotal=Math.max(0,subtotal-discount);return Math.round(subtotal+subtotal*.1);}
 function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'月分 小野田月次施工':(s.bizJobMemo||(s.items||[]).map(x=>x.content).filter(Boolean).slice(0,2).join(' / ')||s.remarks||'工事').slice(0,120);}
 // Presentation metadata only: never used to calculate tax or sales.
 const CATEGORY_RULES=[['クロス張替',/クロス|壁紙/],['穴補修',/穴.*(?:補修|修理|埋)|(?:補修|修理).*穴/],['ドア補修',/(?:ドア|扉).*補修|補修.*(?:ドア|扉)/],['窓枠補修',/窓枠/],['CF/クッションフロア',/\bCF\b|クッションフロア/i],['巾木',/巾木|幅木/],['障子',/障子/],['天井塗装',/天井.*塗装|塗装.*天井/],['ガラスシート',/ガラス.*(?:シート|フィルム)/],['ダイノック',/ダイノック|ダイノク/],['フロアタイル',/フロアタイル/]];
