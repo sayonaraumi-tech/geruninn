@@ -12,7 +12,9 @@ module.exports=async(page,width)=>{
   await page.evaluate(r=>bizSwitchPage(r),route);await page.evaluate(()=>scrollTo(0,0));
   assert(await page.locator('#'+id).isVisible());
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),route+' page overflow');
-  const bar=await page.locator('.biz-topbar').boundingBox(),box=await page.locator('#'+id).boundingBox();assert(box.y>=bar.y+bar.height,route+' clears navigation');
+  const bar=await page.locator('.biz-topbar').boundingBox(),box=await page.locator('#'+id).boundingBox();
+  if(width>=801)assert(box.x>=bar.x+bar.width-1,route+' starts beside the sidebar');
+  else assert(box.y>=bar.y+bar.height,route+' clears navigation');
   if(route!=='chohyo'&&await page.locator('#'+id+' .biz-table').count()){
    const table=await read('#'+id+' .biz-table');assert.equal(table.fontFamily,reference.table.fontFamily);assert.equal(table.fontSize,reference.table.fontSize);
    if(await page.locator('#'+id+' th').count()){const th=await read('#'+id+' th');for(const p of ['fontSize','fontWeight','lineHeight','padding'])assert.equal(th[p],reference.th[p],route+' header '+p);}

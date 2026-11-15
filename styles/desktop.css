@@ -1,0 +1,254 @@
+/* Desktop structure. Screen viewports wider than 800px only.
+   Phone layout, print, and the invoice sheet stay on main.css.
+   .desk-only nodes exist in the DOM but generate no box on a phone. */
+.chohyo-title-desk, .desk-only { display: none; }
+
+@media screen and (min-width: 801px) {
+  :root {
+    --desk-canvas: #e8eef3;
+    --desk-ink: #1a2b3c;
+    --desk-nav: #16324f;
+    --desk-nav-muted: #c5d5e4;
+    --desk-nav-active: #f4f7fb;
+    --desk-primary: #0f6e82;
+    --desk-primary-press: #0c5c6d;
+    --desk-line: #d2dde6;
+    --desk-line-strong: #c3d1de;
+    --desk-header: #f3f7fb;
+    --desk-muted: #5d6e7e;
+    --desk-card: #ffffff;
+    --desk-focus: #0f6e82;
+    --desk-side: 152px;
+  }
+
+  body {
+    font-family: "Noto Sans JP", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "Noto Sans CJK JP", sans-serif;
+    background: var(--desk-canvas);
+    color: var(--desk-ink);
+    padding-top: 0;
+    padding-left: var(--desk-side);
+  }
+
+  /* Left navigation uses the full height. Content uses the remaining width. */
+  .biz-topbar {
+    top: 0;
+    left: 0;
+    right: auto;
+    bottom: 0;
+    width: var(--desk-side);
+    height: 100vh;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 14px 10px 12px;
+    background: var(--desk-nav);
+    color: #f7fbff;
+    box-shadow: inset -3px 0 0 #1c8ea6;
+    overflow: auto;
+  }
+  .biz-brand { letter-spacing: 0.02em; font-weight: 700; line-height: 1.25; }
+  .biz-brand small { color: #9ec3d6; letter-spacing: 0.08em; font-weight: 500; white-space: normal; }
+  .biz-nav { flex: 1; flex-direction: column; align-items: stretch; gap: 2px; overflow: visible; }
+  .biz-nav button {
+    width: 100%;
+    text-align: left;
+    color: var(--desk-nav-muted);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-weight: 500;
+  }
+  .biz-nav button:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+  .biz-nav button.active { background: var(--desk-nav-active); color: var(--desk-nav); font-weight: 700; }
+  .biz-sync { margin-top: auto; color: var(--desk-nav-muted); white-space: normal; }
+  .biz-user { color: #f4f7fb; white-space: normal; }
+  #bizCloudAccountButton {
+    order: -1;
+    width: 100%;
+    max-width: none;
+    background: transparent;
+    color: #f4f7fb;
+    border-color: rgba(255, 255, 255, 0.45);
+    line-height: 1.25;
+    text-align: left;
+  }
+  #coreSyncStatus { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #bizCloudAccountButton:hover { background: rgba(255, 255, 255, 0.1); }
+
+  .biz-page, #pageEstimates, #pageChohyo.editor { max-width: none; }
+  .biz-page { padding: 12px 12px 24px; }
+  .biz-title { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; align-items: center; }
+  .biz-title h1 { color: var(--desk-nav); font-weight: 700; font-size: 20px; }
+  .biz-muted { color: var(--desk-muted); }
+  .biz-section {
+    background: var(--desk-card);
+    border-color: var(--desk-line);
+    border-radius: 10px;
+    margin-top: 0;
+    padding: 12px 14px;
+    box-shadow: none;
+  }
+  .biz-section h2 { color: var(--desk-nav); }
+  .biz-section-head { margin-bottom: 8px; }
+  .biz-card { background: var(--desk-card); border-color: var(--desk-line); border-radius: 10px; box-shadow: none; }
+
+  .biz-btn { border-color: var(--desk-line-strong); border-radius: 8px; background: #fff; color: var(--desk-ink); }
+  .biz-btn:hover { background: #f5f9fb; }
+  .biz-btn.primary { background: var(--desk-primary); border-color: var(--desk-primary); color: #fff; font-weight: 700; }
+  .biz-btn.primary:hover { background: var(--desk-primary-press); border-color: var(--desk-primary-press); }
+  .biz-btn.danger { color: #b42318; border-color: #f0c6c2; background: #fff; }
+  .biz-btn.ok { color: #0f6b56; border-color: #b7ddd2; background: #f3fbf8; }
+  .biz-btn:focus-visible, summary:focus-visible, .biz-sort:focus-visible { outline: 2px solid var(--desk-focus); outline-offset: 2px; }
+
+  .biz-field label, .sales-filters label { color: var(--desk-muted); }
+  :is(.app-page, dialog, #bizEventModal) :is(input, select, textarea):not([type=checkbox]):not([type=radio]) {
+    border-color: var(--desk-line-strong); background: #fff; color: var(--desk-ink);
+  }
+  :is(.app-page, dialog, #bizEventModal) :is(input, select, textarea):focus {
+    outline: 2px solid var(--desk-focus); outline-offset: 0; border-color: var(--desk-primary);
+  }
+  .biz-table th { background: var(--desk-header); color: #3e566c; border-bottom: 1px solid var(--desk-line); }
+  .biz-table td { border-bottom-color: #e6eef3; }
+  .biz-kpi, .biz-money, .home-amount, #cashBalance, .sales-register td:nth-child(n+6):nth-child(-n+8) {
+    font-variant-numeric: tabular-nums; font-feature-settings: "tnum" 1;
+  }
+  .biz-kpi { color: var(--desk-nav); letter-spacing: 0; font-size: 22px; }
+  .biz-alert { background: #fff8ea; border-color: #f0e0b4; color: #7a5b16; }
+  .sales-filters { background: transparent; border: 0; border-radius: 0; padding: 0 0 8px; }
+  dialog { color: var(--desk-ink); border: 1px solid var(--desk-line); box-shadow: 0 18px 48px rgba(22, 50, 79, 0.18); }
+  dialog::backdrop { background: rgba(18, 36, 54, 0.48); }
+
+  /* HOME: header tools, one KPI strip, ledger beside the breakdown. */
+  #pageDashboard.app-page.active {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px 10px;
+    align-items: start;
+  }
+  #pageDashboard > .biz-title { grid-column: 1 / -1; }
+  #pageDashboard:has(#homeSettlement:not([hidden])) > .biz-title { grid-column: 1 / 4; }
+  #pageDashboard > #homeSettlement {
+    grid-column: 4 / -1;
+    grid-row: 1;
+    align-self: center;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  #pageDashboard > #homeSettlement .biz-actions { justify-content: flex-end; }
+  #pageDashboard > #homeSettlement:has(#homeExportPanel:not([hidden])) { grid-column: 1 / -1; }
+  #homeExportPanel { margin-top: 8px; padding: 10px 12px; background: #fff; border: 1px solid var(--desk-line); border-radius: 10px; }
+  #pageDashboard > .home-period { grid-column: 1 / -1; }
+  #pageDashboard > .home-period .biz-form-grid { gap: 8px; }
+  #pageDashboard > .biz-grid:not(.home-secondary) { grid-column: 1 / 5; gap: 8px; }
+  #pageDashboard > .home-secondary { grid-column: 5 / -1; margin-top: 0; gap: 8px; }
+  #pageDashboard > p.biz-muted { grid-column: 1 / -1; margin: 0; }
+  #pageDashboard > .biz-section:has(#homeLedger) { grid-column: 1 / 5; }
+  #pageDashboard > .biz-section:has(#homeBreakdown) { grid-column: 5 / -1; }
+  #pageDashboard > .biz-section:has(#attentionList) { grid-column: 1 / -1; }
+  #pageDashboard .biz-card { padding: 8px 10px; }
+  #pageDashboard .biz-card:after { display: none; }
+  #pageDashboard .biz-card h3 { margin-bottom: 2px; }
+  #pageDashboard .biz-grid:not(.home-secondary) .biz-card:nth-child(1) { box-shadow: inset 3px 0 0 #0f6e82; }
+  #pageDashboard .biz-grid:not(.home-secondary) .biz-card:nth-child(2) { box-shadow: inset 3px 0 0 #15803d; }
+  #pageDashboard .biz-grid:not(.home-secondary) .biz-card:nth-child(3) { box-shadow: inset 3px 0 0 #b7791f; }
+  #pageDashboard .biz-grid:not(.home-secondary) .biz-card:nth-child(4) { box-shadow: inset 3px 0 0 #b91c1c; }
+  #pageDashboard .home-secondary .biz-card { box-shadow: inset 3px 0 0 #8aa0b5; padding-right: 10px; }
+
+  /* List pages fill the width. Entry forms sit beside the ledger. */
+  #pageCalendar.app-page.active,
+  #pageEstimates.app-page.active,
+  #pageSavedDocs.app-page.active,
+  #pageExpenses.app-page.active,
+  #pageBank.app-page.active {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  #pageSales.app-page.active { display: flex; flex-direction: column; gap: 10px; }
+  #paymentRegistrationForm .biz-form-grid { grid-template-columns: 1.6fr 1fr 1fr 1fr 1.4fr auto; align-items: end; }
+  #paymentRegistrationForm .biz-field.span2 { grid-column: span 2; }
+  #pageSettings.app-page.active {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    align-items: start;
+  }
+  #pageSettings > .biz-title { grid-column: 1 / -1; }
+
+  /* 帳票: compact entry on the left, the real sheet stays on the right. */
+  #pageChohyo.editor.app-page.active {
+    max-width: none;
+    margin: 0;
+    padding: 12px 12px 20px;
+    display: grid;
+    grid-template-columns: minmax(420px, 520px) minmax(0, 1fr);
+    column-gap: 14px;
+    row-gap: 10px;
+    align-items: start;
+  }
+  #pageChohyo > * { min-width: 0; }
+  #pageChohyo > button:first-of-type,
+  #pageChohyo > button:nth-of-type(2) { grid-column: 1; grid-row: 1; width: auto; }
+  #pageChohyo > button:first-of-type { justify-self: start; }
+  #pageChohyo > button:nth-of-type(2) { justify-self: end; }
+  #pageChohyo > div.editor-card:nth-of-type(1) { grid-column: 1; grid-row: 2; }
+  #pageChohyo > #itemsCard { grid-column: 1; grid-row: 3; }
+  #pageChohyo > div.editor-card:nth-of-type(3) { grid-column: 1; grid-row: 4; }
+  #pageChohyo > .editor-card:has(.btn-print) { grid-column: 1; grid-row: 5; }
+  #pageChohyo > #confirmedHistoryCard { grid-column: 1; grid-row: 6; }
+  #pageChohyo > #previewArea {
+    grid-column: 2;
+    grid-row: 1 / span 6;
+    position: sticky;
+    top: 12px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    max-height: calc(100vh - 24px);
+    overflow: auto;
+    background: #d5dee8;
+    border-radius: 10px;
+    padding: 12px;
+  }
+  #pageChohyo .editor-card {
+    background: #fff;
+    border: 1px solid var(--desk-line);
+    border-radius: 10px;
+    box-shadow: none;
+    margin-bottom: 0;
+    padding: 12px;
+  }
+  #pageChohyo h2 { color: var(--desk-nav); font-size: 20px; font-weight: 700; letter-spacing: 0.04em; margin-bottom: 2px; }
+  #pageChohyo .chohyo-title-legacy { display: none; }
+  #pageChohyo .chohyo-title-desk { display: inline; }
+  #pageChohyo .subtitle { color: var(--desk-muted); margin-bottom: 8px; }
+  #pageChohyo h3 { color: var(--desk-nav); margin-bottom: 8px; }
+  #pageChohyo .tabs { background: #e6eef5; border-radius: 8px; padding: 3px; gap: 3px; margin: 8px 0; }
+  #pageChohyo .tab { color: #4d6274; border-radius: 6px; }
+  #pageChohyo .tab.active { background: var(--desk-nav); color: #fff; box-shadow: none; }
+  #pageChohyo .form-row { margin-bottom: 8px; }
+  #itemsCard .item-head {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px 76px 88px 36px;
+    gap: 6px;
+    margin-bottom: 4px;
+    color: var(--desk-muted);
+    font-size: 11px;
+    font-weight: 700;
+  }
+  #pageChohyo .item-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 72px 76px 88px 36px;
+    gap: 6px;
+    align-items: center;
+  }
+  #pageChohyo .item-row.item-row-tax { grid-template-columns: minmax(0, 1fr) 64px 68px 80px 72px 36px; }
+  #pageChohyo .item-unit-custom { grid-column: 3; }
+  #pageChohyo .btn-add { color: var(--desk-primary); border: 1px dashed #9dcbd4; background: #f4fbfc; }
+  #pageChohyo .btn-preview { background: #fff; color: var(--desk-nav); border: 1px solid var(--desk-line-strong); }
+  #pageChohyo .btn-print { background: var(--desk-primary); color: #fff; border: 1px solid var(--desk-primary); box-shadow: none; font-weight: 700; }
+  #pageChohyo .btn-download { background: #fff; color: var(--desk-primary); border: 1px solid var(--desk-primary); }
+  #discountSection { margin-top: 4px; padding: 8px 10px; border: 1px dashed var(--desk-line-strong); border-radius: 8px; background: #f7fafc; }
+}
