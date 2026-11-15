@@ -865,7 +865,7 @@ function setDocType(type) {
 
   // 請求書・小野田は支払期限、見積書は有効期限。領収書には表示しない。
   const topExpiry = document.getElementById('topExpiryLine');
-  if (topExpiry) topExpiry.style.display = isReceipt ? 'none' : '';
+  if (topExpiry) topExpiry.style.display = isReceipt ? 'none' : 'grid';
 
   // expiry 标签按抬头不同
   const expiryLabel = document.querySelector('#topExpiryLine .expiry-label');
