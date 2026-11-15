@@ -13,6 +13,8 @@
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <title>月輪合同会社 業務連動システム</title>
 <link rel="stylesheet" href="./styles/main.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="./styles/desktop.css">
 <style>.biz-hidden{display:none!important}</style>
 
 <meta name="theme-color" content="#1a1a1a">
@@ -228,8 +230,8 @@
 
 <div class="editor app-page" id="pageChohyo">
   <div class="editor-card">
-    <h2>🎨 帳票システム P1 — 金色 × 漆黒</h2>
-    <div class="subtitle">月輪合同会社 - 請求書 / 見積書 / 領収書</div>
+    <h2><span class="chohyo-title-legacy">🎨 帳票システム P1 — 金色 × 漆黒</span><span class="chohyo-title-desk">帳票</span></h2>
+    <div class="subtitle"><span class="chohyo-title-legacy">月輪合同会社 - 請求書 / 見積書 / 領収書</span><span class="chohyo-title-desk">月輪合同会社 — 請求書 / 見積書 / 領収書 / 小野田請求</span></div>
 
     <div class="tabs">
       <button class="tab active" data-type="invoice" onclick="setDocType('invoice')">請求書</button>
@@ -285,6 +287,7 @@
 
   <div class="editor-card" id="itemsCard">
     <h3>🔨 工事内容（数量 × 単価 = 金額）</h3>
+    <div class="item-head desk-only" aria-hidden="true"><span>工事内容</span><span>数量</span><span>単位</span><span>単価</span><span></span></div>
     <div id="itemsList"></div>
     <button class="btn-add" onclick="addItem()">＋ 新增一行</button>
   </div>
