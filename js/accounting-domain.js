@@ -21,6 +21,12 @@ async function handleCashAdjustment(cmd, {read, write, required, A}){
  return {cashTxnId:cmd.cashTxnId};
 }
 
+
+async function handleSaveSupplier(cmd, {read, write, required, A}){
+  const id=cmd.supplierId,old=await read('suppliers',id),s=cmd.supplier,openingBalance=A.money(s.openingBalance,true);const prior=old?.payload||{};
+  await write('suppliers',id,{supplierId:id,supplierName:required(s.supplierName,'仕入先名'),openingBalance,openingDate:A.date(s.openingDate),currentBalance:(prior.currentBalance||0)-(prior.openingBalance||0)+openingBalance,deletedAt:null},old?'adjustment':'create',cmd.expectedRevision);return {supplierId:id};
+}
+
 async function handle(cmd,context){
  const {read,write,who,stable,expenseSeed=[],relatedPayments}=context;
  if(who.role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
@@ -95,10 +101,7 @@ async function handle(cmd,context){
   await write('suppliers',cmd.supplierId,{...supplier.payload,currentBalance:(Number(supplier.payload.currentBalance)||0)+b.outgoing},'supplier transaction');
   await write('bankTransactions',cmd.bankTxnId,{...b,status:'照合済',matchType:'supplier',matchId:id,paymentId:'',confirmedBy:who.uid},'bank match confirm',cmd.expectedRevision);return {transactionId:id};
  }
- if(cmd.type==='saveSupplier'){
-  const id=cmd.supplierId,old=await read('suppliers',id),s=cmd.supplier,openingBalance=A.money(s.openingBalance,true);const prior=old?.payload||{};
-  await write('suppliers',id,{supplierId:id,supplierName:required(s.supplierName,'仕入先名'),openingBalance,openingDate:A.date(s.openingDate),currentBalance:(prior.currentBalance||0)-(prior.openingBalance||0)+openingBalance,deletedAt:null},old?'adjustment':'create',cmd.expectedRevision);return {supplierId:id};
- }
+ if(cmd.type==='saveSupplier') return handleSaveSupplier(cmd, {read, write, required, A});
  if(cmd.type==='supplierTransaction'||cmd.type==='deleteSupplierTransaction'){
   let id=cmd.transactionId;const t=cmd.transaction;
   if(t?.type==='monthlyInvoice'){if(!/^\d{4}-(0[1-9]|1[0-2])$/.test(t.invoiceMonth))throw Error('請求月を指定してください。');id=await stable('supplierinvoice',t.supplierId+'|'+t.invoiceMonth);}
