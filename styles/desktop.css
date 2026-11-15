@@ -63,6 +63,7 @@
   .biz-sync { margin-top: auto; color: var(--desk-nav-muted); white-space: normal; }
   .biz-user { color: #f4f7fb; white-space: normal; }
   #bizCloudAccountButton {
+    order: -1;
     width: 100%;
     max-width: none;
     background: transparent;
