@@ -12,6 +12,15 @@ async function mirrorCash(name,id,p,read,write){
  if(eligible&&!p.deletedAt&&p.amount>0)await write('cashLedger',cashTxnId,{cashTxnId,date,type,category,description:description||'',amount:p.amount,linkedPaymentId,linkedExpenseId,linkedSupplierTransactionId,deletedAt:null},'cash transaction');
  else if(old&&!old.payload.deletedAt)await write('cashLedger',cashTxnId,{...old.payload,deletedAt:new Date().toISOString()},'cash transaction');
 }
+
+async function handleCashAdjustment(cmd, {read, write, required, A}){
+ const old=await read('cashLedger',cmd.cashTxnId);
+ if(old)return {unchanged:true};
+ if(!['income','expense'].includes(cmd.direction))throw Error('収支区分が不正です。');
+ await write('cashLedger',cmd.cashTxnId,{cashTxnId:cmd.cashTxnId,date:A.date(cmd.date),type:cmd.direction,category:'残高調整',description:required(cmd.description,'調整理由'),amount:A.money(cmd.amount),linkedPaymentId:'',linkedExpenseId:'',linkedSupplierTransactionId:'',deletedAt:null},'adjustment',0);
+ return {cashTxnId:cmd.cashTxnId};
+}
+
 async function handle(cmd,context){
  const {read,write,who,stable,expenseSeed=[],relatedPayments}=context;
  if(who.role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
@@ -40,7 +49,7 @@ async function handle(cmd,context){
   await write('expenses',id,{expenseId:id,expenseDate:A.date(e.expenseDate),category:A.CATEGORIES.includes(e.category)?e.category:'その他',vendor:e.vendor||'',description:e.description||'',amount:A.money(e.amount),paymentMethod:required(e.paymentMethod,'支払方法'),bankAccount:e.paymentMethod==='現金'?'cash':e.bankAccount||'',receiptAttachmentRef:e.receiptAttachmentRef||'',deletedAt:null},old?'expense update':'expense create',cmd.expectedRevision);return {expenseId:id};
  }
  if(cmd.type==='deleteExpense'){const e=await read('expenses',cmd.expenseId);if(!e)throw Error('支出がありません。');if(e.payload.deletedAt)return {unchanged:true};if(e.payload.bankTxnId||e.payload.platformSettlementBankId||e.payload.supplierTransactionId)throw Error('銀行照合を解除、または仕入先台帳から訂正してください。');await write('expenses',cmd.expenseId,{...e.payload,deletedAt:now(),deleteReason:required(cmd.reason,'取消理由')},'expense delete',cmd.expectedRevision);return {expenseId:cmd.expenseId};}
- if(cmd.type==='cashAdjustment'){const old=await read('cashLedger',cmd.cashTxnId);if(old)return {unchanged:true};if(!['income','expense'].includes(cmd.direction))throw Error('収支区分が不正です。');await write('cashLedger',cmd.cashTxnId,{cashTxnId:cmd.cashTxnId,date:A.date(cmd.date),type:cmd.direction,category:'残高調整',description:required(cmd.description,'調整理由'),amount:A.money(cmd.amount),linkedPaymentId:'',linkedExpenseId:'',linkedSupplierTransactionId:'',deletedAt:null},'adjustment',0);return {cashTxnId:cmd.cashTxnId};}
+ if(cmd.type==='cashAdjustment')return handleCashAdjustment(cmd,{read,write,required,A});
  if(cmd.type==='reviewBankIncome'){
   const row=await read('bankTransactions',cmd.bankTxnId);if(row&&A.live(row.payload)&&row.payload.status==='照合済'&&row.payload.matchType==='bankIncome'&&row.payload.category===(cmd.interest?'受取利息':'雑収入'))return {unchanged:true};if(!row||!A.live(row.payload)||!row.payload.incoming||['照合済','除外'].includes(row.payload.status))throw Error('未照合の銀行入金を選択してください。');const b=row.payload,note=required(cmd.note,'原本確認内容');
   if(cmd.interest||cmd.cashback||cmd.category==='雑収入'){
