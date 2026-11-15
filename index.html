@@ -1113,18 +1113,11 @@ function recalc() {
               '<td class="c4">−' + fmtNum(discount) + '</td></tr>';
     }
     const dRow = document.getElementById('dDiscountRow');
-    const dVal = document.getElementById('dDiscount');
-    if (dRow && dVal) {
-      if (discount > 0) {
-        dVal.textContent = '−' + fmtNum(discount) + ' 円';
-        dRow.hidden = false;
-        dRow.style.display = 'flex';
-      } else {
-        dRow.hidden = true;
-        dRow.style.display = 'none';
-      }
+    if (dRow) {
+      dRow.hidden = true;
+      dRow.style.display = 'none';
     }
-    const usedRows = items.length + (travelFee > 0 ? 1 : 0);
+    const usedRows = items.length + (travelFee > 0 ? 1 : 0) + (discount > 0 ? 1 : 0);
     const fillCount = Math.max(0, 6 - usedRows);
     for (let i = 0; i < fillCount; i++) {
       rows += '<tr class="empty"><td class="c1">&nbsp;</td><td class="c2"></td><td class="cu"></td><td class="c3"></td><td class="c4"></td></tr>';
