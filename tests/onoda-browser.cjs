@@ -1,4 +1,5 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
+const {waitForPageReady}=require('./helpers/page-ready.cjs');
 const root=path.join(__dirname,'..');
 const driver=`window.createTsukinowaFirebaseDriver=async()=>{
  let cb;const records=window.testRecords=new Map(),listeners=[];
@@ -11,13 +12,13 @@ const driver=`window.createTsukinowaFirebaseDriver=async()=>{
 const server=http.createServer((req,res)=>{try{const u=new URL(req.url,'http://localhost').pathname;
  if(u==='/js/firebase-driver.js'){res.setHeader('Content-Type','text/javascript');return res.end(driver);}
  if(u==='/firebase-config.json'){res.setHeader('Content-Type','application/json');return res.end(JSON.stringify({enabled:true,companyId:'tsukinowa',firebase:{apiKey:'test',projectId:'test',authDomain:'test',appId:'test'}}));}
- const f=path.join(root,u==='/'?'index.html':u);res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(f));
+ const f=path.join(root,u==='/'?'index.html':u);res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.css')?'text/css':'application/octet-stream');res.end(fs.readFileSync(f));
  }catch{res.writeHead(404).end();}});
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});
  try{for(const width of [1280,390]){
  const context=await browser.newContext({viewport:{width,height:900},serviceWorkers:'block'}),p=await context.newPage(),errors=[];p.on('pageerror',e=>errors.push(e.message));p.on('dialog',d=>d.dismiss());await p.route('https://**/*',r=>r.fulfill({body:''}));await p.goto('http://127.0.0.1:'+server.address().port);
- await p.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});await p.locator('#bizCloudAccountButton').click();await p.locator('#cloudEmail').fill('admin@example.com');await p.locator('#cloudPassword').fill('test');await p.locator('#cloudLogin').click();await p.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});await p.locator('#cloudDialog').press('Escape');
+ await p.locator('#cloudStatus').filter({hasText:'未ログイン'}).waitFor({state:'attached'});await p.waitForFunction(()=>getComputedStyle(document.getElementById('bizEventModal')).display==='none');await p.locator('#bizCloudAccountButton').click();await p.locator('#cloudEmail').fill('admin@example.com');await p.locator('#cloudPassword').fill('test');await p.locator('#cloudLogin').click();await p.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});await p.locator('#cloudDialog').press('Escape');
  for(const n of [24,25,35]){
  const result=await p.evaluate(async n=>{
   for(const key of [...testRecords.keys()])if(key.includes('/calendarLinks/'))testRecords.delete(key);const ev=(i,extra={})=>({id:'event'+i,googleEventId:'google'+i,date:'2026-09-30',start:'2026-09-30',updated:'2026-09-30T00:00:00Z',title:'小野田、施工'+i+'、1米',googleLatestTitle:i===n-1?'小野田，マキシヴ川崎サウスdue201，51.6米':'小野田、施工'+i+'、1米',googleOriginalDescription:'<p>TimeTree转录：截图未显示具体时间</p>',...extra});

@@ -1,6 +1,7 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
+const {waitForPageReady}=require('./helpers/page-ready.cjs');
 const root=path.join(__dirname,'..');
-const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(root,pathname==='/'?'index.html':pathname);try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});
+const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(root,pathname==='/'?'index.html':pathname);try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});
 const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {initialize:async()=>{},observeAuth:f=>{cb=f;f(null);return()=>{};},claims:async u=>u.claims,signIn:async(email,password)=>{if(password==='wrong')throw Error('no');await cb({uid:'test',email,claims:{role:email.startsWith('admin')?'admin':'staff',companyId:'tsukinowa'}});},signOut:async()=>cb(null),listen:(p,m,next)=>{next([],{fromCache:false});return()=>{};}}};`;
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;const browser=await chromium.launch({headless:true});
@@ -10,7 +11,7 @@ const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {
   page.on('pageerror',e=>errors.push(e.message));await page.route('https://**/*',r=>{sdkCalls++;return r.fulfill({body:''});});
   await page.addInitScript(()=>{localStorage.setItem('tsukinowa_business_v1',JSON.stringify({sales:[{id:'old',amount:100}],payments:[],expenses:[],bank:[],calendar:[],audit:[],estimates:[],projects:[]}));});
   await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false,companyId:'tsukinowa',firebase:{}}}));
-  await page.goto(base);await page.locator('#cloudStatus').filter({hasText:'クラウド未設定'}).waitFor({state:'attached'});
+  await page.goto(base);await waitForPageReady(page);await page.locator('#cloudStatus').filter({hasText:'クラウド未設定'}).waitFor({state:'attached'});
   const backup=await page.evaluate(()=>localStorage.getItem('tsukinowa_business_v1'));
   await page.locator('#bizCloudAccountButton').click();assert(await page.locator('#cloudDialog').isVisible());assert(await page.locator('#cloudLogin').isDisabled());
   const bounds=await page.locator('#bizCloudAccountButton').boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=104);

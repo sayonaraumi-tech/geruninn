@@ -17,7 +17,7 @@ function token(role){const part=v=>Buffer.from(JSON.stringify(v)).toString('base
   if(pathname.startsWith('/test-sdk/')){res.setHeader('Content-Type','text/javascript');return res.end(sdkFiles.get(path.basename(pathname)));}
   try{
    const file=path.join(root,pathname==='/'?'index.html':pathname);
-   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')||file.endsWith('.webmanifest')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');
+   res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')||file.endsWith('.webmanifest')?'application/json':file.endsWith('.html')?'text/html':file.endsWith('.css')?'text/css':'application/octet-stream');
    let source=fs.readFileSync(file);
    if(pathname==='/js/firebase-driver.js')source=source.toString().replace(sdkBase,'/test-sdk/')+`\nconst realDriver=window.createTsukinowaFirebaseDriver; window.createTsukinowaFirebaseDriver=async()=>{const d=await realDriver();d.listen=(p,m,next)=>{next(m?[]:null,{fromCache:false,hasPendingWrites:false});return()=>{};};return d;};`;
    res.end(source);
