@@ -3,7 +3,7 @@
 ## 基线
 - 仓库：`sayonaraumi-tech/geruninn`
 - 分支：`refactor/internal-structure-20261115`
-- 基线 SHA：见最新提交
+- 基线 SHA：c4e29aaddeaef16af8f933d4a08960622e0942d7
 - 状态：内部重构进行中；local CI 通过；Emulator CI 有已知失败项（见风险）
 
 ## 设计范围
