@@ -1,4 +1,5 @@
 // Real navigation clicks, including a late Google script that must not reset the page.
+const {waitForPageReady}=require('./helpers/page-ready.cjs');
 const assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
 const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');

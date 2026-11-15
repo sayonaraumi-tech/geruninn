@@ -1,4 +1,5 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
+const {waitForPageReady}=require('./helpers/page-ready.cjs');
 const root=path.join(__dirname,'..');
 const driver=`window.createTsukinowaFirebaseDriver=async()=>{
  let cb;const records=window.testRecords=new Map(),listeners=[];
