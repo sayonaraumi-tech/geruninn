@@ -302,6 +302,15 @@
         <input type="number" id="travelFee" value="4000" oninput="recalc()">
       </div>
     </div>
+    <div id="discountSection" style="display:none">
+      <button type="button" id="discountToggle" class="biz-btn" style="margin:8px 0">値引きを追加する</button>
+      <div id="discountInputRow" class="form-row" style="display:none">
+        <div class="form-group full">
+          <label>値引き額（円・税前）</label>
+          <input type="number" id="discountAmount" min="0" step="1" value="0" oninput="recalc()">
+        </div>
+      </div>
+    </div>
     <div class="form-row" id="receiptTotalRow" style="display:none">
       <div class="form-group full">
         <label>領収金額（税込合計を直接入力）</label>
@@ -412,6 +421,7 @@
     <div class="bottom-totals-wrap">
       <div class="totals-classic">
         <div class="totals-row"><span class="lbl">小計</span><span class="val" id="dSubtotal">35,720</span></div>
+        <div class="totals-row" id="dDiscountRow" hidden style="display:none"><span class="lbl">値引き</span><span class="val" id="dDiscount">−0 円</span></div>
         <div class="totals-row non-tax-row hidden" id="dNonTaxRow"><span class="lbl">非課税</span><span class="val" id="dNonTax">0 円</span></div>
         <div class="totals-row"><span class="lbl">消費税【10%】</span><span class="val" id="dTax">3,572</span></div>
         <div class="totals-row" id="dCurrentAmountRow" hidden style="display:none"><span class="lbl">今回請求額</span><span class="val" id="dCurrentAmount"></span></div>
@@ -817,6 +827,7 @@ function setDocType(type) {
   document.getElementById('paymentMethodRow').style.display = isEstimate ? 'none' : '';
   document.getElementById('itemsCard').style.display = isReceipt ? 'none' : '';
   document.getElementById('travelFeeRow').style.display = (isReceipt || isOnoda) ? 'none' : '';
+  const ds = document.getElementById('discountSection'); if (ds) ds.style.display = (docType === 'invoice') ? '' : 'none';
   document.getElementById('receiptTotalRow').style.display = isReceipt ? '' : 'none';
 
   // 領収書下「支払方法」要显示在底部
@@ -1090,6 +1101,25 @@ function recalc() {
               '<td class="c3">' + fmtNum(travelFee) + '</td>' +
               '<td class="c4">' + fmtNum(travelFee) + '</td></tr>';
       subtotal += travelFee;
+    const discount = (docType === 'invoice') ? (parseFloat(document.getElementById('discountAmount')?.value) || 0) : 0;
+    if (discount > 0) {
+      subtotal = Math.max(0, subtotal - discount);
+      rows += '<tr><td class="c1">値引き</td><td class="c2"></td><td class="cu"></td>' +
+              '<td class="c3"></td>' +
+              '<td class="c4">−' + fmtNum(discount) + '</td></tr>';
+    }
+    const dRow = document.getElementById('dDiscountRow');
+    const dVal = document.getElementById('dDiscount');
+    if (dRow && dVal) {
+      if (discount > 0) {
+        dVal.textContent = '−' + fmtNum(discount) + ' 円';
+        dRow.hidden = false;
+        dRow.style.display = 'flex';
+      } else {
+        dRow.hidden = true;
+        dRow.style.display = 'none';
+      }
+    }
     }
     const usedRows = items.length + (travelFee > 0 ? 1 : 0);
     const fillCount = Math.max(0, 6 - usedRows);
@@ -1589,12 +1619,21 @@ function collectFormState() {
     tadashi: v('tadashi'),
     receiptTotal: v('receiptTotal'),
     travelFee: v('travelFee'),
+    discountAmount: docType === 'invoice' ? (Number(v('discountAmount')) || 0) : 0,
     items: JSON.parse(JSON.stringify(items || [])),
     month: currentMonthKey(),
     scrollY: window.scrollY || 0,
     savedAt: new Date().toISOString()
   };
 }
+
+document.getElementById('discountToggle')?.addEventListener('click', () => {
+  const row = document.getElementById('discountInputRow');
+  if (!row) return;
+  row.style.display = row.style.display === 'none' ? '' : 'none';
+  if (row.style.display !== 'none') document.getElementById('discountAmount')?.focus();
+});
+
 function applyFormState(state, forceType) {
   if (!state) return;
   _simpleRestoring = true;
@@ -1619,6 +1658,9 @@ function applyFormState(state, forceType) {
     setv('tadashi', state.tadashi);
     setv('receiptTotal', state.receiptTotal);
     setv('travelFee', state.travelFee);
+    setv('discountAmount', state.discountAmount || 0);
+    const dRow = document.getElementById('discountInputRow');
+    if (dRow) dRow.style.display = (Number(state.discountAmount) > 0) ? '' : 'none';
     setv('carryoverMonth', targetType === 'onoda' ? (state.carryoverMonth || state.unpaidMonthLabel || '') : '');
     setv('carryoverAmount', targetType === 'onoda' ? (state.carryoverAmount || 0) : 0);
     if (Array.isArray(state.items) && state.items.length) {
