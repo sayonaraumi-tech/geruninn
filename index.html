@@ -368,7 +368,7 @@
     <div class="customer-meta-right">
       <div class="meta-line"><span class="meta-key" id="lblDocNo">No.</span><span class="meta-val" id="dNo">20260513-001</span></div>
       <div class="meta-line"><span class="meta-key">発行日</span><span class="meta-val" id="dDate">2026年5月13日</span></div>
-      <div class="meta-line top-expiry" id="topExpiryLine"><span class="meta-key expiry-label">有効期限</span><span class="meta-val" id="dExpiryTop">2026年6月13日</span></div>
+      <div class="meta-line top-expiry" id="topExpiryLine" style="display:none"><span class="meta-key expiry-label">有効期限</span><span class="meta-val" id="dExpiryTop">2026年6月13日</span></div>
       <div class="meta-line" id="registrationLine" style="display:none"><span class="meta-key">登録番号</span><span class="meta-val" id="dRegNo"></span></div>
     </div>
   </div>
@@ -865,7 +865,7 @@ function setDocType(type) {
 
   // 請求書・小野田は支払期限、見積書は有効期限。領収書には表示しない。
   const topExpiry = document.getElementById('topExpiryLine');
-  if (topExpiry) topExpiry.style.display = isReceipt ? 'none' : 'grid';
+  if (topExpiry) topExpiry.style.display = isReceipt ? 'none' : '';
 
   // expiry 标签按抬头不同
   const expiryLabel = document.querySelector('#topExpiryLine .expiry-label');
@@ -1640,9 +1640,6 @@ function applyFormState(state, forceType) {
   try {
     const targetType = state.docType || forceType || 'invoice';
     if (docType !== targetType) setDocType(targetType);
-    // Always sync expiry visibility even when type is unchanged
-    const topExpiry = document.getElementById('topExpiryLine');
-    if (topExpiry) topExpiry.style.display = (targetType === 'receipt') ? 'none' : 'grid';
     bizRestoreDocumentLinks(state);
     const setv = (id, value) => {
       const el = document.getElementById(id);
