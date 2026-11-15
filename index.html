@@ -1640,6 +1640,9 @@ function applyFormState(state, forceType) {
   try {
     const targetType = state.docType || forceType || 'invoice';
     if (docType !== targetType) setDocType(targetType);
+    // Always sync expiry visibility even when type is unchanged
+    const topExpiry = document.getElementById('topExpiryLine');
+    if (topExpiry) topExpiry.style.display = (targetType === 'receipt') ? 'none' : 'grid';
     bizRestoreDocumentLinks(state);
     const setv = (id, value) => {
       const el = document.getElementById(id);
