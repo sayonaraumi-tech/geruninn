@@ -20,6 +20,7 @@ test('operations privacy: staff get own idempotency and formal reservations but 
   ]) await setDoc(ref(store,'operations',opId),{actorId,fingerprint:'x',result,createdAt:new Date()});
  });
  const staff=db('staff'),admin=db('admin'),otherTenant=db('staff','other-company');
+ await assertSucceeds(getDoc(ref(staff,'operations','not-created-yet')));
  await assertSucceeds(getDoc(ref(staff,'operations','own-operation')));
  await assertSucceeds(getDoc(ref(staff,'operations','documentNumber_20261116-1200-01')));
  await assertFails(getDoc(ref(staff,'operations','other-operation')));
