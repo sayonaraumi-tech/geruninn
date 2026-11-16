@@ -214,9 +214,7 @@ service cloud.firestore {
   match /companies/{c}/cashLedger/{id} {
    allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
   }
-  // Staff may reserve a formal number only alongside the actual immutable
-  // document snapshot in the same transaction; empty reservations can otherwise
-  // exhaust future invoice numbers without creating financial evidence.
+  // A staff number reservation must match a document committed in the same operation.
   function staffNumberReservation(c,id) {
     let r=request.resource.data.result;
     let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(r.documentId)).data;
@@ -224,7 +222,14 @@ service cloud.firestore {
       && r.keys().hasAll(['documentId','invoiceNo','numberingMinute','numberingSequence'])
       && r.documentId is string && r.invoiceNo is string
       && r.numberingMinute is string && r.numberingSequence is int
-      && r.numberingSequence>0 && r.invoiceNo.matches('^[0-9]{8}-[0-9]{4}-[0-9]+
+      && r.numberingSequence>0 && r.invoiceNo.matches('^[0-9]{8}-[0-9]{4}-[0-9]{2,}')
+      && id=='documentNumber_'+r.invoiceNo
+      && d.updatedBy==request.auth.uid && d.updatedAt==request.time
+      && d.payload.snapshot.invoiceNo==r.invoiceNo
+      && d.payload.snapshot.numberingMinute==r.numberingMinute
+      && d.payload.snapshot.numberingSequence==r.numberingSequence;
+  }
+  match /companies/{c}/operations/{id} {
    // Read only the caller's own idempotency result. The shared invoice-number
    // reservation namespace remains gettable so staff can skip occupied numbers.
    // Listing all operations would expose other users' result/backup payloads.
