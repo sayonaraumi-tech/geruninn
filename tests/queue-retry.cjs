@@ -67,3 +67,22 @@ test('inconsistent reciprocal references remain isolated even when bank snapshot
  sync.enqueue({type:'expenseFromBank',operationId:'bad',bankTxnId:'bic',expense:{amount:6060}});sync.enqueue({type:'test',operationId:'good'});online=true;await sync.flush();
  assert.deepEqual(attempts,['bad','good']);assert.equal(sync.getQueue().length,1);assert(sync.getQueue()[0].blocked);sync.stop();
 });
+
+test('signout snapshot purge removes only confirmed rows, never unsynced financial evidence',()=>{
+ const {purgeConfirmedSnapshots}=require('../js/business-sync');
+ const prefix='tsukinowa_cloud_v2_demo_test_test_',values=new Map([
+  [prefix+'sales','[{"amount":50000}]'],[prefix+'payments','[{"amount":20000}]'],
+  [prefix+'outbox','[{"command":{"type":"payment","operationId":"pending"}}]'],
+  [prefix+'bank_conflict_backup_pending','evidence'],[prefix+'conflicts_1','evidence'],
+  ['tsukinowa_cloud_backup_historical','immutable'],['tsukinowa_business_v1','legacy'],
+  ['tsukinowa_cloud_v2_demo_test_other_sales','other-account']
+ ]);
+ const storage={getItem:k=>values.get(k)??null,removeItem:k=>values.delete(k)};
+ assert.equal(purgeConfirmedSnapshots(storage,{projectId:'demo',companyId:'test',user:{uid:'test'}}),2);
+ for(const key of ['outbox','bank_conflict_backup_pending','conflicts_1'])assert(values.has(prefix+key));
+ assert(values.has('tsukinowa_cloud_backup_historical'));
+ assert(values.has('tsukinowa_business_v1'));
+ assert(values.has('tsukinowa_cloud_v2_demo_test_other_sales'));
+ assert.equal(purgeConfirmedSnapshots(storage,{projectId:'demo',companyId:'test',user:{uid:'test'}}),0);
+ assert.equal(purgeConfirmedSnapshots(storage,null),0);
+});
