@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 35
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,3 +33,6 @@ jobs:
       - run: pnpm test:rules
       - run: pnpm test:document-numbering-browser
       - run: pnpm test:business-browser
+      - run: pnpm test:auth-persistence
+      - run: pnpm test:payment-paths-browser
+      - run: pnpm test:expense-bank-browser
