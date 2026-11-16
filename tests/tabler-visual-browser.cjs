@@ -46,24 +46,18 @@ const server=http.createServer((req,res)=>{
   await page.waitForFunction(()=>document.documentElement.dataset.tablerTheme==='night');
   assert.equal(await page.evaluate(()=>JSON.stringify(bizState)),initial);
   assert.deepEqual(errors,[],'no page JavaScript exceptions');
-  // Actual isolated legacy backup import: bad input never replaces data; a valid
-  // restore leaves a pre-restore recovery copy. No cloud or user data is involved.
+  // Shared accounting UI must refuse any destructive backup import when there is
+  // no authenticated admin. Never weaken this guard to enable a test.
   await page.evaluate(()=>{bizState.sales=[{id:'before-restore',amount:5000}];bizPersist();});
   const restoreDialogs=[];page.on('dialog',d=>{restoreDialogs.push(d.message());return d.accept();});
-  await page.locator('#backupFile').setInputFiles({name:'broken.json',mimeType:'application/json',
-    buffer:Buffer.from('{"state":{"sales":{},"expenses":[]}}')});
-  await page.evaluate(()=>window.importBackup());
-  assert.equal(await page.evaluate(()=>bizState.sales[0].id),'before-restore');
   const valid={version:2,mode:'production',state:{sales:[{id:'after-restore',amount:8000}],
     payments:[],expenses:[],bank:[],calendar:[],audit:[],estimates:[],projects:[]}};
   await page.locator('#backupFile').setInputFiles({name:'safe.json',mimeType:'application/json',
     buffer:Buffer.from(JSON.stringify(valid))});
   await page.evaluate(()=>window.importBackup());
-  assert.equal(await page.evaluate(()=>bizState.sales[0].id),'after-restore',JSON.stringify(restoreDialogs));
-  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('tsukinowa_business_v1')).sales[0].id),'after-restore');
-  const recovered=await page.evaluate(()=>Object.keys(localStorage).find(k=>k.startsWith('tsukinowa_pre_restore_')));
-  assert(recovered,'a recovery key is retained before applying the replacement');
-  assert.equal(await page.evaluate(k=>JSON.parse(localStorage.getItem(k)).sales[0].id,recovered),'before-restore');
+  assert(restoreDialogs.some(x=>x.includes('管理者のみ利用できます')));
+  assert.equal(await page.evaluate(()=>bizState.sales[0].id),'before-restore');
+  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('tsukinowa_business_v1')).sales[0].id),'before-restore');
   await context.close();
   const mobile=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,serviceWorkers:'block'});
   await mobile.route('https://**/*',r=>r.fulfill({body:'',contentType:'text/javascript'}));
