@@ -688,3 +688,24 @@ test('staff cannot squat invoice numbering with an isolated operation',async()=>
  const exists=await getDoc(doc(db('admin'),`companies/${company}/operations/documentNumber_${invoiceNo}`));
  assert.equal(exists.exists(),false);
 });
+
+test('hostile direct finance writes require coupled audit and correct tenant identity',async()=>{
+ const admin=db('admin'),staff=db('staff'),other=db('staff','outside-company');
+ const guest=env.unauthenticatedContext().firestore();
+ const broken={schemaVersion:2,companyId:company,payload:{amount:1000000,status:'confirmed'},
+   revision:1,createdBy:'uid-admin',createdAt:serverTimestamp(),
+   updatedBy:'uid-admin',updatedAt:serverTimestamp(),lastOperationId:'fake',lastAuditId:'fake_0'};
+ for(const name of ['bankTransactions','payments','cashLedger','sales','expenses','documents','settings']){
+  await assertFails(setDoc(doc(admin,`companies/${company}/${name}/forged`),broken));
+  await assertFails(setDoc(doc(staff,`companies/${company}/${name}/forged`),broken));
+ }
+ await assertFails(setDoc(doc(other,`companies/${company}/payments/forged`),broken));
+ await assertFails(setDoc(doc(guest,`companies/${company}/payments/forged`),broken));
+ await assertFails(setDoc(doc(staff,`companies/${company}/operations/fake`),
+  {actorId:'uid-admin',fingerprint:'fake',result:{ok:true},createdAt:serverTimestamp()}));
+ await assertFails(setDoc(doc(staff,`companies/${company}/auditLogs/fake_0`),
+  {userId:'uid-admin',entityType:'payments',entityId:'forged',action:'payment',
+   operationId:'fake',before:null,after:{amount:1000000},timestamp:serverTimestamp()}));
+ await assertFails(deleteDoc(doc(admin,`companies/${company}/payments/forged`)));
+ await assertFails(updateDoc(doc(admin,`companies/${company}/payments/forged`),{payload:{amount:0}}));
+});
