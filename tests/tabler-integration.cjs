@@ -19,6 +19,10 @@ test('visual integration remains screen-only, never print or PDF',()=>{
   assert.doesNotMatch(css,/@media print|\.pdf-page|\.invoice-page|\.receipt-page|#printArea/i);
   assert.doesNotMatch(css,/display\s*:\s*none\s*!important/);
 });
+test('third party PDF renderer has pinned SHA-512 integrity and no-referrer policy',()=>{
+ assert.match(html,/<script[^>]+html2pdf\.bundle\.min\.js"[^>]+integrity="sha512-GsLlZN\/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps\+dvLusV\+eNQATqgA\/HdeKFVgA5v3S\/cIrLF7QnIg=="/);
+ assert.match(html,/html2pdf\.bundle\.min\.js"[^>]+crossorigin="anonymous"[^>]+referrerpolicy="no-referrer"/);
+});
 test('business and cloud entry points have not been replaced with demo scripts',()=>{
   assert.match(html,/id="bizCloudAccountButton"/);
   assert.match(html,/id="bizNav"/);
