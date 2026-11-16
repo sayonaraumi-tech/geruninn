@@ -86,3 +86,17 @@ test('signout snapshot purge removes only confirmed rows, never unsynced financi
  assert.equal(purgeConfirmedSnapshots(storage,{projectId:'demo',companyId:'test',user:{uid:'test'}}),0);
  assert.equal(purgeConfirmedSnapshots(storage,null),0);
 });
+
+test('separate transient snapshot cache never persists server records to outbox storage', async()=>{
+ const {createSync}=require('../js/business-sync');
+ const local=new Map(),transient=new Map();
+ const adapter=map=>({getItem:k=>map.get(k)??null,setItem:(k,v)=>map.set(k,v),removeItem:k=>map.delete(k)});
+ const client={getState:()=>({role:'admin',projectId:'demo',companyId:'test',user:{uid:'test'}}),listen:(name,id,callback)=>{callback([{id:'record',payload:{amount:25000}}],{fromCache:false});return()=>{}},listRecords:async()=>[],transact:async()=>({ok:true})};
+ const sync=createSync({client,storage:adapter(local),snapshotStorage:adapter(transient),online:()=>false});
+ sync.start();
+ assert([...transient.keys()].some(k=>k.endsWith('_sales')));
+ assert(![...local.keys()].some(k=>k.endsWith('_sales')));
+ sync.enqueue({type:'test',operationId:'offline-1'});
+ assert([...local.keys()].some(k=>k.endsWith('_outbox')));
+ sync.stop();
+});
