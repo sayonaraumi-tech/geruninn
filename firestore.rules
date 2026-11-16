@@ -214,6 +214,52 @@ service cloud.firestore {
   match /companies/{c}/cashLedger/{id} {
    allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
   }
+  // Prevent staff from preempting invoice numbers with standalone fake reservations.
+  // A legitimate number reservation and its immutable formal document are committed atomically.
+  function formalNumberReservation(c,id) {
+   let r=request.resource.data.result;
+   let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(r.documentId)).data;
+   return r.keys().hasAll(['documentId','invoiceNo','numberingMinute','numberingSequence'])
+    && r.keys().hasOnly(['documentId','invoiceNo','numberingMinute','numberingSequence'])
+    && r.documentId is string && r.invoiceNo is string && r.numberingMinute is string
+    && r.numberingSequence is int && r.numberingSequence>0
+    && id=='documentNumber_'+r.invoiceNo
+    && r.invoiceNo.matches('^[0-9]{8}-[0-9]{4}-[0-9]+
+   // Staff may read their own idempotency marker and shared formal number reservations,
+   // but must not enumerate other users' potentially sensitive operation results.
+   allow get: if member(c) && (admin(c) || !exists(/databases/$(database)/documents/companies/$(c)/operations/$(id)) || id.matches('documentNumber_.*') || resource.data.actorId==request.auth.uid);
+   allow list: if admin(c);
+   allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && (admin(c) || !id.matches('documentNumber_.*') || formalNumberReservation(c,id)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
+   allow update,delete: if false;
+  }
+  match /companies/{c}/auditLogs/{id} {
+   allow read: if admin(c);
+   allow create: if member(c)
+    && request.resource.data.keys().hasOnly(['userId','timestamp','entityType','entityId','action','before','after','operationId','documentId','oldStatus','newStatus','reason','revisedFromDocumentId','duplicateOfDocumentId','invoiceNo','sourceFileName','sourceHash','linkedSaleId','whetherCreatedSale'])
+    && request.resource.data.userId==request.auth.uid && request.resource.data.timestamp==request.time
+    && ((admin(c) && request.resource.data.entityType=='documents' && request.resource.data.action=='misregistration delete' && isolatedError(request.resource.data.before) && request.resource.data.after==null && !existsAfter(/databases/$(database)/documents/companies/$(c)/documents/$(request.resource.data.entityId)) && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.result.backup==request.resource.data.before)
+    || (admin(c) && request.resource.data.entityType=='auditLogs' && request.resource.data.entityId==id && request.resource.data.action=='migration' && request.resource.data.before==null && request.resource.data.after.legacy is map
+      && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.actorId==request.auth.uid
+      && getAfter(/databases/$(database)/documents/companies/$(c)/operations/$(request.resource.data.operationId)).data.createdAt==request.time)
+    || (business(request.resource.data.entityType)
+    && request.resource.data.action in ['create','update','status change','payment','migration','expense create','expense update','expense delete','cash transaction','supplier transaction','bank csv import','bank match confirm','payment confirm','adjustment','historicalPdfImport']
+    && (!(request.resource.data.action in ['migration','historicalPdfImport'])||admin(c))
+    && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.lastAuditId==id
+    && getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.updatedAt==request.time
+    && auditBefore(c,request.resource.data.entityType,request.resource.data.entityId,request.resource.data.before)
+    && request.resource.data.after==getAfter(/databases/$(database)/documents/companies/$(c)/$(request.resource.data.entityType)/$(request.resource.data.entityId)).data.payload));
+   allow update,delete: if false;
+  }
+  match /{document=**} { allow read,write: if false; }
+ }
+}
+)
+    && d.payload.docType in ['estimate','invoice','receipt','onoda']
+    && d.payload.snapshot.invoiceNo==r.invoiceNo
+    && d.payload.snapshot.numberingMinute==r.numberingMinute
+    && d.payload.snapshot.numberingSequence==r.numberingSequence
+    && d.updatedBy==request.auth.uid && d.updatedAt==request.time;
+  }
   match /companies/{c}/operations/{id} {
    // Staff may read their own idempotency marker and shared formal number reservations,
    // but must not enumerate other users' potentially sensitive operation results.
