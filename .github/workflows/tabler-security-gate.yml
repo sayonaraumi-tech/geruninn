@@ -28,7 +28,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      - run: node --test tests/tabler-integration.cjs
+      - run: node --test tests/tabler-integration.cjs tests/backup-validation.cjs
+      - run: node --check scripts/verify-deployed-firestore-rules.cjs
       - run: node tests/tabler-visual-browser.cjs
       - name: Save nine-page visual evidence
         if: always()
@@ -52,3 +53,5 @@ jobs:
       - run: pnpm test:auth-persistence
       - run: pnpm test:payment-paths-browser
       - run: pnpm test:expense-bank-browser
+      - run: pnpm test:estimate-calendar
+      - run: pnpm test:business-workflow
