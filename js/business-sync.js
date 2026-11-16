@@ -1,5 +1,16 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./business-domain.js'):root.TsukinowaBusiness);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaSync=api;})(globalThis,function(core,domain){
 'use strict';
+// Purge only reloadable server snapshots; never remove uncommitted commands or backups.
+function purgeConfirmedSnapshots(storage, identity){
+ if(!identity?.projectId||!identity?.companyId||!identity?.user?.uid)return 0;
+ const prefix=`tsukinowa_cloud_v2_${identity.projectId}_${identity.companyId}_${identity.user.uid}_`;
+ let count=0;
+ for(const collection of domain.COLLECTIONS){
+  const key=prefix+collection;
+  if(storage.getItem(key)!==null){storage.removeItem(key);count++;}
+ }
+ return count;
+}
 function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
  const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
  let stopped=false,running=null,error=null,reloading=false;const stops=[],rows={},serverSeen=new Set();let queue=[];
