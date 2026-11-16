@@ -215,7 +215,10 @@ service cloud.firestore {
    allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
   }
   match /companies/{c}/operations/{id} {
-   allow read: if member(c);
+   // Staff may read their own idempotency marker and shared formal number reservations,
+   // but must not enumerate other users' potentially sensitive operation results.
+   allow get: if member(c) && (admin(c) || resource.data.actorId==request.auth.uid || id.matches('documentNumber_.*'));
+   allow list: if admin(c);
    allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
   }
