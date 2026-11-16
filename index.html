@@ -3029,7 +3029,23 @@ async function importOnodaFromCalendar(options={}){
   }catch(e){alert('小野田月次の再生成に失敗しました：'+e.message);}
   finally{onodaGenerating=false;}
 }
-async function importBackup(){const f=document.getElementById('backupFile')?.files?.[0];if(!f)return alert('バックアップJSONを選択してください。');if(!confirm('現在の業務データをバックアップ内容で置き換えます。よろしいですか？'))return;try{const j=JSON.parse(await f.text());if(!j.state||!Array.isArray(j.state.sales))throw new Error('対応するバックアップ形式ではありません。');bizState=Object.assign({sales:[],payments:[],expenses:[],bank:[],calendar:[],audit:[]},j.state);localStorage.setItem(BIZ_KEY,JSON.stringify(bizState));bizAudit('バックアップ復元',f.name);bizPersist();bizRefreshAll();alert('バックアップを復元しました。')}catch(e){alert('復元に失敗しました: '+e.message)}}
+async function importBackup(){
+ const file=document.getElementById('backupFile')?.files?.[0];
+ if(!file)return alert('バックアップJSONを選択してください。');
+ if(!confirm('現在の業務データをバックアップ内容で置き換えます。よろしいですか？'))return;
+ try{
+  // Validate fully before touching the current business state or browser storage.
+  const next=TsukinowaBackup.parse(await file.text());
+  const old=localStorage.getItem(BIZ_KEY)??JSON.stringify(bizState);
+  const recoveryKey='tsukinowa_pre_restore_'+Date.now();
+  localStorage.setItem(recoveryKey,old); // Abort on storage quota errors, never silently discard old data.
+  localStorage.setItem(BIZ_KEY,JSON.stringify(next));
+  bizState=next;
+  bizAudit('バックアップ復元',file.name);
+  bizPersist();bizRefreshAll();
+  alert('バックアップを復元しました。復元前データは端末内に別途保管されています。');
+ }catch(e){alert('復元に失敗しました。元のデータは保持されています: '+e.message);}
+}
 function fillSettings(){}
 function bizCloudLogout(){}
 function tryAutoCloud(){}
@@ -3542,6 +3558,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   else if(window.matchMedia('(max-width: 800px)').matches)bizSwitchPage('calendar');
 });
 </script>
+<script src="./js/backup-validation.js"></script>
 <script src="./js/tabler-theme.js" defer></script>
 </body>
 </html>
