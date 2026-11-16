@@ -655,3 +655,24 @@ test('two devices: CSV and bank new expense share a transaction identity under u
   assert.equal(JSON.stringify(await one.listRecords('expenses')),before);
  }finally{one.dispose();two.dispose();}
 });
+
+
+test('operations reads: staff sees own replay and number reservations, never admin backups or full log list',async()=>{
+ const path=id=>doc(db('admin'),`companies/${company}/operations/${id}`);
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const root=ctx.firestore();
+  for(const [id,actorId,result] of [
+   ['admin-sensitive','uid-admin',{backup:{bankAccount:'private-bank',amount:900000}}],
+   ['staff-own','uid-staff',{ok:true}],
+   ['documentNumber_20261116-1000-01','uid-admin',{invoiceNo:'20261116-1000-01',documentId:'doc'}]
+  ])await setDoc(doc(root,`companies/${company}/operations/${id}`),{actorId,fingerprint:'test',createdAt:new Date(),result});
+ });
+ await assertSucceeds(getDoc(path('admin-sensitive')));
+ await assertFails(getDoc(doc(db('staff'),`companies/${company}/operations/admin-sensitive`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/staff-own`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
+ await assertFails(getDocs(collection(db('staff'),`companies/${company}/operations`)));
+ await assertSucceeds(getDocs(collection(db('admin'),`companies/${company}/operations`)));
+ await assertFails(getDoc(doc(db('staff','another-company'),`companies/${company}/operations/staff-own`)));
+ await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
+});
