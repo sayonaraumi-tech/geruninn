@@ -670,6 +670,7 @@ test('operations reads: staff sees own replay and number reservations, never adm
  await assertSucceeds(getDoc(path('admin-sensitive')));
  await assertFails(getDoc(doc(db('staff'),`companies/${company}/operations/admin-sensitive`)));
  await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/staff-own`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/new-not-yet-created`)));
  await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
  await assertFails(getDocs(collection(db('staff'),`companies/${company}/operations`)));
  await assertSucceeds(getDocs(collection(db('admin'),`companies/${company}/operations`)));
