@@ -49,7 +49,7 @@ const server=http.createServer((req,res)=>{
   // Actual isolated legacy backup import: bad input never replaces data; a valid
   // restore leaves a pre-restore recovery copy. No cloud or user data is involved.
   await page.evaluate(()=>{bizState.sales=[{id:'before-restore',amount:5000}];bizPersist();});
-  page.on('dialog',d=>d.accept());
+  const restoreDialogs=[];page.on('dialog',d=>{restoreDialogs.push(d.message());return d.accept();});
   await page.locator('#backupFile').setInputFiles({name:'broken.json',mimeType:'application/json',
     buffer:Buffer.from('{"state":{"sales":{},"expenses":[]}}')});
   await page.evaluate(()=>window.importBackup());
@@ -59,7 +59,7 @@ const server=http.createServer((req,res)=>{
   await page.locator('#backupFile').setInputFiles({name:'safe.json',mimeType:'application/json',
     buffer:Buffer.from(JSON.stringify(valid))});
   await page.evaluate(()=>window.importBackup());
-  assert.equal(await page.evaluate(()=>bizState.sales[0].id),'after-restore');
+  assert.equal(await page.evaluate(()=>bizState.sales[0].id),'after-restore',JSON.stringify(restoreDialogs));
   assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('tsukinowa_business_v1')).sales[0].id),'after-restore');
   const recovered=await page.evaluate(()=>Object.keys(localStorage).find(k=>k.startsWith('tsukinowa_pre_restore_')));
   assert(recovered,'a recovery key is retained before applying the replacement');
