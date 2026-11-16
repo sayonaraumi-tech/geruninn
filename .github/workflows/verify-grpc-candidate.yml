@@ -5,6 +5,7 @@ on:
       - security/dependency-refresh-20261116
     paths:
       - package.json
+      - pnpm-workspace.yaml
 permissions:
   contents: write
 jobs:
