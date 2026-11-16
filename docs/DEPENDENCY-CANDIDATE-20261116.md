@@ -10,3 +10,6 @@ Target: `security/operations-read-isolation-20261116`
 - Unit/business checks: 191/191 passing; Firestore emulator: 48/48 passing; other subsidiary suites also passed.
 - This does NOT verify full live browser/PDF release regression, deployed cloud permissions, backup restoration, IAM/MFA, or Japanese electronic tax records compliance.
 - Candidate is not merged or deployed. Review all major-version upgrades and run full release suite before merge.
+
+## Compatibility follow-up
+The first Firebase SDK major upgrade passed Node unit/Firestore rules but failed the full browser release suite. The isolated candidate now retains the previously browser-validated Firebase 12.19.0 test SDK and rules-unit-testing 5.0.1 while keeping the patched grpc workspace override; full release CI must rerun on the regenerated lockfile before acceptance.
