@@ -2,12 +2,18 @@
 // One-time operator script. Only getUser and setCustomUserClaims are used.
 // Usage: node scripts/set-tsukinowa-claims.cjs FIREBASE_PROJECT_ID
 const COMPANY_ID = 'tsukinowa';
-const USERS = Object.freeze([
-  Object.freeze({uid: 'Du6KeSndv5UKijU10kZgrkRDPQQ2', role: 'admin'}),
-  Object.freeze({uid: 'sBbSB4IDaPM3BTeWho17kqz1YV82', role: 'staff'}),
-]);
+// Production UIDs are operator-supplied and must never be committed to Git.
+function resolveUsers(env = process.env) {
+  const adminUid = env.TSUKINOWA_ADMIN_UID;
+  const staffUid = env.TSUKINOWA_STAFF_UID;
+  if (![adminUid, staffUid].every(uid => typeof uid === 'string' && /^[A-Za-z0-9_-]{10,128}$/.test(uid)) || adminUid === staffUid) {
+    throw new Error('Set distinct TSUKINOWA_ADMIN_UID and TSUKINOWA_STAFF_UID in the trusted operator environment.');
+  }
+  return Object.freeze([Object.freeze({uid:adminUid,role:'admin'}),Object.freeze({uid:staffUid,role:'staff'})]);
+}
 
-async function setClaims(auth, print = console.log) {
+async function setClaims(auth, print = console.log, usersConfig = resolveUsers()) {
+  const USERS = usersConfig;
   // Check both UIDs before the first write; preserve unrelated existing claims.
   const users = await Promise.all(USERS.map(({uid}) => auth.getUser(uid)));
   const updates = USERS.map(({uid, role}, i) => ({
@@ -50,10 +56,11 @@ async function main(args = process.argv.slice(2)) {
   const {initializeApp, applicationDefault, deleteApp} = require('firebase-admin/app');
   const {getAuth} = require('firebase-admin/auth');
   const projectId = args[0];
+  const usersConfig = resolveUsers();
   const app = initializeApp({credential: applicationDefault(), projectId}, 'tsukinowa-initial-claims');
   try {
     console.log(`Firebase project: ${projectId}; companyId: ${COMPANY_ID}`);
-    await setClaims(getAuth(app));
+    await setClaims(getAuth(app), console.log, usersConfig);
     console.log('Verified both users. Sign out and sign in again to obtain tokens with the new claims.');
   } finally {
     // Disposes the SDK instance only; does not delete the Firebase project or users.
@@ -65,4 +72,4 @@ if (require.main === module) main().catch(error => {
   console.error(error.message);
   process.exitCode = 1;
 });
-module.exports = {COMPANY_ID, USERS, setClaims, main};
+module.exports = {COMPANY_ID, resolveUsers, setClaims, main};
