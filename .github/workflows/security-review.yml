@@ -21,6 +21,8 @@ jobs:
           version: 11.25.0
           run_install: false
       - run: pnpm install --frozen-lockfile
+      - name: Separately assess production-only dependencies
+        run: pnpm audit --prod --audit-level high
       - name: Reject high/critical dependency advisories
         run: pnpm audit --audit-level high
   history-secret-scan:
