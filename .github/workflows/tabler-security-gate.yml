@@ -40,6 +40,8 @@ jobs:
           if-no-files-found: ignore
       - run: pnpm test
       - run: pnpm test:rules
+      - name: Firestore backup and restore safety drill (emulator only)
+        run: pnpm exec firebase emulators:exec --only firestore --project demo-tsukinowa "node tests/firestore-backup-restore.cjs"
       - run: pnpm test:document-numbering-browser
       - name: Obtain SHA-512 pinned PDF renderer
         run: |
