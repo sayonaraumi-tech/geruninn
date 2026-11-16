@@ -1,0 +1,34 @@
+name: Security review (history and dependencies)
+on:
+  push:
+    branches:
+      - security/**
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dependency-advisories:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - run: pnpm install --frozen-lockfile
+      - name: Reject high/critical dependency advisories
+        run: pnpm audit --audit-level high
+  history-secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Gitleaks full reachable git history scan
+        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact --log-opts="--all" /repo
