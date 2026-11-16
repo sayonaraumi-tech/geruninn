@@ -218,7 +218,7 @@ service cloud.firestore {
    // Read only the caller's own idempotency result. The shared invoice-number
    // reservation namespace remains gettable so staff can skip occupied numbers.
    // Listing all operations would expose other users' result/backup payloads.
-   allow get: if member(c) && (admin(c) || resource.data.actorId==request.auth.uid || id.matches('documentNumber_.*'));
+   allow get: if member(c) && (admin(c) || resource == null || id.matches('documentNumber_.*') || resource.data.actorId==request.auth.uid);
    allow list: if admin(c);
    allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
