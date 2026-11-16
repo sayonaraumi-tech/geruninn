@@ -2,3 +2,5 @@ allowBuilds:
   '@firebase/util': false
   protobufjs: false
   re2: false
+overrides:
+  '@grpc/grpc-js': 1.13.6
