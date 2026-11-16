@@ -27,6 +27,7 @@ jobs:
           node-version: '22'
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: node --test tests/tabler-integration.cjs
       - run: pnpm test
       - run: pnpm test:rules
