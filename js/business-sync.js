@@ -1,6 +1,6 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./business-domain.js'):root.TsukinowaBusiness);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaSync=api;})(globalThis,function(core,domain){
 'use strict';
-function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
+function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
  const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
  let stopped=false,running=null,error=null,reloading=false;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
@@ -11,18 +11,18 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  }
  const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
  if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
- for(const name of collections)rows[name]=load(prefix+name,[]);
+ for(const name of collections){const raw=snapshotStorage.getItem(prefix+name);rows[name]=raw?JSON.parse(raw):[];}
  function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
  function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
    if(stopped||reloading)return;
-   if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
+   if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{snapshotStorage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
    // The app cache contains the last server-confirmed lifecycle state for these rows.
-   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||storage.getItem(prefix+name)!==null))){rows[name]=value;onData(rows);}
+   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||snapshotStorage.getItem(prefix+name)!==null))){rows[name]=value;onData(rows);}
    status();
  },e=>{if(!stopped){if(name==='receivables'&&String(e.code||'').includes('permission-denied')){rows[name]=[];serverSeen.add(name);onData(rows);status();return;}error=e.message;status();}}));status();flush();}
  async function reload(){
-  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;storage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
+  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;snapshotStorage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
  }
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
