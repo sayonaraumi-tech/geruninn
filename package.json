@@ -21,11 +21,11 @@
     "test:release:emulator": "firebase emulators:exec --only firestore --project demo-tsukinowa \"node --test tests/firestore-rules.cjs && node scripts/test-browser-suite.cjs emulator\""
   },
   "devDependencies": {
-    "@firebase/rules-unit-testing": "5.0.1",
-    "firebase": "12.19.0",
-    "firebase-admin": "13.6.0",
-    "firebase-tools": "15.11.0",
-    "playwright": "1.62.1"
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.3.0",
+    "firebase-admin": "14.5.1",
+    "firebase-tools": "15.36.0",
+    "playwright": "1.65.1"
   },
   "engines": {
     "node": ">=22"
