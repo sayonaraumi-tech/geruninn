@@ -31,4 +31,13 @@ jobs:
         with:
           fetch-depth: 0
       - name: Gitleaks full reachable git history scan
-        run: docker run --rm -v "$PWD:/repo:ro" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact --log-opts="--all" /repo
+        run: |
+          set +e
+          docker run --rm -v "$PWD:/repo:ro" -v "$RUNNER_TEMP:/scan" ghcr.io/gitleaks/gitleaks:v8.24.3 git --redact --log-opts="--all" --report-format=json --report-path=/scan/history-findings.json /repo
+          status=$?
+          set -e
+          if [ -f "$RUNNER_TEMP/history-findings.json" ]; then
+            echo "Rule, path, line and commit (secret values never printed):"
+            jq -r '.[] | [.RuleID,.File,(.StartLine|tostring),.Commit] | @tsv' "$RUNNER_TEMP/history-findings.json" | sort -u
+          fi
+          exit "$status"
