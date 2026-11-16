@@ -677,3 +677,14 @@ test('operations reads: staff sees own replay and number reservations, never adm
  await assertFails(getDoc(doc(db('staff','another-company'),`companies/${company}/operations/staff-own`)));
  await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
 });
+
+test('staff cannot squat invoice numbering with an isolated operation',async()=>{
+ const staff=db('staff');
+ const invoiceNo='20261116-1300-01';
+ const reservation={actorId:'uid-staff',fingerprint:'a'.repeat(64),
+   createdAt:serverTimestamp(),
+   result:{documentId:'nonexistent',invoiceNo,numberingMinute:'20261116-1300',numberingSequence:1}};
+ await assertFails(setDoc(doc(staff,`companies/${company}/operations/documentNumber_${invoiceNo}`),reservation));
+ const exists=await getDoc(doc(db('admin'),`companies/${company}/operations/documentNumber_${invoiceNo}`));
+ assert.equal(exists.exists(),false);
+});
