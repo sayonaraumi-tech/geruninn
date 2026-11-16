@@ -1,3 +1,5 @@
+/* Theme picker is strictly desktop-only, preserving the pre-approved mobile layout. */
+#tablerThemePicker {display:none;}
 /* Tabler v11 desktop visual shell; screen-only. All financial logic and PDF markup
    remain owned by the original application. Mobile layout is untouched. */
 @media screen and (min-width: 901px) {
