@@ -113,5 +113,5 @@ async function migrateLegacy({client,storage,onStatus=()=>{}}){
   storage.setItem(stateKey,JSON.stringify({migrationVersion:2,status:'success',backupKey,count:records.length}));onStatus('移行成功（元データ・バックアップ保持）');return {sourceId,count:records.length,backupKey};
  }catch(e){try{storage.setItem(stateKey,JSON.stringify({migrationVersion:2,status:'failed',backupKey,error:e.message}));}catch(_){}onStatus('移行失敗：'+e.message+'（元データは保持されています）');throw e;}
 }
-return {createSync,migrateLegacy};
+return {purgeConfirmedSnapshots,createSync,migrateLegacy};
 });
