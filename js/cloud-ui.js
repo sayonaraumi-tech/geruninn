@@ -38,7 +38,7 @@
   }
   root.bizOpenCloudAccount=function(){el('cloudDialog').showModal();};
   root.bizCloseCloudAccount=function(){el('cloudDialog').close();};
-  root.bizCloudLogout=async function(){if(!client)return;try{const identity=client.getState();await client.signOut();root.TsukinowaSync?.purgeConfirmedSnapshots(localStorage,identity);}catch(_){el('cloudError').textContent='ログアウトできませんでした。再試行してください。';}};
+  root.bizCloudLogout=async function(){if(!client)return;try{const identity=client.getState();await client.signOut();root.TsukinowaSync?.purgeConfirmedSnapshots(localStorage,identity);root.TsukinowaSync?.purgeConfirmedSnapshots(sessionStorage,identity);}catch(_){el('cloudError').textContent='ログアウトできませんでした。再試行してください。';}};
   root.bizCloudBackup=function(){
     try{
       const backup=root.TsukinowaCloudCore.backupLegacy(localStorage);
