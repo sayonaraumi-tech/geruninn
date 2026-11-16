@@ -217,7 +217,7 @@ service cloud.firestore {
   match /companies/{c}/operations/{id} {
    // Staff may read their own idempotency marker and shared formal number reservations,
    // but must not enumerate other users' potentially sensitive operation results.
-   allow get: if member(c) && (admin(c) || resource.data.actorId==request.auth.uid || id.matches('documentNumber_.*'));
+   allow get: if member(c) && (admin(c) || !exists(/databases/$(database)/documents/companies/$(c)/operations/$(id)) || id.matches('documentNumber_.*') || resource.data.actorId==request.auth.uid);
    allow list: if admin(c);
    allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
