@@ -1,0 +1,36 @@
+/* Tabler-compatible UI integration, desktop-only.
+ * v11 visual baseline; print/PDF remains owned by original document styles.
+ * DO NOT put financial state or data into CSS or alter rendered document nodes.
+ */
+@media screen and (min-width: 901px) {
+  :root {
+    --tabler-primary:#bb995e;
+    --tabler-primary-hover:#a7864f;
+    --tabler-page:#f5f5f3;
+    --tabler-surface:#fff;
+    --tabler-ink:#292d32;
+    --tabler-muted:#69717b;
+    --tabler-line:#e2e4e6;
+    --tabler-sidebar:#202225;
+    --tabler-sidebar-ink:#d3d5d9;
+  }
+  body { background:var(--tabler-page);color:var(--tabler-ink); }
+  .biz-topbar { background:var(--tabler-sidebar);box-shadow:0 2px 10px #10121722; }
+  .biz-brand { letter-spacing:.025em;font-weight:700; }
+  .biz-brand small { opacity:.64;font-weight:400; }
+  .biz-nav button { color:var(--tabler-sidebar-ink);font-weight:500;border-radius:7px; }
+  .biz-nav button:hover { background:#ffffff17;color:#fff; }
+  .biz-nav button.active { background:var(--tabler-primary);color:#181818;box-shadow:none; }
+  .biz-section,.biz-card { background:var(--tabler-surface);border:1px solid var(--tabler-line);
+    border-radius:9px;box-shadow:0 1px 3px #181a1e0d; }
+  .biz-section { padding:14px;margin-top:12px; }
+  .biz-card { padding:14px; }
+  .biz-section h2 { color:var(--tabler-ink);font-weight:650; }
+  .biz-card h3 { color:var(--tabler-muted);font-weight:550; }
+  .biz-kpi { font-variant-numeric:tabular-nums;font-weight:680; }
+  .biz-btn { border-color:var(--tabler-line);border-radius:7px; }
+  .biz-btn.primary { background:var(--tabler-primary);border-color:var(--tabler-primary);
+    color:#1d1b16;box-shadow:none;font-weight:650; }
+  .biz-btn.primary:hover { background:var(--tabler-primary-hover); }
+  #pageDashboard .biz-card:after { background:#bb995e17;color:var(--tabler-primary); }
+}
