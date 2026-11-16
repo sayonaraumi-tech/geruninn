@@ -10,6 +10,39 @@ const company='tsukinowa',ref=(db,name,id='one')=>doc(db,`companies/${company}/$
 const db=(role,tenant=company)=>env.authenticatedContext('uid-'+role,{role,companyId:tenant}).firestore();
 before(async()=>{env=await initializeTestEnvironment({projectId:'demo-tsukinowa',firestore:{rules:fs.readFileSync('firestore.rules','utf8')}});});
 after(async()=>{await env?.cleanup();});beforeEach(async()=>env.clearFirestore());
+test('staff cannot forge or preempt standalone formal numbering reservations',async()=>{
+ const actor='uid-staff';
+ const forged={actorId:actor,fingerprint:'forged',result:{
+  documentId:'forged-document',invoiceNo:'20261116-1400-01',
+  numberingMinute:'20261116-1400',numberingSequence:1
+ },createdAt:serverTimestamp()};
+ await assertFails(setDoc(ref(db('staff'),'operations','documentNumber_20261116-1400-01'),forged));
+ // A generic idempotency marker for an ordinary permitted operation remains available.
+ await assertSucceeds(setDoc(ref(db('staff'),'operations','ordinary-staff-marker'),{
+  actorId:actor,fingerprint:'normal',result:{ok:true},createdAt:serverTimestamp()
+ }));
+});
+
+test('operations privacy: staff get own idempotency and formal reservations but cannot enumerate or read another actor', async()=>{
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const store=ctx.firestore();
+  for(const [opId,actorId,result] of [
+   ['own-operation','uid-staff',{operation:'own'}],
+   ['other-operation','uid-admin',{customerBankAccount:'sensitive-test-value'}],
+   ['documentNumber_20261116-1200-01','uid-admin',{invoiceNo:'20261116-1200-01'}]
+  ]) await setDoc(ref(store,'operations',opId),{actorId,fingerprint:'x',result,createdAt:new Date()});
+ });
+ const staff=db('staff'),admin=db('admin'),otherTenant=db('staff','other-company');
+ await assertSucceeds(getDoc(ref(staff,'operations','not-created-yet')));
+ await assertSucceeds(getDoc(ref(staff,'operations','own-operation')));
+ await assertSucceeds(getDoc(ref(staff,'operations','documentNumber_20261116-1200-01')));
+ await assertFails(getDoc(ref(staff,'operations','other-operation')));
+ await assertFails(getDocs(collection(staff,`companies/${company}/operations`)));
+ await assertSucceeds(getDoc(ref(admin,'operations','other-operation')));
+ await assertSucceeds(getDocs(collection(admin,`companies/${company}/operations`)));
+ await assertFails(getDoc(ref(otherTenant,'operations','own-operation')));
+});
+
 function storage(){const m=new Map();return {get length(){return m.size},key:i=>[...m.keys()][i],getItem:k=>m.get(k)??null,setItem:(k,v)=>m.set(k,v)};}
 async function clientFor(role){
  const store=db(role);let callback;

@@ -1,0 +1,59 @@
+name: Tabler integration and Firestore security gate
+on:
+  pull_request:
+    paths:
+      - 'index.html'
+      - 'styles/tabler-integration.css'
+      - 'tests/tabler-integration.cjs'
+      - 'firestore.rules'
+      - 'js/**'
+      - 'tests/**'
+      - 'package.json'
+      - '.github/workflows/tabler-security-gate.yml'
+  workflow_dispatch:
+jobs:
+  ui-and-security:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: node --test tests/tabler-integration.cjs tests/backup-validation.cjs
+      - run: node --check scripts/verify-deployed-firestore-rules.cjs
+      - run: node tests/tabler-visual-browser.cjs
+      - name: Save nine-page visual evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tabler-nine-page-screenshots
+          path: test-artifacts/tabler-desktop/
+          if-no-files-found: ignore
+      - run: pnpm test
+      - run: pnpm test:rules
+      - name: Firestore backup and restore safety drill (emulator only)
+        run: pnpm exec firebase emulators:exec --only firestore --project demo-tsukinowa "node tests/firestore-backup-restore.cjs"
+      - run: pnpm test:document-numbering-browser
+      - name: Obtain SHA-512 pinned PDF renderer
+        run: |
+          curl -fsSL --retry 3 https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js -o "$RUNNER_TEMP/html2pdf.bundle.min.js"
+          actual=$(openssl dgst -sha512 -binary "$RUNNER_TEMP/html2pdf.bundle.min.js" | openssl base64 -A)
+          test "$actual" = 'GsLlZN/3F2ErC5ifS5QtgpiJtWd43JWSuIgh7mbzZ8zBps+dvLusV+eNQATqgA/HdeKFVgA5v3S/cIrLF7QnIg=='
+          echo "HTML2PDF_BUNDLE=$RUNNER_TEMP/html2pdf.bundle.min.js" >> "$GITHUB_ENV"
+      - name: Four real rendered PDF downloads
+        run: pnpm test:document-numbering-browser
+      - run: pnpm test:business-browser
+      - run: pnpm test:auth-persistence
+      - run: pnpm test:payment-paths-browser
+      - run: pnpm test:expense-bank-browser
+      - run: pnpm test:estimate-calendar
+      - run: pnpm test:business-workflow

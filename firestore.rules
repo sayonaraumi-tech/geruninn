@@ -214,9 +214,28 @@ service cloud.firestore {
   match /companies/{c}/cashLedger/{id} {
    allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
   }
+  // Bind staff number reservations to formal documents saved in the same transaction.
+  function formalNumberReservation(c,id) {
+   let r=request.resource.data.result;
+   let d=getAfter(/databases/$(database)/documents/companies/$(c)/documents/$(r.documentId)).data;
+   return r.keys().hasAll(['documentId','invoiceNo','numberingMinute','numberingSequence'])
+    && r.keys().hasOnly(['documentId','invoiceNo','numberingMinute','numberingSequence'])
+    && r.documentId is string && r.invoiceNo is string && r.numberingMinute is string
+    && r.numberingSequence is int && r.numberingSequence>0
+    && id=='documentNumber_'+r.invoiceNo
+    && r.invoiceNo.matches('^[0-9]{8}-[0-9]{4}-[0-9]+$')
+    && d.payload.docType in ['estimate','invoice','receipt','onoda']
+    && d.payload.snapshot.invoiceNo==r.invoiceNo
+    && d.payload.snapshot.numberingMinute==r.numberingMinute
+    && d.payload.snapshot.numberingSequence==r.numberingSequence
+    && d.updatedBy==request.auth.uid && d.updatedAt==request.time;
+  }
   match /companies/{c}/operations/{id} {
-   allow read: if member(c);
-   allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
+   // Staff may read their own idempotency marker and shared formal number reservations,
+   // but must not enumerate other users' potentially sensitive operation results.
+   allow get: if member(c) && (admin(c) || !exists(/databases/$(database)/documents/companies/$(c)/operations/$(id)) || id.matches('documentNumber_.*') || resource.data.actorId==request.auth.uid);
+   allow list: if admin(c);
+   allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && (admin(c) || !id.matches('documentNumber_.*') || formalNumberReservation(c,id)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
   }
   match /companies/{c}/auditLogs/{id} {
