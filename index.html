@@ -1918,9 +1918,9 @@ function renderItemEditor() {
 
     let html =
       '<input type="text" class="item-content" placeholder="工事内容" value="' + escapeAttr(it.content) + '">' +
-      '<input type="number" class="item-qty" inputmode="decimal" placeholder="数量" step="0.1" value="' + it.qty + '">' +
+      '<input type="number" class="item-qty" inputmode="decimal" placeholder="数量" step="0.1" value="' + escapeAttr(it.qty) + '">' +
       unitSel +
-      '<input type="number" class="item-price" inputmode="numeric" placeholder="単価" value="' + it.price + '"' + (isOnodaFixed ? ' readonly' : '') + '>';
+      '<input type="number" class="item-price" inputmode="numeric" placeholder="単価" value="' + escapeAttr(it.price) + '"' + (isOnodaFixed ? ' readonly' : '') + '>';
     if (showTax) {
       const isTaxable = (it.taxable !== false);
       html += '<select class="item-tax">' +
@@ -2030,7 +2030,7 @@ function recalc() {
       if (isTaxable) taxableSub += amt;
       else nonTaxableSub += amt;
       rows += '<tr><td class="c1">' + escapeHtml(it.content || '\u00A0') + '</td>' +
-              '<td class="c2">' + (it.qty || '') + '</td>' +
+              '<td class="c2">' + escapeHtml(it.qty || '') + '</td>' +
               '<td class="cu">' + (it.unit ? escapeHtml(it.unit) : '') + '</td>' +
               '<td class="c3">' + (it.price ? fmtNum(it.price) : '') + '</td>' +
               '<td class="c-tax">' + (isTaxable ? '課税' : '非課税') + '</td>' +
@@ -2050,7 +2050,7 @@ function recalc() {
       const amt = (it.qty || 0) * (it.price || 0);
       subtotal += amt;
       rows += '<tr><td class="c1">' + escapeHtml(it.content || '\u00A0') + '</td>' +
-              '<td class="c2">' + (it.qty || '') + '</td>' +
+              '<td class="c2">' + escapeHtml(it.qty || '') + '</td>' +
               '<td class="cu">' + (it.unit ? escapeHtml(it.unit) : '') + '</td>' +
               '<td class="c3">' + (it.price ? fmtNum(it.price) : '') + '</td>' +
               '<td class="c4">' + (amt ? fmtNum(amt) : '') + '</td></tr>';

@@ -655,3 +655,70 @@ test('two devices: CSV and bank new expense share a transaction identity under u
   assert.equal(JSON.stringify(await one.listRecords('expenses')),before);
  }finally{one.dispose();two.dispose();}
 });
+
+test('cash payment cannot commit without its matching ledger mirror', async () => {
+ const admin = await clientFor('admin'), staff = await clientFor('staff');
+ try {
+  const service = createService(staff);
+  await exec(service, {type:'saveDocument',snapshot:snapshot('cash-mirror-guard'),expectedRevision:0});
+  const saleId = 'sale_cash-mirror-guard', id = 'missing-mirror';
+  const payment = {id,paymentId:id,saleId,amount:2000,paymentDate:'2026-09-22',date:'2026-09-22',method:'現金',confirmation:'cash-received'};
+  await assertFails(staff.transact('without-mirror', {id}, async ({read,write}) => {
+   const {payload,revision} = await read('sales', saleId);
+   await write('sales', saleId, {...payload,paymentIds:[id],paymentVersion:1}, 'payment', revision);
+   await write('payments', id, payment, 'payment', 0);
+   return {id};
+  }));
+  assert.equal((await admin.listRecords('payments')).length, 0);
+  const {paymentId} = await exec(service, {type:'payment',paymentId:'default-cash',saleId,amount:2000,paymentDate:payment.paymentDate});
+  const [saved] = await admin.listRecords('payments');
+  const [mirror] = await admin.listRecords('cashLedger');
+  assert.equal(saved.payload.confirmation, 'cash-received');
+  assert.equal(mirror.id, 'cash_' + paymentId);
+  assert.equal(mirror.payload.amount, payment.amount);
+ } finally {
+  admin.dispose();
+  staff.dispose();
+ }
+});
+
+test('legacy migration makes no cloud request when the stored raw backup is corrupt', async () => {
+ const source = storage();
+ source.setItem(LOCAL_KEYS.business, '{"sales":[]}');
+ const client = {
+  getState: () => ({role:'admin',companyId:company,user:{uid:'backup-test'}}),
+  digest: async () => 'a'.repeat(64),
+  transact: async () => assert.fail('migration contacted Firestore without a valid backup')
+ };
+ const key = 'tsukinowa_cloud_backup_v2_' + 'a'.repeat(48);
+ source.setItem(key, '{"raw":{}}');
+ await assert.rejects(migrateLegacy({client,storage:source}), /バックアップ/);
+ assert.equal(source.getItem(key), '{"raw":{}}');
+});
+
+test('staff can retry own operations but cannot read or reserve administrator deletion backups', async () => {
+ const admin = await clientFor('admin'), staff = await clientFor('staff');
+ try {
+  const service = createService(admin);
+  const id = 'private-error-backup';
+  await exec(service, {type:'migrateRecord',collection:'documents',id,payload:{
+   documentId:id,docType:'estimate',sourceType:'system-error',confirmed:false,
+   snapshot:{documentId:id,docType:'estimate',customerName:'非公開テスト'}
+  }});
+  const opId = 'delete_error_' + id + '_1';
+  await exec(service, {type:'deleteMisregistration',documentId:id,expectedRevision:1,reason:'誤生成'});
+  assert.equal((await getDoc(ref(db('admin'),'operations',opId))).data().result.backup.documentId, id);
+  await assertFails(getDoc(ref(db('staff'),'operations',opId)));
+  await assertFails(getDocs(collection(db('staff'), 'companies/tsukinowa/operations')));
+  await assertFails(setDoc(ref(db('staff'),'operations','delete_error_new_1'), {
+   actorId:'uid-staff',fingerprint:'test',result:{},createdAt:serverTimestamp()
+  }));
+  const command = {type:'saveDocument',operationId:'staff-own-operation',snapshot:snapshot('staff-retry'),expectedRevision:0};
+  const staffService = createService(staff);
+  const first = await staffService.execute(command);
+  assert.deepEqual(await staffService.execute(command), first);
+ } finally {
+  admin.dispose();
+  staff.dispose();
+ }
+});
