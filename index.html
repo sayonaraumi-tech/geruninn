@@ -1918,9 +1918,9 @@ function renderItemEditor() {
 
     let html =
       '<input type="text" class="item-content" placeholder="工事内容" value="' + escapeAttr(it.content) + '">' +
-      '<input type="number" class="item-qty" inputmode="decimal" placeholder="数量" step="0.1" value="' + it.qty + '">' +
+      '<input type="number" class="item-qty" inputmode="decimal" placeholder="数量" step="0.1" value="' + escapeAttr(it.qty) + '">' +
       unitSel +
-      '<input type="number" class="item-price" inputmode="numeric" placeholder="単価" value="' + it.price + '"' + (isOnodaFixed ? ' readonly' : '') + '>';
+      '<input type="number" class="item-price" inputmode="numeric" placeholder="単価" value="' + escapeAttr(it.price) + '"' + (isOnodaFixed ? ' readonly' : '') + '>';
     if (showTax) {
       const isTaxable = (it.taxable !== false);
       html += '<select class="item-tax">' +
@@ -2455,7 +2455,8 @@ function renderConfirmedHistory() {
   if (title) title.textContent = '📚 ' + docTypeLabel(docType) + ' 保存履歴';
   // それぞれの画面には、その種類の履歴だけを表示する。
   // 小野田請求の履歴は小野田請求画面にしか出さない。
-  const rows = loadConfirmedHistory().filter(r => r.docType === docType);
+  const allRows = loadConfirmedHistory();
+  const rows = allRows.filter(r => r.docType === docType);
   if (!rows.length) {
     list.innerHTML = '<div style="padding:18px;text-align:center;color:#999;border:1px dashed #d8dde3;border-radius:10px;">まだ保存履歴はありません。PDFをダウンロードした帳票だけ保存されます。</div>';
     return;
@@ -2466,7 +2467,7 @@ function renderConfirmedHistory() {
     const date = escapeHistoryHtml(r.invoiceDate || '');
     const summary = escapeHistoryHtml(historySummary(r));
     const saved = r.savedAt ? new Date(r.savedAt).toLocaleString('ja-JP') : '';
-    const originalIndex = loadConfirmedHistory().findIndex(x => x.historyId === r.historyId);
+    const originalIndex = allRows.indexOf(r);
     return '<div style="border:1px solid #e0e3e8;border-radius:10px;padding:12px 14px;margin-bottom:9px;background:#fafbfc;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">'
       + '<div><div style="font-weight:700;">' + label + ' ｜ ' + customer + '</div>'
       + '<div style="font-size:12px;color:#777;margin-top:5px;">' + date + ' ｜ ' + summary + ' ｜ 保存 ' + escapeHistoryHtml(saved) + '</div></div>'
