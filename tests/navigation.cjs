@@ -34,6 +34,25 @@ async function checkPage(page,route){
    await page.locator('#cloudEmail').fill(role+'@example.com');await page.locator('#cloudPassword').fill('test');await page.locator('#cloudLogin').click();
    await page.locator('#coreSyncStatus').filter({hasText:'クラウド同期済'}).waitFor({state:'attached'});
    await page.locator('#cloudDialog').press('Escape');
+   if(role==='admin'){
+    const rendered=await page.evaluate(()=>{
+     const previous=collectFormState();
+     const preview='<img data-injected="preview" src="data:,">';
+     applyFormState({...previous,docType:'invoice',items:[
+      {content:'テスト',qty:'1" data-injected="quantity',price:'100" data-injected="price'},
+      {content:'テスト',qty:preview,price:100}
+     ]});
+     const result={
+      injected:[...document.querySelectorAll('[data-injected]')].map(el=>el.dataset.injected),
+      preview:document.querySelectorAll('#invItems .c2')[1].textContent
+     };
+     applyFormState(previous);
+     return result;
+    });
+    assert.deepEqual(rendered.injected,[]);
+    assert.equal(rendered.preview,'<img data-injected="preview" src="data:,">');
+    console.log(`PASS ${width}px: saved document numbers cannot inject HTML into editor or preview`);
+   }
    if(role==='admin'&&width===1280){await page.locator('#bizNav [data-page="dashboard"]').click();await page.getByRole('button',{name:'年度',exact:true}).click();assert.equal(await page.locator('#homePeriodMode').inputValue(),'year');await page.getByRole('button',{name:'決算・エクスポート',exact:true}).click();await page.locator('#homeExportPanel summary').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.getByRole('button',{name:'月次',exact:true}).click();}
    if(role==='staff'){assert.equal(await page.locator('#cloudExport').isVisible(),false);for(const fn of ['exportBackup','yearEndExport','importBackup']){const dialog=page.waitForEvent('dialog');const attempt=page.evaluate(fn=>window[fn]('年間集計.csv'),fn);const denied=await dialog;assert(denied.message().includes('管理者'));await denied.dismiss();await attempt;}}
    const visibleRoutes=role==='staff'?mobileRoutes:width===390?['dashboard',...mobileRoutes]:Object.keys(routes);const allowed=visibleRoutes;
