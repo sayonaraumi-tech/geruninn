@@ -67,3 +67,41 @@ test('inconsistent reciprocal references remain isolated even when bank snapshot
  sync.enqueue({type:'expenseFromBank',operationId:'bad',bankTxnId:'bic',expense:{amount:6060}});sync.enqueue({type:'test',operationId:'good'});online=true;await sync.flush();
  assert.deepEqual(attempts,['bad','good']);assert.equal(sync.getQueue().length,1);assert(sync.getQueue()[0].blocked);sync.stop();
 });
+
+test('a committed payment remains replayable when the local outbox cannot be updated', async () => {
+ const values = new Map(), attempted = [];
+ let online = false, failNextRemoval = false;
+ const client = {
+  getState: () => ({role:'admin',projectId:'demo',companyId:'test',user:{uid:'test'}}),
+  listRecords: async () => [],
+  transact: async id => { attempted.push(id); return {paymentId:id}; }
+ };
+ const storage = {
+  getItem: key => values.get(key) ?? null,
+  setItem(key, value) {
+   if (failNextRemoval && key.endsWith('_outbox') && JSON.parse(value).length === 1) {
+    failNextRemoval = false;
+    throw Error('quota');
+   }
+   values.set(key, value);
+  }
+ };
+ const sync = createSync({client,storage,online:() => online});
+ sync.enqueue({type:'payment',operationId:'cash-collection',paymentId:'p',saleId:'s',method:'現金',amount:2000,paymentDate:'2026-09-22'});
+ sync.enqueue({type:'test',operationId:'next'});
+ failNextRemoval = true;
+ online = true;
+ await sync.flush();
+ assert.deepEqual(attempted, ['cash-collection']);
+ assert.equal(sync.getQueue()[0].blocked, undefined);
+ await sync.flush();
+ assert.deepEqual(attempted, ['cash-collection','cash-collection','next']);
+ assert.equal(sync.getQueue().length, 0);
+});
+
+test('enqueue rejects different commands with the same offline operation ID', () => {
+ const h = harness();
+ assert.equal(h.sync.enqueue({type:'test',operationId:'op0'}), 'op0');
+ assert.throws(() => h.sync.enqueue({type:'test',operationId:'op0',amount:2000}), /Operation ID conflict/);
+ assert.equal(h.sync.getQueue().length, 14);
+});

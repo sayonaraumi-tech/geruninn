@@ -26,8 +26,13 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  }
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
-   if(queue.some(x=>x.command.operationId===command.operationId))return command.operationId;
-   const entry={command:JSON.parse(core.canonical(core.normalizeDates(command))),createdAt:new Date().toISOString()};
+   const serialized=core.canonical(core.normalizeDates(command));
+   const existing=queue.find(x=>x.command.operationId===command.operationId);
+   if(existing){
+    if(core.canonical(existing.command)!==serialized)throw Error('Operation ID conflict');
+    return command.operationId;
+   }
+   const entry={command:JSON.parse(serialized),createdAt:new Date().toISOString()};
    const next=[...queue,entry];storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();flush();return command.operationId;
  }
  function flush(){
@@ -46,11 +51,9 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
      const backupKey=prefix+'bank_conflict_backup_'+item.command.operationId;
      if(!storage.getItem(backupKey))storage.setItem(backupKey,JSON.stringify(queue));
     }
-    try{const result=await service.execute(item.command);if(stopped)return;
-      if(item.command.type==='payment')await reload();
-      // Persist removal before issuing the next command. Replaying a committed operation is safe after a quota failure.
-      const next=queue.filter(x=>x!==item);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=queue.find(x=>x.blocked)?.error||null;try{onCommitted(item.command,result);}catch(observerError){onFailure(item.command,'保存済み。画面を再読込してください：'+observerError.message);}
-    }catch(e){
+    let result;
+    try{result=await service.execute(item.command);}
+    catch(e){
       if(stopped)return;
       const transient=['unavailable','deadline-exceeded','cancelled','network-request-failed'].some(x=>String(e.code||'').includes(x))||!online();
       error=(e.code?'['+e.code+'] ':'')+(e.message||'Firestore同期失敗');
@@ -58,6 +61,20 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
       if(!transient&&item.command.type==='expenseFromBank'&&/既存の支出候補/.test(error)&&!resolved(item))continue;
       break;
     }
+    if(stopped)return;
+    try{
+      if(item.command.type==='payment')await reload();
+      if(stopped)return;
+      // Keep the same operation in the outbox until removal is durable.
+      const next=queue.filter(x=>x!==item);
+      storage.setItem(queueKey,JSON.stringify(next));
+      queue=next;
+    }catch(e){
+      error='クラウドに保存済み。同期の再試行が必要です：'+e.message;
+      break;
+    }
+    error=queue.find(x=>x.blocked)?.error||null;
+    try{onCommitted(item.command,result);}catch(e){onFailure(item.command,'保存済み。画面を再読込してください：'+e.message);}
    }
   })().finally(()=>{running=null;if(!stopped)status();});status();return running;
  }
@@ -77,9 +94,13 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');
  const service=domain.createService(client),backup=core.backupLegacy(storage);if(backup.errors.length)throw Error('旧データに読込エラーがあります。原本を修復・確認してから移行してください。');
- const sourceHash=await client.digest(core.canonical(backup.raw)),sourceId='v2_'+sourceHash.slice(0,48),backupKey='tsukinowa_cloud_backup_'+sourceId;
+ const raw=core.canonical(backup.raw),sourceHash=await client.digest(raw),sourceId='v2_'+sourceHash.slice(0,48),backupKey='tsukinowa_cloud_backup_'+sourceId;
  // A verified raw backup must be durable before any Firestore request is issued.
- const encoded=JSON.stringify(backup);if(!storage.getItem(backupKey))storage.setItem(backupKey,encoded);if(!storage.getItem(backupKey))throw Error('バックアップを保存できません。移行は開始していません。');
+ try{
+  if(storage.getItem(backupKey)===null)storage.setItem(backupKey,JSON.stringify(backup));
+  const saved=JSON.parse(storage.getItem(backupKey));
+  if(saved?.format!==backup.format||saved.schemaVersion!==backup.schemaVersion||core.canonical(saved.raw)!==raw)throw Error('Backup mismatch');
+ }catch(e){throw Error('バックアップを確認できません。移行は開始していません。',{cause:e});}
  const stateKey='tsukinowa_cloud_migration_'+client.getState().companyId+'_'+sourceId;
  storage.setItem(stateKey,JSON.stringify({migrationVersion:2,status:'running',backupKey}));onStatus('移行中（元データとバックアップを保持）');
  try{

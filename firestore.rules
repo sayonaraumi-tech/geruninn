@@ -91,6 +91,16 @@ service cloud.firestore {
    return sale.data.payload.paymentIds.hasAny([id]) && (sale.data.lastOperationId==request.resource.data.lastOperationId || (admin(c) && resource!=null && platformPaymentEvidence(c,id,p)))
      && (p.get('deletedAt',null)!=null || active(sale.data.payload));
   }
+  function newCashPaymentHasMirror(c,id,p) {
+   let cashId='cash_'+id;
+   let row=getAfter(/databases/$(database)/documents/companies/$(c)/cashLedger/$(cashId));
+   let cash=row.data.payload;
+   return p.method=='現金' && p.amount>0 && p.get('deletedAt',null)==null
+    && row.data.lastOperationId==request.resource.data.lastOperationId
+    && cash.linkedPaymentId==id && cash.cashTxnId==cashId && cash.type=='income'
+    && cash.amount==p.amount && cash.date==p.paymentDate && cash.deletedAt==null
+    && cash.linkedExpenseId=='' && cash.linkedSupplierTransactionId=='';
+  }
   // Admin-only evidence updates keep all economic/identity fields immutable.
   // The bank and its allocation list must be committed in this same operation.
   function platformPaymentEvidence(c,id,p) {
@@ -207,7 +217,8 @@ service cloud.firestore {
   }
   match /companies/{c}/{n}/{id} {
    allow read: if business(n) && (admin(c) || (member(c) && (core(n) || (n=='settings' && id=='system'))));
-   allow create: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && documentGuard(c,n,id) && (n!='payments'||paymentGuard(c,n,id)) && valid(c,n,id) && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time;
+   allow create: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && documentGuard(c,n,id) && (n!='payments'||paymentGuard(c,n,id)) && valid(c,n,id) && request.resource.data.revision==1 && request.resource.data.createdBy==request.auth.uid && request.resource.data.createdAt==request.time
+    && (n!='payments' || request.resource.data.payload.get('confirmation','')!='cash-received' || newCashPaymentHasMirror(c,id,request.resource.data.payload));
    allow update: if business(n) && member(c) && (admin(c)||staffWrite(c,n,id)) && documentGuard(c,n,id) && (n!='payments'||paymentGuard(c,n,id)) && valid(c,n,id) && request.resource.data.revision==resource.data.revision+1 && request.resource.data.createdBy==resource.data.createdBy && (!resource.data.keys().hasAny(['createdAt']) || request.resource.data.createdAt==resource.data.createdAt);
    allow delete: if n=='documents' && errorDeletion(c,id);
   }
@@ -215,8 +226,10 @@ service cloud.firestore {
    allow get: if member(c) && (!exists(/databases/$(database)/documents/companies/$(c)/cashLedger/$(id)) || resource.data.payload.linkedPaymentId!='');
   }
   match /companies/{c}/operations/{id} {
-   allow read: if member(c);
-   allow create: if member(c) && (!id.matches('historical_.*') || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
+   allow list: if admin(c);
+   allow get: if admin(c) || (member(c) && !id.matches('delete_error_.*')
+    && (resource==null || resource.data.actorId==request.auth.uid || id.matches('documentNumber_[0-9]{8}-[0-9]{4}-[0-9]{2,}')));
+   allow create: if member(c) && (!(id.matches('historical_.*') || id.matches('delete_error_.*')) || admin(c)) && request.resource.data.keys().hasOnly(['actorId','fingerprint','result','createdAt']) && request.resource.data.actorId==request.auth.uid && request.resource.data.fingerprint is string && request.resource.data.result is map && request.resource.data.createdAt==request.time;
    allow update,delete: if false;
   }
   match /companies/{c}/auditLogs/{id} {
