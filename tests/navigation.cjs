@@ -7,7 +7,7 @@ let serveOldWorker=false;
 const server=http.createServer((req,res)=>{
  const name=new URL(req.url,'http://localhost').pathname,file=path.join(root,name==='/'?'index.html':name);
  if(name==='/sw.js'&&serveOldWorker){res.setHeader('Content-Type','text/javascript');return res.end(fs.readFileSync(file,'utf8').replace(/const CACHE='[^']+';/,`const CACHE='${oldCache}';`));}
- try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
+ try{res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.html')?'text/html':file.endsWith('.json')?'application/json':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.writeHead(404).end();}
 });
 const routes={dashboard:'pageDashboard',calendar:'pageCalendar',estimates:'pageEstimates',chohyo:'pageChohyo',savedDocs:'pageSavedDocs',sales:'pageSales',expenses:'pageExpenses',bank:'pageBank',settings:'pageSettings'};
 const mobileRoutes=['calendar','estimates','chohyo','savedDocs'];
@@ -55,7 +55,7 @@ async function checkPage(page,route){
    }
    if(role==='admin'&&width===1280){await page.locator('#bizNav [data-page="dashboard"]').click();await page.getByRole('button',{name:'年度',exact:true}).click();assert.equal(await page.locator('#homePeriodMode').inputValue(),'year');await page.getByRole('button',{name:'決算・エクスポート',exact:true}).click();await page.locator('#homeExportPanel summary').click();const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'年間売上一覧.csv',exact:true}).click();assert.equal((await downloading).suggestedFilename(),'年間売上一覧.csv');const backup=page.waitForEvent('download');await page.getByRole('button',{name:'全データバックアップ',exact:true}).click();assert((await backup).suggestedFilename().endsWith('.json'));await page.getByRole('button',{name:'月次',exact:true}).click();}
    if(role==='staff'){assert.equal(await page.locator('#cloudExport').isVisible(),false);for(const fn of ['exportBackup','yearEndExport','importBackup']){const dialog=page.waitForEvent('dialog');const attempt=page.evaluate(fn=>window[fn]('年間集計.csv'),fn);const denied=await dialog;assert(denied.message().includes('管理者'));await denied.dismiss();await attempt;}}
-   const visibleRoutes=role==='staff'?mobileRoutes:width===390?['dashboard',...mobileRoutes]:Object.keys(routes);const allowed=visibleRoutes;
+   const visibleRoutes=role==='staff'?mobileRoutes:Object.keys(routes);const allowed=visibleRoutes;
    assert.equal(await page.locator('#pageMonthly,#bizNav [data-page="monthly"],#pageProjects,#pageSuppliers,#supplierNav,#bizNav [data-page="projects"],#bizNav [data-page="suppliers"]').count(),0);
    const before=await page.evaluate(()=>JSON.stringify({business:bizState,history:loadConfirmedHistory()}));
    for(const route of allowed){
