@@ -1021,6 +1021,7 @@ dialog h2{font-size:15px}
 .biz-actions{align-items:center}
 @media(max-width:600px){.sales-filters{padding:10px}.sales-filters label{flex-basis:calc(50% - 10px)}.biz-section-head>.biz-actions{width:100%}.editor h2{font-size:19px}}
 </style>
+<link rel="stylesheet" href="./css/tabler-v13.css">
 </head>
 <body>
 <div class="biz-topbar">
@@ -1098,21 +1099,21 @@ dialog h2{font-size:15px}
 
 <div id="pageEstimates" class="biz-page app-page">
  <div class="biz-title"><div><h1>見積履歴</h1><div class="biz-muted">正式請求書の発行前はここで管理します。発行後の入金確認は売上・入金台帳へ。元の見積書・取消／訂正帳票は保存帳票から確認できます。</div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>保存済み見積</h2><div class="biz-actions"><label><input type="checkbox" id="estimateShowIssued" onchange="renderEstimates()"> 請求書発行済みの履歴も表示</label><input id="estimateSearch" placeholder="客户名・地区・金额" oninput="renderEstimates()"></div></div>
-  <div class="biz-table-wrap"><table class="biz-table estimate-history"><thead><tr><th aria-sort="descending" id="estimateDateHeader"><button class="biz-sort" onclick="bizToggleEstimateDateSort()">見積日 <span id="estimateDateDirection">▼</span></button></th><th>客户</th><th>項目分類 / 内容摘要</th><th class="biz-money">金额</th><th>状态</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
+ <div class="biz-section"><div class="biz-section-head"><h2>保存済み見積</h2><div class="biz-actions"><label><input type="checkbox" id="estimateShowIssued" onchange="renderEstimates()"> 請求書発行済みの履歴も表示</label><input id="estimateSearch" placeholder="お客様名・地区・金額" oninput="renderEstimates()"></div></div>
+  <div class="biz-table-wrap"><table class="biz-table estimate-history"><thead><tr><th aria-sort="descending" id="estimateDateHeader"><button class="biz-sort" onclick="bizToggleEstimateDateSort()">見積日 <span id="estimateDateDirection">▼</span></button></th><th>お客様</th><th>項目分類 / 内容</th><th class="biz-money">金額</th><th>状態</th><th>日程</th><th></th></tr></thead><tbody id="estimateRows"></tbody></table></div>
  </div>
 </div>
 
 <div id="pageSavedDocs" class="biz-page app-page">
  <div class="biz-title"><div><h1>保存帳票</h1><div class="biz-muted">保存済みの見積書・請求書・領収書・小野田請求を一覧表示します。呼び出し・再ダウンロードしても同じ帳票IDとして扱い、売上・入金を重複登録しません。</div></div></div>
  <div class="biz-section">
-  <div class="biz-section-head"><h2>保存済み帳票</h2><div class="biz-actions"><input id="savedDocSearch" placeholder="客户名・番号・種類" oninput="renderAllSavedDocs()"></div></div>
+  <div class="biz-section-head"><h2>保存済み帳票</h2><div class="biz-actions"><input id="savedDocSearch" placeholder="お客様名・番号・種類" oninput="renderAllSavedDocs()"></div></div>
   <div id="allSavedDocsList"></div>
  </div>
 </div>
 
 <div id="pageSales" class="biz-page app-page">
- <div class="biz-title"><div><h1>売上・入金</h1><div class="biz-muted">請求書を正式保存すると自動で売上に入ります。銀行・現金の入金日は別管理です。</div></div><div class="biz-actions"><button class="biz-btn" onclick="openManualSale()">手動売上</button></div></div>
+ <div class="biz-title"><div><h1>売上・入金</h1><div class="biz-muted">請求書を正式保存すると自動で売上に入ります。銀行・現金の入金日は別管理です。</div></div><div class="biz-actions"><button class="biz-btn" onclick="bizSwitchPage('chohyo');setDocType('invoice')">請求書で売上登録</button></div></div>
  <div class="biz-section sales-register"><div class="biz-section-head"><div><h2>売上・入金台帳</h2><p class="biz-muted">売上日で期間を選択・入金は基準日までの確認済み金額（円）</p></div><button class="biz-btn primary" onclick="accountingExport('salesRegister')">CSV出力</button></div>
  <div class="sales-filters"><label>期間<select id="salesPeriodMode" onchange="renderSales()"><option value="month">月次</option><option value="year">年度（10月〜9月）</option><option value="custom">指定期間</option></select></label><label id="salesMonthField">対象月<input type="month" id="salesMonth" onchange="renderSales()"></label><label id="salesYearField" hidden>年度<input type="number" id="salesYear" min="2000" max="9998" onchange="renderSales()"></label><label id="salesStartField" hidden>開始日<input type="date" id="salesStart" onchange="renderSales()"></label><label id="salesEndField" hidden>終了日<input type="date" id="salesEnd" onchange="renderSales()"></label><label>入金基準日<input type="date" id="receivableAsOf" onchange="renderSales()"></label><label>売上日順<select id="salesSort" onchange="renderSales()"><option value="asc">古い順 ↑</option><option value="desc">新しい順 ↓</option></select></label></div><p id="salesViewStatus" role="status"></p><div id="salesRegisterTable"></div><div id="salesDetails" hidden></div></div>
  <div class="biz-section" id="paymentRegistrationForm"><div class="biz-section-head"><h2>入金登録</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>対象売上</label><select id="paymentSale" onchange="bizOnodaPaymentHint()"></select><p id="onodaPaymentHint" hidden>小野田の前月未入金残高は今回の売上に含まれません。合算で受領した場合も、本月分と過去分を元の売上・未収へ分けて登録してください。自動分配は行いません。</p></div><div class="biz-field"><label>入金日</label><input type="date" id="paymentDate"></div><div class="biz-field"><label for="paymentType">入金経路</label><select id="paymentType" onchange="bizPaymentChannelChanged()"><option>銀行振込</option><option>現金</option><option>プラットフォーム経由</option><option>その他</option></select></div><div class="biz-field" id="paymentPlatformField" hidden><label for="paymentPlatformName">プラットフォーム名（任意）</label><input id="paymentPlatformName" placeholder="くらしのマーケット"></div><div class="biz-field"><label>入金額</label><input type="number" id="paymentAmount"></div><div class="biz-field span2"><label>備考</label><input id="paymentMemo" placeholder="一部入金・現金受領など"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" id="paymentSubmit" onclick="addPayment()">入金登録</button></div></div></div>
@@ -1210,13 +1211,13 @@ dialog h2{font-size:15px}
 
     <div class="form-row">
       <div class="form-group full">
-        <label>お客様名（客户名）</label>
+        <label>お客様名</label>
         <input type="text" id="customerName" value="プラスワン株式会社">
       </div>
     </div>
     <div class="form-row">
       <div class="form-group">
-        <label>日付（日期）</label>
+        <label>日付</label>
         <input type="date" id="invoiceDate">
       </div>
       <div class="form-group">
@@ -3541,5 +3542,8 @@ document.addEventListener('DOMContentLoaded',()=>{
   else if(window.matchMedia('(max-width: 800px)').matches)bizSwitchPage('calendar');
 });
 </script>
+<script src="./js/tabler-calendar.js"></script>
+<script src="./js/tabler-ui.js"></script>
+<script src="./js/tabler-analytics.js"></script>
 </body>
 </html>

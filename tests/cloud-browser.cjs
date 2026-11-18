@@ -1,6 +1,6 @@
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
 const root=path.join(__dirname,'..');
-const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(root,pathname==='/'?'index.html':pathname);try{res.setHeader('Content-Type',file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});
+const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http://localhost').pathname;const file=path.join(root,pathname==='/'?'index.html':pathname);try{res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':file.endsWith('.json')?'application/json':file.endsWith('.html')?'text/html':'application/octet-stream');res.end(fs.readFileSync(file));}catch{res.statusCode=404;res.end();}});
 const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {initialize:async()=>{},observeAuth:f=>{cb=f;f(null);return()=>{};},claims:async u=>u.claims,signIn:async(email,password)=>{if(password==='wrong')throw Error('no');await cb({uid:'test',email,claims:{role:email.startsWith('admin')?'admin':'staff',companyId:'tsukinowa'}});},signOut:async()=>cb(null),listen:(p,m,next)=>{next([],{fromCache:false});return()=>{};}}};`;
 (async()=>{
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;const browser=await chromium.launch({headless:true});
@@ -13,7 +13,7 @@ const fakeDriver=`window.createTsukinowaFirebaseDriver=async()=>{let cb;return {
   await page.goto(base);await page.locator('#cloudStatus').filter({hasText:'クラウド未設定'}).waitFor({state:'attached'});
   const backup=await page.evaluate(()=>localStorage.getItem('tsukinowa_business_v1'));
   await page.locator('#bizCloudAccountButton').click();assert(await page.locator('#cloudDialog').isVisible());assert(await page.locator('#cloudLogin').isDisabled());
-  const bounds=await page.locator('#bizCloudAccountButton').boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=0&&bounds.y+bounds.height<=104);
+  const bounds=await page.locator('#bizCloudAccountButton').boundingBox(),header=await page.locator('.biz-topbar').boundingBox();assert(bounds.x>=0&&bounds.x+bounds.width<=width&&bounds.y>=header.y&&bounds.y+bounds.height<=header.y+header.height);
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'端末内データをバックアップ（JSON）'}).click();const download=await downloadPromise;const json=JSON.parse(fs.readFileSync(await download.path(),'utf8'));assert.equal(json.business.sales[0].id,'old');
   await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:true,companyId:'tsukinowa',firebase:{apiKey:'public-test',authDomain:'test.firebaseapp.com',projectId:'test',appId:'test'}}}));
   await page.route('**/js/firebase-driver.js',r=>r.fulfill({contentType:'text/javascript',body:fakeDriver}));

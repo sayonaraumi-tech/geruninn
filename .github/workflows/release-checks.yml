@@ -10,12 +10,13 @@ concurrency:
   cancel-in-progress: true
 jobs:
   regression:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         suite: [local, emulator]
+        os: [ubuntu-latest, windows-latest, macos-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -32,7 +33,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test
+      - name: Prepare browser evidence
+        run: node -e "require('fs').mkdirSync('test-screenshots',{recursive:true})"
       - run: pnpm test:release:${{ matrix.suite }}
+        env:
+          PREVIEW_DIR: ${{ github.workspace }}/test-screenshots
+      - name: Preserve browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-evidence-${{ matrix.os }}-${{ matrix.suite }}
+          path: test-screenshots
+          if-no-files-found: ignore
       - name: Collect failure diagnostics
         if: failure()
         run: |
@@ -41,6 +53,6 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: regression-diagnostics-${{ matrix.suite }}
+          name: regression-diagnostics-${{ matrix.os }}-${{ matrix.suite }}
           path: test-diagnostics
           if-no-files-found: ignore

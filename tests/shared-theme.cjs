@@ -18,19 +18,19 @@ module.exports=async function assertSharedTheme(page,pageId){
   });
   const baselineButton=buttons(reference),targetButton=buttons(target);
   const bar=document.querySelector('.biz-topbar').getBoundingClientRect();
-  const navFits=[...document.querySelectorAll('.biz-nav button')].filter(e=>e.getBoundingClientRect().height).every(e=>e.getBoundingClientRect().bottom<=bar.bottom);
+  const sidebar=document.querySelector('.tabler-sidebar').getBoundingClientRect();const navFits=[...document.querySelectorAll('.biz-nav button')].filter(e=>e.getBoundingClientRect().height).every(e=>e.getBoundingClientRect().bottom<=sidebar.bottom);
   const nav=getComputedStyle(document.querySelector('.biz-topbar')),selected=getComputedStyle(document.querySelector('.biz-nav .active'));
   if(before!==null&&JSON.stringify([...testRecords])!==before)throw Error('Theme inspection must not write records');
   return{navFits,titleClear:target.querySelector('.biz-title').getBoundingClientRect().top>=bar.bottom,targetStyles,referenceStyles,targetButton,baselineButton,background:getComputedStyle(document.body).backgroundColor,nav:nav.backgroundColor,selected:selected.backgroundColor,overflow:document.documentElement.scrollWidth>innerWidth};
  },pageId);
  for(const key of ['page','title','th','table']){assert.equal(styles.targetStyles[key].fontFamily,styles.referenceStyles[key].fontFamily);}
- // History needs a wider desktop container for its intact action group.
- assert.equal(styles.referenceStyles.page.maxWidth,'1440px');
- assert.equal(styles.targetStyles.page.maxWidth,pageId==='pageEstimates'?'1440px':'1180px');
+ // All nine pages use the approved v13 content width.
+ assert.equal(styles.referenceStyles.page.maxWidth,'1650px');
+ assert.equal(styles.targetStyles.page.maxWidth,'1650px');
  delete styles.targetStyles.page.maxWidth;delete styles.referenceStyles.page.maxWidth;
  assert.deepEqual(styles.targetStyles,styles.referenceStyles,pageId+' must share 見積履歴 typography and containers');
  for(const button of [...styles.targetButton,...styles.baselineButton])delete button.fontFamily;
- assert.deepEqual(styles.targetButton,styles.baselineButton,pageId+' ordinary and gold primary buttons');
- assert.equal(styles.navFits,true,'mobile menus stay inside the black navigation bar');assert.equal(styles.titleClear,true,'title stays below navigation');
- assert.equal(styles.background,'rgb(240, 242, 245)');assert.equal(styles.nav,'rgb(20, 20, 20)');assert.equal(styles.selected,'rgb(43, 43, 43)');assert.equal(styles.overflow,false);
+ assert.deepEqual(styles.targetButton,styles.baselineButton,pageId+' ordinary and themed primary buttons');
+ assert.equal(styles.navFits,true,'menus stay inside the v13 sidebar');assert.equal(styles.titleClear,true,'title stays below navigation');
+ assert.equal(styles.background,'rgb(244, 246, 249)');assert.equal(styles.nav,'rgb(255, 255, 255)');assert.equal(styles.selected,'rgb(232, 240, 250)');assert.equal(styles.overflow,false);
 };

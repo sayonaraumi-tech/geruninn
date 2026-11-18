@@ -1,0 +1,108 @@
+/* Tabler v13 visual adapter. Screen-only rules deliberately exclude formal PDF/print. */
+@media screen {
+body {--acc:#2869ad;--bg:#f4f6f9;--panel:#fff;--fg:#243348;--mut:#647386;--line:#dfe5ed;--side:#fff;--selected:#e8f0fa;--expense:#648d9d;--side-fg:#26384c;--side-mut:#647386;--side-active:#e8f0fa;margin:0;padding:var(--tabler-header-height,57px) 0 0 205px;background:var(--bg);color:var(--fg);font-family:-apple-system,BlinkMacSystemFont,'Noto Sans JP',sans-serif;font-size:13px}
+body * {box-sizing:border-box}
+.tabler-sidebar {position:fixed;inset:0 auto 0 0;width:205px;padding:17px 11px;background:var(--side);border-right:1px solid var(--line);z-index:200;overflow:auto}
+.tabler-sidebar .biz-brand {font-size:18px;color:var(--side-fg);padding:5px 10px 26px;white-space:normal}
+.tabler-sidebar .biz-brand small {display:none}
+body #bizNav {display:grid!important;grid-template-columns:1fr!important;gap:4px;height:auto;width:100%;padding:0;overflow:visible!important}
+body #bizNav button {background:none;border:0;border-radius:5px;text-align:left;color:var(--side-mut);padding:11px;font-size:13px;font-weight:560;white-space:nowrap}
+body #bizNav button.active {background:var(--side-active);color:var(--acc)}
+body #bizNav button[hidden] {display:none!important}
+body .biz-topbar {left:205px;right:0;top:0;width:auto;height:auto;min-height:57px;display:flex;padding:10px 23px;background:var(--panel);border-bottom:1px solid var(--line);box-shadow:none;color:var(--fg);gap:12px;flex-wrap:wrap}
+.tabler-crumb {margin-right:auto;font-weight:650}
+.tabler-themes {display:flex;gap:7px;flex-wrap:wrap}
+.tabler-themes button {background:var(--panel);color:var(--fg);border:1px solid var(--line);padding:7px 10px;border-radius:5px;font:inherit;cursor:pointer}
+.tabler-themes button[aria-pressed=true] {outline:2px solid var(--acc)}
+body .biz-sync,body .biz-user {color:var(--mut)}
+body #bizCloudAccountButton {position:static;color:var(--fg);background:var(--panel);border-color:var(--line)}
+body .biz-page,body #pageChohyo.editor {width:100%;max-width:1650px;margin:0 auto;padding:20px}
+body .biz-title h1 {font-size:20px;font-weight:750;color:var(--fg)}
+body .biz-title {margin:0 0 15px}
+body .biz-muted,body .biz-field label {color:var(--mut)}
+body .biz-section,body .biz-card {background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:9px;box-shadow:0 1px 2px #0d172208;padding:15px;margin-bottom:12px}
+body .biz-section-head h2,body .biz-card h3 {font-size:13px;color:var(--fg)}
+body .biz-grid {gap:12px;margin-bottom:14px}
+body #pageDashboard .biz-card {padding:15px;min-height:0}
+body #pageDashboard .biz-card:after {display:none}
+body .biz-kpi {font-size:21px;color:var(--fg);font-variant-numeric:tabular-nums;letter-spacing:-.025em}
+body .biz-btn {border:1px solid var(--line);border-radius:5px;padding:8px 11px;background:var(--panel);color:var(--fg);font-size:12px;box-shadow:none}
+body .biz-btn.primary {background:var(--acc);border-color:var(--acc);color:#fff}
+body .biz-btn.ok {background:var(--selected);color:var(--acc);border-color:var(--line)}
+body .biz-table {font-size:12px}
+body .biz-table th,body .biz-table td {padding:10px 11px;border-color:var(--line)}
+body .biz-table th {background:var(--bg);color:var(--mut);font-size:11px}
+body .biz-table td {color:var(--fg)}
+body .biz-field input,body .biz-field select,body .biz-field textarea,body .biz-section input,body .biz-section select {background:var(--panel);color:var(--fg);border-color:var(--line);border-radius:5px}
+body .sales-filters {background:var(--bg);color:var(--fg)}
+body .biz-badge {border-radius:4px}
+body #cloudDialog {background:var(--panel);color:var(--fg)}
+body #pageChohyo.active {display:grid!important;grid-template-columns:minmax(360px,.85fr) minmax(420px,1.15fr);gap:12px;align-items:start}
+.tabler-document-form {min-width:0}
+body #pageChohyo .editor-card {background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:7px;padding:15px;margin-bottom:12px;box-shadow:none}
+body #pageChohyo .editor-card h2,body #pageChohyo .subtitle {display:none}
+body #pageChohyo .form-group input,body #pageChohyo .form-group select,body #pageChohyo .form-group textarea,body #pageChohyo .item-row input {background:var(--panel);color:var(--fg);border-color:var(--line)}
+body #pageChohyo .form-group label {color:var(--mut)}
+body #pageChohyo .tabs {background:var(--bg)}
+body #pageChohyo .tab.active,body #pageChohyo .btn-print {background:var(--acc);color:#fff;box-shadow:none}
+body #pageChohyo #previewArea {display:flex!important;position:sticky;top:85px;max-height:calc(100vh - 100px);max-width:100%;overflow:auto;border:1px solid var(--line);border-radius:7px;padding:12px;background:var(--bg);justify-content:flex-start;margin:0}
+body #pageChohyo #previewArea .invoice {zoom:.68;flex:none;color:#1a1a1a;background:#fff;box-shadow:0 2px 12px #0002}
+body #pageChohyo .btn-preview {display:none}
+.tabler-calendar-toolbar {display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.tabler-month-grid {display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:3px;min-width:0}
+.tabler-weekday {text-align:center;color:var(--mut);font-size:11px;padding:5px}
+.tabler-day {min-height:87px;border:1px solid var(--line);background:var(--panel);padding:6px;min-width:0;overflow:hidden}
+.tabler-day.outside {background:var(--bg);color:var(--mut)}
+.tabler-day.today {outline:2px solid var(--acc);outline-offset:-2px}
+.tabler-day time {font-size:12px;font-variant-numeric:tabular-nums}
+.tabler-event {display:block;width:100%;text-align:left;border:0;background:var(--selected);color:var(--acc);margin-top:4px;padding:4px;border-radius:3px;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+.tabler-month-caption {font-size:16px;font-weight:650;margin-right:auto}
+body button:focus-visible {outline:2px solid var(--acc);outline-offset:2px}
+@media(min-width:1700px){body #pageChohyo #previewArea .invoice {zoom:.85}}
+@media(max-width:1200px){body #pageChohyo.active {grid-template-columns:minmax(0,1fr)}body #pageChohyo #previewArea {position:static;max-height:950px;justify-content:center}body #pageChohyo #previewArea .invoice {zoom:.86}}
+@media(max-width:800px){
+body {padding:0}
+.tabler-sidebar {position:static;width:100%;padding:9px;overflow:visible}
+.tabler-sidebar .biz-brand {padding:5px;display:block;height:auto}
+body #bizNav {display:flex!important;gap:4px;overflow-x:auto!important;padding:5px 0;width:100%;height:auto}
+body #bizNav button {padding:8px;flex:none;font-size:12px!important}
+body #bizNav button.mobile-hide:not([hidden]) {display:block!important}
+body .biz-topbar {position:static;min-height:57px;padding:10px;width:100%}
+body .biz-page,body #pageChohyo.editor {padding:10px}
+.tabler-themes {gap:5px}.tabler-themes button {padding:6px;font-size:11px}
+body .biz-grid {grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+body .biz-kpi {font-size:17px}
+.tabler-day {padding:3px;min-height:65px}.tabler-event {font-size:10px;padding:3px}
+body #pageChohyo #previewArea .invoice {zoom:.45}
+}
+}
+@media screen {
+.tabler-analytics {display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:12px}
+.tabler-analytics h2 {font-size:13px;font-weight:650;margin:0 0 12px}
+.tabler-comparison-row {display:grid;grid-template-columns:30px minmax(0,1fr) 140px;gap:8px;align-items:center;font-size:11px;margin-top:9px}
+.tabler-comparison-track {height:7px;margin:3px 0;background:var(--bg);border-radius:3px;overflow:hidden}
+.tabler-comparison-track i {display:block;height:100%;background:var(--acc)}
+.tabler-comparison-track i.prior {background:var(--expense)}
+@media(max-width:1000px){.tabler-analytics {grid-template-columns:minmax(0,1fr)}}
+}
+
+@media screen {
+.tabler-date-button {background:none;color:inherit;border:0;padding:2px;cursor:pointer}
+.tabler-schedule-dialog {border:1px solid var(--line);border-radius:9px;padding:20px;width:min(520px,calc(100% - 30px));background:var(--panel);color:var(--fg)}
+.tabler-schedule-dialog::backdrop {background:#0007}
+.tabler-schedule-dialog h2 {font-size:18px}.tabler-schedule-dialog p {font-size:12px;line-height:1.7}
+.tabler-schedule-dialog label {display:block;margin:12px 0;font-size:12px}
+.tabler-schedule-dialog input,.tabler-schedule-dialog textarea {display:block;margin-top:5px;padding:9px;width:100%;background:var(--panel);color:var(--fg);border:1px solid var(--line);border-radius:5px;font:inherit}
+}
+@media screen {
+.tabler-analytics .biz-section {min-width:0}
+.tabler-analytics .biz-table {min-width:0}
+.tabler-analytics {grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);gap:13px}
+body #pageChohyo #confirmedHistoryCard {display:none}
+@media(max-width:1000px){.tabler-analytics {grid-template-columns:minmax(0,1fr)}}
+}
+@media screen {body #pageEstimates.biz-page {max-width:1650px}}
+@media screen {body .biz-section h2 {font-weight:650}}
+@media screen {
+body #pageDashboard,body #pageCalendar,body #pageEstimates,body #pageChohyo,body #pageSavedDocs,body #pageSales,body #pageExpenses,body #pageBank,body #pageSettings {max-width:1650px}
+}

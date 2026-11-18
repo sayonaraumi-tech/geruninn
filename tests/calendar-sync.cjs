@@ -8,7 +8,7 @@ new vm.Script(fs.readFileSync(path.join(root,'sw.js'),'utf8'));
 assert(!html.includes('clean_reset_done'));assert(!html.includes('rows.slice(0, 500)'));assert(!html.includes('bizEscape('));
 console.log('PASS static syntax and data preservation checks');
 const {chromium}=require('playwright');
-const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname;const f=path.join(root,name==='/'?'index.html':name);try{res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.webmanifest')?'application/manifest+json':'image/png');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
+const server=http.createServer((req,res)=>{const name=new URL(req.url,'http://localhost').pathname;const f=path.join(root,name==='/'?'index.html':name);try{res.setHeader('Content-Type',f.endsWith('.css')?'text/css':f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':f.endsWith('.webmanifest')?'application/manifest+json':'image/png');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 (async()=>{
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const base=`http://127.0.0.1:${server.address().port}`;
