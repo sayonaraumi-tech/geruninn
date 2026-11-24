@@ -50,7 +50,24 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
    for(const name of ['gold','green','purple','dark','blue']){await p.locator('[data-tabler-theme='+name+']').click();assert.equal(await p.locator('[data-tabler-theme='+name+']').getAttribute('aria-pressed'),'true');}
    assert.equal(await p.evaluate(()=>JSON.stringify(TsukinowaBusinessUI.getSync().getRows())),baseline,'navigation and themes cannot write financial records');
    if(output)fs.writeFileSync(path.join(output,'control-inventory-'+width+'.json'),JSON.stringify(inventory,null,2));
-   await context.close();console.log('PASS v13 '+width+': real emulator calendar creation, leap day, cash text non-posting, XSS, detail, month controls, nine routes, five themes, no financial mutation, screenshots and control inventory');
+   // Same-origin tabs share an outbox: only the lock owner may mutate it.
+   const second=await context.newPage();second.on('pageerror',e=>errors.push(e.message));
+   await second.route('https://**/*',r=>r.fulfill({body:''}));await second.goto(base);
+   await second.waitForFunction(()=>cloudStatus.textContent==='未ログイン');
+   await second.locator('#bizCloudAccountButton').click();await second.locator('#cloudEmail').fill('admin@example.com');await second.locator('#cloudPassword').fill('password');await second.locator('#cloudLogin').click();
+   await second.waitForFunction(()=>coreSyncStatus.textContent.includes('閲覧専用'));
+   const denied=await second.evaluate(()=>{try{TsukinowaBusinessUI.getSync().enqueue({type:'calendar',operationId:'denied-tab-write',event:{id:'denied',title:'cannot write',date:'2028-02-29'}});return '';}catch(e){return e.message;}});
+   assert.match(denied,/閲覧専用/);
+   await context.setOffline(true);
+   const queuedId=await p.evaluate(w=>TsukinowaBusinessUI.enqueue({type:'calendar',event:{id:'tab-handoff-'+w,title:'検証用タブ引継 '+w,date:'2028-02-29'}}),width);
+   assert(queuedId);assert.equal(await second.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),1);
+   await p.close();
+   await second.waitForFunction(()=>{try{TsukinowaBusinessUI.getSync().assertWritable();return true;}catch{return false;}});
+   await context.setOffline(false);await second.evaluate(()=>TsukinowaBusinessUI.getSync().flush());
+   await second.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0);
+   await second.waitForFunction(w=>bizState.calendar.some(e=>e.title==='検証用タブ引継 '+w),width);
+   assert.equal(await second.evaluate(w=>bizState.calendar.filter(e=>e.title==='検証用タブ引継 '+w).length,width),1);
+   await context.close();console.log('PASS v13 '+width+': real emulator calendar creation, leap day, cash text non-posting, XSS, detail, month controls, nine routes, five themes, no financial mutation, screenshots, control inventory, same-origin tab lock and offline outbox handoff');
   }
   assert.deepEqual(errors,[]);
  }finally{await browser.close();server.close();await env.cleanup();}

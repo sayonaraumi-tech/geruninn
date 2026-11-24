@@ -105,3 +105,82 @@ test('enqueue rejects different commands with the same offline operation ID', ()
  assert.throws(() => h.sync.enqueue({type:'test',operationId:'op0',amount:2000}), /Operation ID conflict/);
  assert.equal(h.sync.getQueue().length, 14);
 });
+
+// Two live clients share browser storage and a real Web Locks implementation
+// on Node versions that provide it. A small FIFO adapter supports older CI.
+function lockManager(){
+ if(globalThis.navigator?.locks)return globalThis.navigator.locks;
+ const tails=new Map();
+ return {request(name,{signal},fn){
+  const prev=tails.get(name)||Promise.resolve();let release;
+  const held=new Promise(r=>release=r);tails.set(name,held);
+  return prev.then(async()=>{if(signal.aborted)throw Error('aborted');return fn();}).finally(release);
+ }};
+}
+function sharedTabs(){
+ const values=new Map(),writes=[],attempts=[],scope='lock-'+require('node:crypto').randomUUID();let online=false;
+ const storage={getItem:k=>values.get(k)??null,setItem:(k,v)=>{writes.push(k);values.set(k,v);}};
+ const client={getState:()=>({role:'admin',projectId:scope,companyId:'test',user:{uid:'test'}}),
+  listen:(name,id,next)=>{next([],{fromCache:false});return()=>{};},listRecords:async()=>[],transact:async id=>{attempts.push(id);return {id};}};
+ const locks=lockManager(),newTab=()=>createSync({client,storage,locks,online:()=>online});
+ return {newTab,values,writes,attempts,prefix:`tsukinowa_cloud_v2_${scope}_test_test_`,connect:()=>online=true};
+}
+async function turn(){await new Promise(resolve=>setImmediate(resolve));}
+async function writer(sync){for(let i=0;i<50;i++){try{sync.assertWritable();return;}catch{}await turn();}throw Error('writer lock timeout');}
+test('same-account tabs cannot overwrite or submit the other tab outbox',async()=>{
+ const h=sharedTabs(),a=h.newTab(),b=h.newTab();
+ try{
+  a.start();await writer(a);b.start();await turn();
+  a.enqueue({type:'test',operationId:'one'});
+  assert.throws(()=>b.enqueue({type:'test',operationId:'two'}),/閲覧専用/);
+  assert.throws(()=>b.service.execute({type:'test',operationId:'direct'}),/閲覧専用/);
+  await assert.rejects(b.retryBlocked(),/閲覧専用/);
+  assert.throws(()=>b.archiveBlocked(),/閲覧専用/);
+  assert.deepEqual(b.getQueue().map(x=>x.command.operationId),['one']);
+  assert.deepEqual(h.attempts,[]);
+  assert.equal(JSON.parse(h.values.get(h.prefix+'outbox')).length,1);
+ }finally{a.stop();b.stop();await turn();}
+});
+test('next tab reloads durable outbox when writer exits, then replays each operation once',async()=>{
+ const h=sharedTabs(),a=h.newTab(),b=h.newTab();
+ try{
+  a.start();await writer(a);b.start();
+  a.enqueue({type:'test',operationId:'from-first'});a.stop();await writer(b);
+  b.enqueue({type:'test',operationId:'from-next'});
+  h.connect();await b.flush();
+  assert.deepEqual(h.attempts,['from-first','from-next']);assert.equal(b.getQueue().length,0);
+  assert.equal(h.values.get(h.prefix+'outbox'),'[]');
+ }finally{a.stop();b.stop();await turn();}
+});
+test('waiting tab never repairs or archives the writer pending commands',async()=>{
+ const h=sharedTabs(),a=h.newTab();let b;
+ try{
+  a.start();await writer(a);
+  const original=[{command:{type:'test',operationId:'legacy'},createdAt:'2026-10-01',blocked:true,error:'Invalid Date'}];
+  h.values.set(h.prefix+'outbox',JSON.stringify(original));
+  b=h.newTab();const before=h.writes.length;b.start();await turn();
+  assert.equal(h.values.get(h.prefix+'outbox'),JSON.stringify(original));
+  assert(!h.writes.slice(before).some(k=>k===h.prefix+'outbox'||k.includes('invalid_date_')));
+  a.stop();await writer(b);
+  assert.equal(b.getQueue()[0].blocked,false);
+  assert.equal(JSON.parse(h.values.get(h.prefix+'invalid_date_legacy')).blocked,true);
+ }finally{a.stop();b?.stop();await turn();}
+});
+test('a stopped lock waiter cannot acquire ownership or replay after sign-out',async()=>{
+ const h=sharedTabs(),a=h.newTab(),b=h.newTab(),c=h.newTab();
+ try{
+  a.start();await writer(a);b.start();c.start();b.stop();a.stop();await writer(c);
+  assert.throws(()=>b.enqueue({type:'test',operationId:'signed-out'}),/ログイン/);
+  c.enqueue({type:'test',operationId:'live'});h.connect();await c.flush();
+  assert.deepEqual(h.attempts,['live']);
+ }finally{a.stop();b.stop();c.stop();await turn();}
+});
+test('lock API failure preserves storage and prevents all writes',async()=>{
+ const h=sharedTabs(),waiting=h.newTab();
+ // The API exception must surface as a protected state, not an unlocked fallback.
+ const client={getState:()=>({role:'admin',projectId:'broken-lock',companyId:'test',user:{uid:'test'}}),listen:(n,id,next)=>{next([],{fromCache:false});return()=>{};}};
+ const values=new Map(),storage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v)};
+ const broken=createSync({client,storage,locks:{request:()=>Promise.reject(Error('unavailable'))}});
+ try{broken.start();await turn();assert.throws(()=>broken.enqueue({type:'test',operationId:'never'}),/排他制御に失敗/);assert(![...values.keys()].some(k=>k.endsWith('_outbox')));}
+ finally{broken.stop();waiting.stop();}
+});

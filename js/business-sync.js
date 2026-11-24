@@ -1,20 +1,41 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./business-domain.js'):root.TsukinowaBusiness);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaSync=api;})(globalThis,function(core,domain){
 'use strict';
-function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
- const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
+function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true,locks=null}){
+ const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),rawService=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
+ let ownsQueue=!locks,releaseQueue=null,lockAbort=null,lockStarted=false,lockError=locks?'別のタブで同期中です。このタブは閲覧専用です。':'';
+ function assertWritable(){if(stopped)throw Error('ログイン状態が変更されました。');if(!ownsQueue)throw Error(lockError||'同期用タブを確認中です。しばらくしてから再試行してください。');}
+ // One writer owns the entire legacy outbox across same-origin tabs. Firestore
+ // still supplies operation idempotency and revision checks across devices.
+ const service={...rawService,execute:(...args)=>{assertWritable();return rawService.execute(...args);}};
  let stopped=false,running=null,error=null,reloading=false;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
  queue=load(queueKey,[]);
+ function prepareQueue(){
+ queue=load(queueKey,[]);
+ if(!Array.isArray(queue))throw Error('端末内の同期データ形式が不正です。元データを保持して停止しました。');
  for(const item of queue.filter(x=>x.command?.type==='expenseFromBank')){
   const key=prefix+'bank_conflict_backup_'+item.command.operationId;
   if(!storage.getItem(key))storage.setItem(key,JSON.stringify(queue));
  }
  const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
  if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
+ }
+ if(!locks)prepareQueue();
  for(const name of collections)rows[name]=load(prefix+name,[]);
- function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
- function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
- function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
+ function status(){const message=error||lockError;onStatus({state:message?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error:message||null,pending:queue.length,ready:serverSeen.size===collections.length&&ownsQueue});}
+ function saveQueue(){assertWritable();storage.setItem(queueKey,JSON.stringify(queue));}
+ function start(){
+  if(locks&&!lockStarted){
+   lockStarted=true;lockAbort=new AbortController();
+   locks.request(queueKey,{mode:'exclusive',signal:lockAbort.signal},async()=>{
+    if(stopped)return;
+    let release;const held=new Promise(resolve=>{release=resolve;});releaseQueue=release;
+    ownsQueue=true;
+    try{prepareQueue();lockError='';status();flush();await held;}
+    finally{ownsQueue=false;releaseQueue=null;}
+   }).catch(e=>{if(stopped)return;ownsQueue=false;lockError='同期用タブの排他制御に失敗しました。元データは保持されています：'+e.message;status();});
+  }
+  onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
    if(stopped||reloading)return;
    if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
    // The app cache contains the last server-confirmed lifecycle state for these rows.
@@ -25,7 +46,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
   reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;storage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
  }
  function enqueue(command){
-   if(stopped)throw Error('ログイン状態が変更されました。');
+   assertWritable();
    const serialized=core.canonical(core.normalizeDates(command));
    const existing=queue.find(x=>x.command.operationId===command.operationId);
    if(existing){
@@ -36,7 +57,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
    const next=[...queue,entry];storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();flush();return command.operationId;
  }
  function flush(){
-  if(running)return running;if(stopped||!online()||!queue.length){status();return Promise.resolve();}
+  if(running)return running;if(stopped||!ownsQueue||!online()||!queue.length){status();return Promise.resolve();}
   running=(async()=>{
    while(queue.length&&!stopped&&online()){
     // Keep financial conflicts in the outbox. Only independent commands may pass them.
@@ -80,6 +101,7 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  }
  async function retryBlocked(){
   if(stopped)return;
+  assertWritable();
   if(running)await running;
   if(stopped)return;
   if(queue[0]?.blocked){
@@ -88,8 +110,8 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
   }
   return flush();
  }
- function archiveBlocked(){if(!queue[0]?.blocked)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[0]));const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();return key;}
- return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
+ function archiveBlocked(){assertWritable();if(!queue[0]?.blocked)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[0]));const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();return key;}
+ return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,assertWritable,isReady:()=>ownsQueue&&serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>{if(locks&&!ownsQueue)queue=load(queueKey,[]);return queue.map(x=>JSON.parse(JSON.stringify(x)));},getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;lockAbort?.abort();releaseQueue?.();for(const stop of stops)stop();},service};
 }
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');
