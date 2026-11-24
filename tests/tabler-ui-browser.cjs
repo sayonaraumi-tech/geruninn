@@ -58,6 +58,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
    await second.waitForFunction(()=>coreSyncStatus.textContent.includes('閲覧専用'));
    const denied=await second.evaluate(()=>{try{TsukinowaBusinessUI.getSync().enqueue({type:'calendar',operationId:'denied-tab-write',event:{id:'denied',title:'cannot write',date:'2028-02-29'}});return '';}catch(e){return e.message;}});
    assert.match(denied,/閲覧専用/);
+   assert.match(await second.evaluate(async()=>{try{await bizGooglePatchNow('readonly-probe');return '';}catch(e){return e.message;}}),/閲覧専用/);
    await context.setOffline(true);
    const queuedId=await p.evaluate(w=>TsukinowaBusinessUI.enqueue({type:'calendar',event:{id:'tab-handoff-'+w,title:'検証用タブ引継 '+w,date:'2028-02-29'}}),width);
    assert(queuedId);assert.equal(await second.evaluate(()=>TsukinowaBusinessUI.getSync().getQueue().length),1);
