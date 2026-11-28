@@ -1259,6 +1259,18 @@ body.dd small.register-note.dd-only{display:block!important}
 #ddLocalEvent .dd-dialog-actions{display:flex;gap:8px;align-items:center;margin-top:12px}
 #ddLocalEvent .dd-dialog-actions span{flex:1}
 }
+/* 本地予定: 売上・入金 (請求書・領収書なし) */
+#ddLocalEvent .dd-sale{margin-top:12px;padding:10px 12px;border:1px solid #e3e6ea;border-radius:10px;background:#fafbfc}
+#ddLocalEvent .dd-sale[hidden]{display:none}
+#ddLocalEvent .dd-sale h4{margin:0 0 6px;font-size:13px}
+#ddLocalEvent .dd-sale-status{margin:0 0 6px;font-size:12px;color:#444}
+#ddLocalEvent .dd-sale-status:empty{display:none}
+#ddLocalEvent .dd-sale>label.check{display:flex;align-items:center;gap:6px;font-size:13px;color:#222}
+#ddLocalEvent .dd-sale .dd-form{margin-top:8px}
+#ddLocalEvent .dd-sale select{font:inherit;font-size:16px;padding:7px 8px;border:1px solid #ddd;border-radius:8px;background:#fff;min-width:0}
+#ddLocalEvent .dd-sale-hint{grid-column:1/-1;margin:0;font-size:11px;color:#666}
+#ddLocalEvent .dd-sale-actions{display:flex;gap:8px;margin-top:6px}
+#ddLocalEvent .dd-sale [hidden]{display:none!important}
 </style>
 </head>
 <body>
@@ -3951,15 +3963,39 @@ function renderCalendarGrid(){
  function googlePanel(rows){const g=rows.filter(e=>['google','ics'].includes(srcOf(e))),l=rows.filter(e=>srcOf(e)==='local'),sys=rows.filter(e=>srcOf(e)==='system');
   return '<section class="dd-panel" id="ddCalendarSources"><h3>日程の保存先</h3><div class="dd-pad"><p class="dd-src-summary"><span class="dd-src src-local">本地</span> '+l.length+'件 <span class="dd-src src-system">帳票・受注</span> '+sys.length+'件 <span class="dd-src src-google">Google</span> '+g.length+'件（表示中の月）</p><p class="biz-muted" style="font-size:11px">本地日程はこのシステムに保存され、Google連携がなくても登録・編集・削除できます。Google日程は同期した記録として残り、ここでは読み取り専用です。将来Google連携を外しても日程は消えません。必要なものは「本地にコピー」で編集できる本地日程になります（元の記録は変更しません）。帳票・受注の日程は受注の施工日・保存帳票から自動で作成・更新され、Google連携がなくても残ります。</p>'+(g.length?'<button type="button" class="biz-btn" data-dd-copy-month>この月のGoogle日程を本地にコピー（'+g.length+'件）</button>':'')+'</div></section>';}
  function localDialog(){let d=$('ddLocalEvent');if(d)return d;d=document.createElement('dialog');d.id='ddLocalEvent';d.className='dd-dialog';
-  d.innerHTML='<form method="dialog"><h3 id="ddLocalTitle">本地予定</h3><div class="dd-form"><label>日付<input type="date" id="ddLeDate" required></label><label>開始<input type="time" id="ddLeStart"></label><label>終了<input type="time" id="ddLeEnd"></label><label class="wide">タイトル<input id="ddLeTitle" required placeholder="例：佐藤様 現地調査"></label><label class="wide">場所<input id="ddLeLocation"></label><label class="wide">メモ<textarea id="ddLeMemo" rows="3"></textarea></label><label class="wide check"><input type="checkbox" id="ddLePush"> Googleカレンダーにも登録する（接続中のみ送信、未接続なら次回接続後）</label></div><p class="dd-error" id="ddLeError" role="alert"></p><div class="dd-dialog-actions"><button type="button" class="biz-btn danger" id="ddLeDelete">削除</button><span></span><button type="button" class="biz-btn" id="ddLeCancel">キャンセル</button><button type="button" class="biz-btn primary" id="ddLeSave">保存</button></div></form>';
+  d.innerHTML='<form method="dialog"><h3 id="ddLocalTitle">本地予定</h3><div class="dd-form"><label>日付<input type="date" id="ddLeDate" required></label><label>開始<input type="time" id="ddLeStart"></label><label>終了<input type="time" id="ddLeEnd"></label><label class="wide">タイトル<input id="ddLeTitle" required placeholder="例：佐藤様 現地調査"></label><label class="wide">場所<input id="ddLeLocation"></label><label class="wide">メモ<textarea id="ddLeMemo" rows="3"></textarea></label><label class="wide check"><input type="checkbox" id="ddLePush"> Googleカレンダーにも登録する（接続中のみ送信、未接続なら次回接続後）</label></div><section class="dd-sale" id="ddLeSale"><h4>売上・入金（請求書・領収書なし）</h4><p class="dd-sale-status" id="ddLeSaleStatus" role="status"></p><label class="check" id="ddLeSaleToggle"><input type="checkbox" id="ddLeSaleOn"> この予定の売上・入金も登録する</label><div class="dd-form" id="ddLeSaleFields" hidden><label>売上日<input type="date" id="ddLsDate"></label><label>入金方法<select id="ddLsMethod"><option>現金</option><option>銀行振込</option><option>プラットフォーム経由</option><option>その他</option></select></label><label class="wide">取引先（お客様名・宛名）<input id="ddLsCustomer" placeholder="未入力なら「現金客」"></label><label class="wide">内容<input id="ddLsContent" placeholder="例：網戸張替え"></label><label>金額（税込・円）<input type="number" id="ddLsAmount" min="1" step="1" inputmode="numeric"></label><p class="dd-sale-hint wide" id="ddLsHint"></p></div><div class="dd-sale-actions" id="ddLeSaleAdmin" hidden><button type="button" class="biz-btn" id="ddLsEdit">売上を修正</button><button type="button" class="biz-btn danger" id="ddLsVoid">売上を取消</button></div></section><p class="dd-error" id="ddLeError" role="alert"></p><div class="dd-dialog-actions"><button type="button" class="biz-btn danger" id="ddLeDelete">削除</button><span></span><button type="button" class="biz-btn" id="ddLeCancel">キャンセル</button><button type="button" class="biz-btn primary" id="ddLeSave">保存</button></div></form>';
   document.body.append(d);
   $('ddLeCancel').addEventListener('click',()=>d.close());
-  $('ddLeSave').addEventListener('click',async()=>{try{$('ddLeError').textContent='';const saved=await bizSaveLocalEvent({id:d.dataset.id||'',date:$('ddLeDate').value,startTime:$('ddLeStart').value,endTime:$('ddLeEnd').value,title:$('ddLeTitle').value,location:$('ddLeLocation').value,description:$('ddLeMemo').value,pushToGoogle:$('ddLePush').checked});calDay=saved.date;d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
-  $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
+  $('ddLeSave').addEventListener('click',async()=>{try{$('ddLeError').textContent='';
+   const mode=d.dataset.saleMode||'',on=mode==='new'&&$('ddLeSaleOn').checked||mode==='edit',sale=on?saleValues():null;let reason='';
+   if(on&&(!sale.content||!(Number(sale.amount)>0)||!sale.salesDate))throw Error('売上の内容・金額（税込）・売上日を入力してください。');
+   if(mode==='edit'){reason=prompt('売上を修正する理由（必須）','')||'';if(!reason.trim())throw Error('修正の理由を入力してください。');}
+   const saved=await bizSaveLocalEvent({id:d.dataset.id||'',date:$('ddLeDate').value,startTime:$('ddLeStart').value,endTime:$('ddLeEnd').value,title:$('ddLeTitle').value,location:$('ddLeLocation').value,description:$('ddLeMemo').value,pushToGoogle:$('ddLePush').checked});calDay=saved.date;
+   if(on){try{const api=saleApi();if(!api)throw Error('売上登録を利用できません。');if(mode==='edit')await api.change(saved.id,'edit',sale,reason);else await api.register(saved.id,sale);}
+    catch(e){d.dataset.id=saved.id;renderCalendarGrid();renderSale(saved.id);$('ddLeError').textContent='日程は保存しました。売上：'+e.message;return;}}
+   d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
+  $('ddLeSaleOn').addEventListener('change',()=>{$('ddLeSaleFields').hidden=!$('ddLeSaleOn').checked;if($('ddLeSaleOn').checked&&!$('ddLsContent').value)$('ddLsContent').value=$('ddLeTitle').value;saleHint();});
+  $('ddLsMethod').addEventListener('change',saleHint);$('ddLsDate').addEventListener('input',()=>{$('ddLsDate').dataset.touched='1';});
+  $('ddLeDate').addEventListener('change',()=>{if(!$('ddLsDate').dataset.touched)$('ddLsDate').value=$('ddLeDate').value;});
+  $('ddLsEdit').addEventListener('click',()=>{const st=saleApi()?.state(d.dataset.id);if(!st?.sale)return;const x=st.sale;d.dataset.saleMode='edit';fillSale({salesDate:x.salesDate||x.saleDate,customer:x.customer,content:x.content,amount:x.amount,paymentMethod:x.paymentMethod});$('ddLeSaleFields').hidden=false;$('ddLeSaleAdmin').hidden=true;$('ddLeSaleStatus').textContent='修正内容を入力して「保存」を押してください（保存時に理由を確認します）。';});
+  $('ddLsVoid').addEventListener('click',async()=>{const id=d.dataset.id;if(!id)return;const reason=prompt('売上を取消する理由（必須）\n取消後も記録は「取消済み」として残ります。','');if(reason===null)return;try{$('ddLeError').textContent='';await saleApi().change(id,'cancel',null,reason);renderCalendarGrid();renderSale(id);}catch(e){$('ddLeError').textContent=e.message;}});
+  $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(id&&saleApi()?.state(id).sale){$('ddLeError').textContent='この予定には売上が登録されています。先に売上を取消してください。';return;}if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   return d;}
  function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=bizJstTime;d.dataset.id=e?.id||'';
-  $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';
+  $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';renderSale(e?.id||'');
   d.showModal();}
+ // 売上・入金 from a 本地予定: TsukinowaBusinessUI.calendarSale (cloud: registerCalendarSale / calendarSaleChange; local: same records in bizState).
+ const saleApi=()=>window.TsukinowaBusinessUI?.calendarSale;
+ function saleValues(){return {salesDate:$('ddLsDate').value,customer:$('ddLsCustomer').value,content:$('ddLsContent').value,amount:$('ddLsAmount').value,paymentMethod:$('ddLsMethod').value};}
+ function fillSale(v){$('ddLsDate').value=v.salesDate||'';$('ddLsDate').dataset.touched=v.touched?'1':'';$('ddLsCustomer').value=v.customer||'';$('ddLsContent').value=v.content||'';$('ddLsAmount').value=v.amount||'';$('ddLsMethod').value=v.paymentMethod||'現金';saleHint();}
+ function saleHint(){$('ddLsHint').textContent=$('ddLsMethod').value==='現金'?'現金：売上と入金（現金出納）を同時に登録します。':'銀行振込など：売上のみ登録します（未収）。入金は銀行明細の照合または入金登録で記録します。';}
+ function renderSale(id){const d=localDialog(),api=saleApi(),st=api?api.state(id):null,box=$('ddLeSale');d.dataset.saleMode='';
+  $('ddLeSaleOn').checked=false;$('ddLeSaleFields').hidden=true;$('ddLeSaleAdmin').hidden=true;$('ddLeSaleToggle').hidden=true;
+  fillSale({salesDate:$('ddLeDate').value,paymentMethod:'現金'});box.hidden=!st;if(!st)return;
+  if(st.sale){const x=st.sale;$('ddLeSaleStatus').textContent='登録済：'+bizMoney(x.amount)+'円（税込）／'+(x.customer||'')+'／'+(x.paymentMethod||'')+'／'+(st.outstanding===0?'入金済':'未収 '+bizMoney(st.outstanding)+'円')+(st.canChange?'':st.attached?'（入金登録・銀行照合済みのため、ここでは修正できません）':!st.admin?'（修正・取消は管理者のみ）':'（帳票の売上は保存帳票から訂正）');$('ddLeSaleAdmin').hidden=!st.canChange;return;}
+  if(st.cancelled){$('ddLeSaleStatus').textContent='この予定の売上は取消済みです（記録は取消済みとして残ります）。この予定からの再登録はできません。';return;}
+  if(st.canRegister){d.dataset.saleMode='new';$('ddLeSaleToggle').hidden=false;$('ddLeSaleStatus').textContent=st.cloud?'':'端末内保存（ローカルモード）に記録します。';return;}
+  $('ddLeSaleStatus').textContent=st.cloud&&st.admin?'クラウドにログインすると売上も登録できます。':'売上の登録・修正は管理者のみです。';}
  async function copyToLocal(ids){if(!ids.length)return;if(!confirm(ids.length+'件のGoogle日程を本地日程としてコピーします。\n元のGoogle日程の記録は変更しません。コピー後はコピーした本地日程を表示します。'))return;try{const n=await bizCopyGoogleEventsToLocal(ids);renderCalendarGrid();alert(n+'件を本地日程にコピーしました。');}catch(e){alert(e.message);}}
  function shiftMonth(delta){const input=$('calendarMonth');if(!input)return;const [y,m]=(input.value||bizNowMonth()).split('-').map(Number),d=new Date(y,m-1+delta,1);input.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');input.dispatchEvent(new Event('change',{bubbles:true}));}
  // ---------- shared helpers for the design views (read-only) ----------
