@@ -1391,7 +1391,7 @@ body.dd small.register-note.dd-only{display:block!important}
 
 <div id="pageSettings" class="biz-page app-page">
  <div class="biz-title"><div><h1><span class="dd-only">設定</span><span class="dd-hide">Google Calendar API 接続設定</span></h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
- <div class="biz-section">
+ <div id="googleCalendarSetting" class="biz-section">
   <div class="biz-section-head"><h2>Googleカレンダー連携</h2></div>
   <label class="check"><input type="checkbox" id="googleCalendarEnabled" checked onchange="bizGoogleSetEnabled(this.checked)"> Googleカレンダー連携を使う</label>
   <p class="biz-muted">オフにすると、Google日程の同期・本地予定のGoogle登録・帳票の予定のGoogle自動反映を行いません（この端末の設定）。取込済みのGoogle日程は読み取り専用で表示され、本地にコピーできます。</p>

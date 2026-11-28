@@ -48,8 +48,18 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await p.fill('#ddLeDate','2026-11-10');await p.fill('#ddLeTitle','小野田, maxiv, 横浜阪東橋due1103, 54.9米');await p.locator('#ddLeSave').click();
  await p.waitForFunction(()=>!document.getElementById('ddLocalEvent').open||document.getElementById('ddLeError').textContent,null,{timeout:15000});
  assert.equal(await p.locator('#ddLeError').textContent(),'','plain schedule: '+JSON.stringify(await queue()));
- assert.equal(await p.evaluate(()=>bizState.calendar.some(e=>e.title.startsWith('小野田, maxiv')&&e.date==='2026-11-10'&&!e.deletedAt)),true);
+ // appears as soon as the listener delivers it (no reload, within 3 s)
+ await p.waitForFunction(()=>bizState.calendar.some(e=>e.title.startsWith('小野田, maxiv')&&e.date==='2026-11-10'&&!e.deletedAt),null,{timeout:3000});
  assert.equal(await p.evaluate(()=>bizState.sales.length),0,'a schedule creates no sale');
+ // An event with a 銀行振込 sale on another day also syncs while that command is refused: 売上日 = event date, 売上 only (未収).
+ await p.locator('#pageCalendar .biz-title button:has-text("＋ 本地予定")').click();
+ await p.fill('#ddLeDate','2026-10-30');await p.fill('#ddLeTitle','試験様・中野・クロス張替・¥70000');await p.locator('#ddLeSaleOn').check();await p.fill('#ddLeDate','2026-11-27');
+ await p.fill('#ddLsCustomer','試験様');await p.fill('#ddLsAmount','70000');await p.selectOption('#ddLsMethod','銀行振込');await p.locator('#ddLeSave').click();
+ await p.waitForFunction(()=>!document.getElementById('ddLocalEvent').open||document.getElementById('ddLeError').textContent,null,{timeout:15000});
+ assert.equal(await p.locator('#ddLeError').textContent(),'','bank-transfer sale: '+JSON.stringify(await queue()));
+ await p.waitForFunction(()=>bizState.sales.some(s=>s.amount===70000&&!s.deletedAt),null,{timeout:10000});
+ {const r=await p.evaluate(async()=>{const c=TsukinowaBusinessUI.getClient();const sales=(await c.listRecords('sales')).filter(x=>!x.payload.deletedAt&&x.payload.amount===70000);const pays=(await c.listRecords('payments')).filter(x=>!x.payload.deletedAt&&x.payload.saleId===sales[0]?.id);return {n:sales.length,date:sales[0]?.payload.saleDate||sales[0]?.payload.salesDate,method:sales[0]?.payload.paymentMethod,pays:pays.length};});
+  assert.deepEqual(r,{n:1,date:'2026-11-27',method:'銀行振込',pays:0});}
  // Deleting the event with the refused command names that command instead of a bare 未同期.
  await p.locator('#ddCalendar [data-dd-day="2026-11-28"]').click();await edit.click();await p.locator('#ddLeDelete').click();
  await p.waitForFunction(()=>document.getElementById('ddLeError').textContent,null,{timeout:15000});
