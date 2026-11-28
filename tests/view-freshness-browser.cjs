@@ -29,6 +29,11 @@ const business={estimates:[],projects:[],calendar:[],audit:[],expenses:[],bank:[
  assert.equal(await page.$eval('#receivableAsOf',e=>e.value),'2026-12-01');
  const home=await page.evaluate(()=>TsukinowaAccounting.aggregate({sales:bizState.sales.map(s=>({...s,salesDate:s.saleDate})),payments:bizState.payments.map(p=>({...p,paymentDate:p.paymentDate||p.date}))},TsukinowaAccounting.periodFilter({month:document.getElementById('homeMonth').value})).income);
  assert.equal(home,11000,width+': ホーム month follows the day and counts the payment');
- assert.match(await page.$eval('#kpiPayments',e=>e.textContent),/11,000/,width+': ホーム shows the payment');
+ // ホーム 収支差額 (payments dated in the month) shows the December payment at once; 入金 / 未収金 use the
+ // 売上・入金 CSV basis (the month's sales), so the November sale's month shows it as paid, also without a reload.
+ assert.match(await page.$eval('#kpiDifference',e=>e.textContent),/11,000/,width+': ホーム 収支差額 shows the payment');
+ await page.evaluate(()=>bizSwitchPage('dashboard'));await page.evaluate(()=>{const e=document.getElementById('homeMonth');e.value='2026-11';e.dispatchEvent(new Event('change'));});
+ assert.equal(await page.$eval('#kpiPayments',e=>e.textContent),'11,000',width+': ホーム 入金 (CSV basis) shows the payment');
+ assert.equal(await page.$eval('#kpiReceivable',e=>e.textContent),'0',width+': ホーム 未収金 (CSV basis) is cleared');
  assert.deepEqual(errors,[]);await page.close();}
  console.log('view freshness browser tests passed');}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exit(1);});

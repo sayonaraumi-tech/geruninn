@@ -48,13 +48,15 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
   const csv=kind=>TsukinowaAccounting.parseCSV(TsukinowaAccounting.csv(TsukinowaAccountingUI.exportRows(kind)).replace(/^\uFEFF/,''));
   const rs=csv('salesRegister'),table=id=>[...document.querySelectorAll('#'+id+(id==='salesRows'?' tr':' tbody tr'))].map(r=>[...r.cells].map(c=>c.textContent));
   const receivablePage=table('salesRows').map(r=>r.slice(0,-1));
-  return {rs,receivablePage,balance:TsukinowaBusinessUI.invoiceBalance('active'),home:document.getElementById('kpiReceivable').textContent};
+  const hp=TsukinowaAccountingUI.homePeriod(),asOf=document.getElementById('receivableAsOf').value||todayISO();
+  return {rs,receivablePage,balance:TsukinowaBusinessUI.invoiceBalance('active'),home:document.getElementById('kpiReceivable').textContent,homeCsvBasis:bizMoney(TsukinowaAccountingUI.salesRegister(hp,asOf).reduce((n,r)=>n+r.outstanding,0)),periodEndReceivables:bizMoney(TsukinowaAccounting.aggregate(TsukinowaAccountingUI.homeData(),hp).receivables)};
  });
  for(const [kind,label,expected] of [['salesRegister','CSV出力',result.rs]]){const [download]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:label,exact:true}).click()]);const file=path.join(root,'../'+kind+'-'+width+'.csv');await download.saveAs(file);const parsed=require('../js/accounting').parseCSV(fs.readFileSync(file,'utf8').replace(/^\uFEFF/,''));assert.deepEqual(parsed,expected);}
  assert.deepEqual(result.rs.slice(1),result.receivablePage);
  assert.equal(result.rs.length,3);
  assert.equal(result.balance.paidAmount,400);assert.equal(result.balance.outstandingAmount,700);
- assert.equal(result.home,'2,900');assert.deepEqual(result.rs.find(r=>r[0]==='2026-10-01'&&r[6]==='400').slice(5,8),['1,100','400','700']);
+ // ホーム 未収金 = the 売上・入金 CSV basis for the home month; the unchanged period-end receivable total is still 2,900.
+ assert.equal(result.home,result.homeCsvBasis);assert.equal(result.periodEndReceivables,'2,900');assert.deepEqual(result.rs.find(r=>r[0]==='2026-10-01'&&r[6]==='400').slice(5,8),['1,100','400','700']);
  // Date and month filters must carry through to exports.
  await page.evaluate(()=>{document.getElementById('salesMonth').value='2026-09';document.getElementById('receivableAsOf').value='2026-10-01';renderSales();});
  assert.equal(await page.locator('#salesRows tr').count(),1);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('salesRegister').find(r=>r[0]==='2026-09-20')[6]),'0');
