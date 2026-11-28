@@ -22,7 +22,7 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
    const before=await businessStorage(page);
    const visibleAdded=()=>page.locator('.dd-only,#ddCrumb,#ddThemes,#ddHomeAnalytics,#ddCalendar,#ddChohyoHead').evaluateAll(xs=>xs.filter(x=>x.getClientRects().length&&getComputedStyle(x).display!=='none').map(x=>x.id||x.textContent));
    if(mobile){
-    for(const route of routes){await page.evaluate(r=>bizSwitchPage(r),route);assert.deepEqual(await visibleAdded(),[],width+'px '+route+' shows no desktop-design element');}
+    for(const route of routes){await page.evaluate(r=>bizSwitchPage(r),route);assert.deepEqual(await visibleAdded(),route==='calendar'?['ddCalendar']:[],width+'px '+route+' shows no desktop-design element (日程 shows only the month grid)');}
     const style=await page.evaluate(()=>({pad:getComputedStyle(document.body).paddingLeft,bar:getComputedStyle(document.querySelector('.biz-topbar')).backgroundColor,nav:getComputedStyle(document.getElementById('bizNav')).position}));
     assert.deepEqual(style,{pad:'0px',bar:'rgb(20, 20, 20)',nav:'static'},width+'px keeps the previous top navigation');
     await page.evaluate(()=>bizSwitchPage('chohyo'));assert.equal(await page.locator('#previewArea').isVisible(),false,'mobile preview stays behind the existing toggle');

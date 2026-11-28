@@ -13,21 +13,26 @@ const business={estimates:[],projects:[],calendar:[google],audit:[],expenses:[],
  await page.addInitScript(b=>{if(!localStorage.getItem('tsukinowa_business_v1'))localStorage.setItem('tsukinowa_business_v1',b);},JSON.stringify(business));
  await page.goto('http://127.0.0.1:'+server.address().port);await page.evaluate(()=>bizSwitchPage('calendar'));
  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('tsukinowa_business_v1')).calendar);
- if(width<=800){
-  // Mobile: no new controls; the existing list keeps its five columns.
-  assert.equal(await page.locator('#pageCalendar button:has-text("本地予定")').isVisible(),false);
+ const mobile=width<=800,newButton=mobile?'#ddCalendar [data-dd-new]':'#pageCalendar .biz-title button:has-text("＋ 本地予定")';
+ if(mobile){
+  // Mobile: the month grid and the 本地予定 dialog are added; the desktop header controls stay hidden and the existing list keeps its five columns.
+  assert.equal(await page.locator('#pageCalendar .biz-title button:has-text("本地予定")').isVisible(),false);
   assert.deepEqual(await page.$$eval('#pageCalendar thead th',t=>t.map(x=>x.textContent)),['日付','タイトル','時刻','状態','']);
   assert.match(await page.locator('#calendarRows').innerText(),/Google 打合せ/);
-  assert.deepEqual(errors,[]);await page.close();continue;
+  assert.equal(await page.locator('#ddCalendar .dd-cal').isVisible(),true,'mobile month grid');assert.equal(await page.locator('#ddCalendar [data-dd-day]').count(),31);
+  assert.equal(await page.locator('#ddCalendar [data-dd-day="2026-12-05"] [data-dd-src="google"]').count(),1);
+  assert.ok(await page.evaluate(()=>document.querySelector('#ddCalendar .dd-cal').scrollWidth<=document.querySelector('#ddCalendar .dd-cal').clientWidth),'grid fits 390px');
  }
- await page.locator('#pageCalendar .biz-title button:has-text("＋ 本地予定")').click();
+ // Japan time for cloud-stored UTC times
+ assert.deepEqual(await page.evaluate(()=>[bizJstTime('2026-12-03T01:00:00.000Z'),bizJstTime('2026-12-03T10:00:00+09:00'),bizJstTime('2026-12-03')]),['10:00','10:00','']);
+ await page.locator(newButton).click();
  const dlg=page.locator('#ddLocalEvent');assert.equal(await dlg.isVisible(),true);
  await page.locator('#ddLeSave').click();assert.match(await page.locator('#ddLeError').textContent(),/タイトル|日付/);
  await page.fill('#ddLeDate','2026-12-03');await page.fill('#ddLeStart','10:00');await page.fill('#ddLeEnd','11:30');await page.fill('#ddLeTitle','佐藤様 現地調査');await page.fill('#ddLeLocation','浅草');await page.locator('#ddLeSave').click();
  assert.equal(await dlg.isVisible(),false);
  let local=(await stored()).find(e=>e.source==='local');assert.ok(local,'saved to the existing business storage');
  assert.deepEqual({date:local.date,start:local.start,end:local.end,title:local.title,location:local.location,push:local.pushToGoogle,g:local.googleEventId},{date:'2026-12-03',start:'2026-12-03T10:00:00+09:00',end:'2026-12-03T11:30:00+09:00',title:'佐藤様 現地調査',location:'浅草',push:false,g:''});
- assert.equal(await page.locator('#ddCalendar [data-dd-day="2026-12-03"] .calEvent[data-dd-src="local"]').count(),1);
+ assert.equal(await page.locator('#ddCalendar [data-dd-day="2026-12-03"] [data-dd-src="local"]').count(),1);
  const item=page.locator('#ddCalendar [data-dd-event="'+local.id+'"]');assert.match(await item.innerText(),/本地[\s\S]*佐藤様 現地調査/);
  // Edit
  await item.locator('[data-dd-edit]').click();assert.equal(await page.inputValue('#ddLeStart'),'10:00');await page.fill('#ddLeTitle','佐藤様 現地調査（再訪）');await page.locator('#ddLeSave').click();
@@ -41,11 +46,15 @@ const business={estimates:[],projects:[],calendar:[google],audit:[],expenses:[],
  assert.equal(JSON.stringify(all.find(e=>e.id==='g_shared_gev1')),original,'the Google record is not modified');
  assert.equal(await page.locator('#ddCalendar [data-dd-event="g_shared_gev1"]').count(),0,'copied Google row is shown once, as 本地');
  assert.equal(await page.locator('#ddCalendar [data-dd-event="'+copy.id+'"]').count(),1);
- // Delete (soft): the record stays in storage
+ // User text is rendered as text (grid, day list, dialog): no markup or handler runs
+ await page.locator(newButton).click();await page.fill('#ddLeDate','2026-12-04');await page.fill('#ddLeTitle','<img src=x onerror="window.__xss=1"><b>太字</b>');await page.fill('#ddLeMemo','<script>window.__xss=2</script>');await page.locator('#ddLeSave').click();
+ assert.equal(await page.locator('#ddCalendar img, #calendarRows img').count(),0);assert.equal(await page.evaluate(()=>[...document.querySelectorAll('#ddCalendar b,#calendarRows b')].some(b=>b.textContent==='太字')),false);assert.equal(await page.evaluate(()=>window.__xss),undefined);
+ assert.match(await page.locator('#ddCalendar [data-dd-event]').first().innerText(),/<img src=x/);
+  // Delete (soft): the record stays in storage
  await page.locator('#ddCalendar [data-dd-day="2026-12-03"]').click();await page.locator('#ddCalendar [data-dd-edit="'+local.id+'"]').click();await page.locator('#ddLeDelete').click();
  local=(await stored()).find(e=>e.id===local.id);assert.ok(local.deletedAt);assert.equal(await page.locator('#ddCalendar [data-dd-event="'+local.id+'"]').count(),0);
  // Push toggle while Google is not connected: saved now, marked for Google, nothing sent
- await page.locator('#pageCalendar .biz-title button:has-text("＋ 本地予定")').click();await page.fill('#ddLeDate','2026-12-10');await page.fill('#ddLeTitle','Google連携テスト');await page.check('#ddLePush');await page.locator('#ddLeSave').click();
+ await page.locator(newButton).click();await page.fill('#ddLeDate','2026-12-10');await page.fill('#ddLeTitle','Google連携テスト');await page.check('#ddLePush');await page.locator('#ddLeSave').click();
  let pushed=(await stored()).find(e=>e.title==='Google連携テスト');assert.equal(pushed.pushToGoogle,true);assert.equal(pushed.googleCreatePending,true);assert.match(pushed.googleEventId,/^[a-v0-9]{5,}$/);assert.equal(posts.length,0);
  // After connecting, the existing create path sends it as an all-day event
  await page.evaluate(()=>{bizGoogleAccessToken='token';bizGoogleTokenExpiresAt=Date.now()+3600000;bizGoogleCalendarId='shared';bizGoogleCalendarsLoaded=true;});

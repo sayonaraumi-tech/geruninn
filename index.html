@@ -1024,8 +1024,8 @@ dialog h2{font-size:15px}
 @media(max-width:600px){.sales-filters{padding:10px}.sales-filters label{flex-basis:calc(50% - 10px)}.biz-section-head>.biz-actions{width:100%}.editor h2{font-size:19px}}
 </style>
 <style id="desktopDesignStyles">
-/* chiori desktop design (2026-11-28). Desktop only: every rule below is limited to screen >=801px,
-   so the mobile layout (<=800px) and print/PDF output are untouched. Presentation only. */
+/* chiori desktop design (2026-11-28). Desktop rules are limited to screen >=801px. The only mobile rules
+   (block at the end, screen <=800px) style the 日程 month grid and 本地予定 dialog; print/PDF output is untouched. */
 .dd-only{display:none!important}
 @media screen and (min-width:801px){
 body.dd{--dd-side-w:205px;--dd-top-h:57px;font-feature-settings:"tnum" 1;padding-top:calc(var(--dd-top-h) + 20px);padding-left:var(--dd-side-w);background:var(--dd-bg);color:var(--dd-fg)}
@@ -1221,6 +1221,40 @@ body.dd .dd-dialog-actions{display:flex;gap:8px;align-items:center;margin-top:10
 body.dd .dd-dialog-actions span{flex:1}
 /* 旧データ notes in 売上 (desktop only; mobile unchanged) */
 body.dd small.register-note.dd-only{display:block!important}
+}
+/* mobile 日程 (screen <=800px): month grid, 本地/Google labels and the 本地予定 dialog, in the existing card style */
+@media screen and (max-width:800px){
+#ddCalendar .dd-m-legend{display:flex;gap:6px;margin:0 0 8px}
+#ddCalendar .dd-src,#ddLocalEvent .dd-src{display:inline-block;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:999px;margin-right:6px;vertical-align:1px}
+#ddCalendar .src-local{background:#e8f4ec;color:#1f7a3d}#ddCalendar .src-google{background:#e8effc;color:#2456b8}#ddCalendar .src-ics{background:#f2eee6;color:#7a5a1f}
+#ddCalendar .dd-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
+#ddCalendar .dd-cal .dow{text-align:center;font-size:11px;font-weight:700;color:#777;padding:2px 0}
+#ddCalendar .dd-cal .dow.sun{color:#c0392b}#ddCalendar .dd-cal .dow.sat{color:#2456b8}
+#ddCalendar .dd-cal button{height:46px;min-width:0;padding:4px 2px;border:1px solid #e6e6e6;border-radius:6px;background:#fff;color:#222;font:inherit;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer}
+#ddCalendar .dd-cal button.today b{color:#2456b8}
+#ddCalendar .dd-cal button.active{outline:2px solid #222;background:#f6f6f6}
+#ddCalendar .calDots{display:flex;gap:2px;align-items:center;height:7px}
+#ddCalendar .calDot{display:block;width:6px;height:6px;border-radius:50%}
+#ddCalendar .calDot.src-local{background:#2e9b55}#ddCalendar .calDot.src-google{background:#4a7fe0}#ddCalendar .calDot.src-ics{background:#a7843f}
+#ddCalendar .calDots small{font-size:9px;color:#777}
+#ddCalendar .dd-m-day{font-size:14px;margin:14px 0 4px}
+#ddCalendar .dd-day-list{display:grid}
+#ddCalendar .dd-day-item{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:10px 0;font-size:13px}
+#ddCalendar .dd-day-item>div:first-child{min-width:0;overflow-wrap:anywhere}
+#ddCalendar .dd-day-item small{display:block;color:#777;font-size:11px;margin-top:3px}
+#ddCalendar .dd-day-actions{display:flex;flex-direction:column;gap:6px;flex:none}
+#ddCalendar .dd-day-actions .biz-btn{padding:6px 10px;font-size:12px}
+#ddLocalEvent{border:1px solid #ddd;border-radius:12px;padding:0;width:min(520px,94vw);max-height:92vh;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+#ddLocalEvent::backdrop{background:rgba(20,24,30,.4)}
+#ddLocalEvent form{padding:16px}
+#ddLocalEvent h3{margin:0 0 12px;font-size:16px}
+#ddLocalEvent .dd-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#ddLocalEvent .dd-form label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#666;min-width:0}
+#ddLocalEvent .dd-form label:first-child,#ddLocalEvent .dd-form label.wide{grid-column:1/-1}
+#ddLocalEvent .dd-form label.check{flex-direction:row;align-items:center;gap:6px;color:#222}
+#ddLocalEvent .dd-form input:not([type=checkbox]),#ddLocalEvent .dd-form textarea{font:inherit;font-size:16px;padding:8px;border:1px solid #ddd;border-radius:8px;min-width:0}
+#ddLocalEvent .dd-dialog-actions{display:flex;gap:8px;align-items:center;margin-top:12px}
+#ddLocalEvent .dd-dialog-actions span{flex:1}
 }
 </style>
 </head>
@@ -3819,7 +3853,7 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
 <script id="desktopDesignShell">
 // chiori desktop design shell (2026-11-28). Presentation and navigation wiring only:
 // it reads existing state through existing functions and never writes business data.
-// Everything it adds is hidden below 801px, so the mobile UI is unchanged.
+// Everything it adds is hidden below 801px, except the 日程 month grid and 本地予定 dialog (mobile 日程 page).
 (function(){
  'use strict';
  const THEME_KEY='tsukinowa_ui_theme';// UI preference only; no business data.
@@ -3897,18 +3931,22 @@ function renderHomeAnalytics(){
  }
  // ---------- Calendar month grid (same rows as the existing list) ----------
  let calDay=null;
- function renderCalendarGrid(){
+function renderCalendarGrid(){
+  // Desktop: design month grid + selected-day panel. Mobile (<=800px): compact grid in the existing card style.
   const box=$('ddCalendar');if(!box||typeof bizCalendarVisibleRows!=='function')return;
-  if(!window.matchMedia('(min-width: 801px)').matches)return;
+  const wide=window.matchMedia('(min-width: 801px)').matches;
   const month=$('calendarMonth')?.value||bizNowMonth(),[y,mo]=month.split('-').map(Number);
   const rows=bizCalendarVisibleRows(),first=new Date(y,mo-1,1).getDay(),end=new Date(y,mo,0).getDate();
-  const today=new Date(),todayKey=today.getFullYear()+'-'+String(today.getMonth()+1).padStart(2,'0')+'-'+String(today.getDate()).padStart(2,'0');
+  const todayKey=todayISO();
   if(!calDay||calDay.slice(0,7)!==month)calDay=todayKey.slice(0,7)===month?todayKey:month+'-01';
   const byDay=new Map();for(const e of rows){const k=String(e.date||'').slice(0,10);if(!byDay.has(k))byDay.set(k,[]);byDay.get(k).push(e);}
+  const chips=list=>wide?list.slice(0,2).map(e=>'<span class="calEvent src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'">'+esc(e.title)+'</span>').join('')+(list.length>2?'<span class="calMore">他 '+(list.length-2)+' 件</span>':''):'<span class="calDots">'+list.slice(0,3).map(e=>'<i class="calDot src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'"></i>').join('')+(list.length>3?'<small>+'+(list.length-3)+'</small>':'')+'</span>';
   let cells=['日','月','火','水','木','金','土'].map((d,i)=>'<div class="dow'+(i===0?' sun':i===6?' sat':'')+'">'+d+'</div>').join('')+'<span></span>'.repeat(first);
-  for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+list.slice(0,2).map(e=>'<span class="calEvent src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'">'+esc(e.title)+'</span>').join('')+(list.length>2?'<span class="calMore">他 '+(list.length-2)+' 件</span>':'')+'</button>';}
-  const dayRows=byDay.get(calDay)||[];
-  box.innerHTML='<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad"><div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button><button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。「＋ 本地予定」で登録するか、Google日程を同期すると表示されます。</p>')+'</div></div></section>'+googlePanel(rows);
+  for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" aria-label="'+k+' 予定'+list.length+'件" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+chips(list)+'</button>';}
+  const dayRows=byDay.get(calDay)||[],dayList='<div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button><button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。「＋ 本地予定」で登録するか、Google日程を同期すると表示されます。</p>')+'</div>';
+  box.innerHTML=wide
+   ?'<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad">'+dayList+'</div></section>'+googlePanel(rows)
+   :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定</h3>'+dayList+'</div>';
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
  }
  function srcOf(e){return typeof bizCalendarSource==='function'?bizCalendarSource(e):(e.source==='local'?'local':'google');}
@@ -4038,8 +4076,8 @@ function showDesktopPreview(){
   // Calendar
   addHeaderActions('pageCalendar',[button('＋ 本地予定','primary',()=>openLocalEvent('')),button('‹ 前月','',()=>shiftMonth(-1)),Object.assign(document.createElement('b'),{id:'ddCalMonthLabel',className:'dd-month-label dd-only'}),button('翌月 ›','',()=>shiftMonth(1)),button('小野田明細読込 → 請求書','',()=>importOnodaFromCalendar())]);
   const calSection=document.querySelector('#pageCalendar>.biz-section');
-  if(calSection){const c=document.createElement('div');c.id='ddCalendar';c.className='dd-only';calSection.after(c);
-   c.addEventListener('click',e=>{const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);const edit=e.target.closest('[data-dd-edit]');if(edit)openLocalEvent(edit.dataset.ddEdit);const copy=e.target.closest('[data-dd-copy]');if(copy)copyToLocal([copy.dataset.ddCopy]);if(e.target.closest('[data-dd-copy-month]'))copyToLocal(bizCalendarVisibleRows().filter(x=>srcOf(x)!=='local').map(x=>x.id));});}
+  if(calSection){const c=document.createElement('div');c.id='ddCalendar';calSection.after(c);
+   c.addEventListener('click',e=>{if(e.target.closest('[data-dd-new]')){openLocalEvent('');return;}const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);const edit=e.target.closest('[data-dd-edit]');if(edit)openLocalEvent(edit.dataset.ddEdit);const copy=e.target.closest('[data-dd-copy]');if(copy)copyToLocal([copy.dataset.ddCopy]);if(e.target.closest('[data-dd-copy-month]'))copyToLocal(bizCalendarVisibleRows().filter(x=>srcOf(x)!=='local').map(x=>x.id));});}
   // 帳票
   const chohyo=$('pageChohyo');
   if(chohyo){const h=document.createElement('div');h.id='ddChohyoHead';h.className='dd-only';h.innerHTML='<h1>帳票</h1>';h.append(button('保存帳票へ','',go('savedDocs')));chohyo.prepend(h);
