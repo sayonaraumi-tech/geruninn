@@ -10,6 +10,9 @@ function rev(n,id){return B().getSync()?.getRevision(n,id)||0;}
 function send(c){if(!isAdmin())return;return B().enqueue(c);}
 const value=id=>el(id)?.value||'',table=(headers,body)=>`<div class="biz-table-wrap"><table class="biz-table"><thead><tr>${headers.map(h=>'<th>'+esc(h)+'</th>').join('')}</tr></thead><tbody>${body||'<tr><td colspan="20">記録はありません。</td></tr>'}</tbody></table></div>`,cell=x=>'<td>'+esc(x)+'</td>',money=x=>bizMoney(Number(x)||0);
 function notice(message){el('accountingMessage').textContent=message;}
+// View defaults follow today/this month on every render until the user picks a value themselves.
+function autoValue(id,v){const e=el(id);if(!e)return;if(!e.value||e.dataset.autoValue===e.value){e.value=v;e.dataset.autoValue=v;}}
+root.bizAutoValue=autoValue;
 function guard(fn){return async(...args)=>{try{return await fn(...args);}catch(e){notice(e.message);alert(e.message);}};}
 function flatten(rows){return rows.map(r=>({...r.payload,id:r.id,createdAt:r.createdAt,updatedAt:r.updatedAt,createdBy:r.createdBy,updatedBy:r.updatedBy,revision:r.revision}));}
 function hydrate(rows){data={};for(const n of ['documents','sales','payments',...A.COLLECTIONS])data[n]=flatten(rows[n]||[]);data.sales.push(...flatten(rows.receivables||[]));bizState.expenses=data.expenses.filter(A.live).map(e=>({...e,date:e.expenseDate,method:e.paymentMethod,memo:e.description}));bizState.bank=data.bankTransactions.map(b=>({...b,date:b.bankTransactionDate,desc:b.description,matched:b.status==='照合済'}));renderCash();root.renderSales();renderCategoryRules();renderBankRules();renderDuplicateReview();renderSupplierLedger();}
@@ -218,7 +221,7 @@ function homeRows(d,p){
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
 }
 function homePeriod(){const mode=value('homePeriodMode');return A.periodFilter(mode==='year'?{year:value('homeYear')}:mode==='custom'?{start:value('homeStart'),end:value('homeEnd')}:{month:value('homeMonth')||bizNowMonth()});}
-root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth();if(!value('homeMonth'))el('homeMonth').value=now;if(!value('homeYear'))el('homeYear').value=+now.slice(0,4)-(+now.slice(5)<10?1:0);if(!value('homeStart'))el('homeStart').value=now+'-01';if(!value('homeEnd'))el('homeEnd').value=A.periodFilter({month:now}).end;
+root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth();autoValue('homeMonth',now);autoValue('homeYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0)));autoValue('homeStart',now+'-01');autoValue('homeEnd',A.periodFilter({month:now}).end);
  const mode=value('homePeriodMode');for(const [id,shown] of [['homeMonthField',mode==='month'],['homeYearField',mode==='year'],['homeStartField',mode==='custom'],['homeEndField',mode==='custom']])el(id).hidden=!shown;
  let p;try{p=homePeriod();}catch(e){el('dashPeriod').textContent=e.message;return;}const d=homeData(),m=A.aggregate(d,p);el('dashPeriod').textContent=p.start+' ～ '+p.end;for(const [id,k] of [['kpiSales','sales'],['kpiPayments','income'],['kpiExpenses','expenseTotal'],['kpiReceivable','receivables'],['kpiDifference','cashFlowDifference']])el(id).textContent=money(m[k]);el('kpiAttention').textContent=m.attention;for(const [id,label] of [['kpiSales','売上'],['kpiPayments','入金'],['kpiExpenses','支出']])el(id).previousElementSibling.textContent=label;
  el('attentionList').replaceChildren(...m.reminders.map(message=>{const p=document.createElement('p');p.textContent=message;return p;}));if(!m.reminders.length)el('attentionList').textContent='確認事項はありません。';
@@ -230,7 +233,7 @@ root.TsukinowaAccountingUI.salesRegister=(period,asOf,descending=false)=>A.sales
 root.renderSales=function(){
  if(!el('salesRegisterTable'))return;
  const now=bizNowMonth(),mode=value('salesPeriodMode')||'month';
- for(const [id,v] of [['salesMonth',now],['salesYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0))],['salesStart',now+'-01'],['salesEnd',A.periodFilter({month:now}).end],['receivableAsOf',todayISO()]])if(!value(id))el(id).value=v;
+ for(const [id,v] of [['salesMonth',now],['salesYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0))],['salesStart',now+'-01'],['salesEnd',A.periodFilter({month:now}).end],['receivableAsOf',todayISO()]])autoValue(id,v);
  for(const [id,show] of [['salesMonthField',mode==='month'],['salesYearField',mode==='year'],['salesStartField',mode==='custom'],['salesEndField',mode==='custom']])el(id).hidden=!show;
  try{
  const period=A.periodFilter(mode==='year'?{year:value('salesYear')}:mode==='custom'?{start:value('salesStart'),end:value('salesEnd')}:{month:value('salesMonth')}),asOf=A.date(value('receivableAsOf'));

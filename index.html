@@ -3028,6 +3028,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 window.addEventListener('focus',bizCalendarCheckMonth);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)bizCalendarCheckMonth();});
+// When the date changes while the app stays open, re-render so auto-set 入金基準日 / 対象月 follow today.
+let bizObservedDay=todayISO();
+function bizCheckDay(){const d=todayISO();if(bizObservedDay&&bizObservedDay!==d){bizObservedDay=d;bizRefreshAll();}else bizObservedDay=d;}
+setInterval(bizCheckDay,30000);window.addEventListener('focus',bizCheckDay);document.addEventListener('visibilitychange',()=>{if(!document.hidden)bizCheckDay();});
 function bizNowMonth(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function bizEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function bizLoad(){if(window.TsukinowaCloudCore){const old=TsukinowaCloudCore.readLegacy(localStorage);bizState=Object.assign(bizState,old.business);bizSettings=Object.assign(bizSettings,old.settings);if(old.errors.length)console.warn('一部の端末内データを読み込めませんでした。元データは保持されています。');return;}try{const x=JSON.parse(localStorage.getItem(BIZ_KEY)||'null');if(x)bizState=Object.assign(bizState,x)}catch(_){} try{const x=JSON.parse(localStorage.getItem(BIZ_SETTINGS_KEY)||'null');if(x)bizSettings=Object.assign(bizSettings,x)}catch(_){}}
@@ -3052,7 +3056,7 @@ function bizOnDocumentConfirmed(state){
 }
 function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
 function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
-function bizRefreshAll(){const m=bizNowMonth();['calendarMonth','salesMonth','expenseMonth'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=m});['paymentDate','expDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=todayISO()});const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
+function bizRefreshAll(){const m=bizNowMonth(),auto=window.bizAutoValue||((id,v)=>{const el=document.getElementById(id);if(el&&!el.value)el.value=v});['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
 function renderSales(){window.TsukinowaAccountingUI?.renderSales?.()}
 function bizOnodaPaymentHint(){const id=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===id);document.getElementById('onodaPaymentHint').hidden=sale?.docType!=='onoda';}
 function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const previous=sel.value,source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const unpaid=source.filter(s=>TsukinowaAccounting.live(s)&&bizOutstanding(s)>0).slice().sort((a,b)=>String(a.salesDate||a.saleDate).localeCompare(String(b.salesDate||b.saleDate))||String(a.id).localeCompare(String(b.id)));sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('');sel.value=previous;bizOnodaPaymentHint()}
