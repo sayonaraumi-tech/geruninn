@@ -1070,6 +1070,7 @@ body.dd .biz-section>.biz-section-head:first-child{margin:-15px -15px 15px}
 body.dd :is(.biz-section>.biz-section-head:first-child,.dd-panel>h3):has(button,input,select){padding-block:8px}
 body.dd .biz-section-head h2,body.dd .biz-section h2{font-size:13px;font-weight:700;color:var(--dd-fg);margin:0}
 body.dd .biz-section-head>div:has(>h2){display:flex;align-items:baseline;gap:10px;min-width:0}
+body.dd .biz-section-head>:first-child{margin-right:auto}
 body.dd .biz-section-head>div>h2~.biz-muted{font-size:11px;font-weight:400;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 body.dd :is(.biz-section-head,.dd-panel>h3){--dd-control-font:11px;--biz-control-pad:5px 8px}
 body.dd :is(.biz-section-head,.dd-panel>h3) .biz-btn{padding:5px 8px}
@@ -1203,18 +1204,31 @@ body.dd .dd-filters{margin-bottom:13px}
 body.dd .dd-filters .dd-toolbar{margin-bottom:8px}
 body.dd .dd-count{font-size:11px}
 /* 銀行: 月別未照合明細 */
-body.dd #ddBankMonthly{margin-bottom:13px}
+body.dd #pageBank.active{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,.85fr);grid-auto-flow:row dense;column-gap:13px;align-items:start}
+body.dd #pageBank>*{grid-column:1/-1;order:3}
+body.dd #pageBank>.biz-title{order:0}
+body.dd #pageBank>#ddBankMetrics{order:1}
+body.dd #pageBank>.bank-transactions{grid-column:1;order:2;margin-top:0}
+body.dd #pageBank>#ddBankMonthly{grid-column:2;order:2}
+/* 支出・現金: design order (KPI cards, 支出一覧), then registration/CSV/rules/cash book */
+body.dd #pageExpenses.active{display:flex;flex-direction:column}
+body.dd #pageExpenses>*{order:3}
+body.dd #pageExpenses>.biz-title{order:0}
+body.dd #pageExpenses>#ddExpenseMetrics{order:1}
+body.dd #pageExpenses>.expense-ledger{order:2;margin-top:0}
 body.dd .dd-bank-month{margin-bottom:14px;font-size:13px}
 body.dd .dd-bank-month>.biz-muted{margin:5px 0;font-size:11px}
 body.dd .dd-bank-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--dd-line)}
 body.dd .dd-bank-item .biz-btn{font-size:11px;padding:5px 8px}
 /* 設定: 会社情報 + 取込機能 */
 body.dd #ddCompanyInfo{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;margin-bottom:13px}
-body.dd .dd-info{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px 12px;font-size:12px}
-body.dd .dd-info dt{color:var(--dd-mut)}
-body.dd .dd-info dd{margin:0;color:var(--dd-fg);overflow-wrap:anywhere}
-body.dd .dd-import{line-height:1.9;font-size:12px}
-body.dd .dd-import p{margin:0 0 6px}
+body.dd .dd-formgrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+body.dd .dd-formgrid .full{grid-column:1/-1}
+body.dd .dd-formgrid label{display:block;color:var(--dd-mut);margin-bottom:5px;font-size:11px}
+body.dd #ddCompanyInfo .dd-formgrid input{width:100%;padding:9px;border-radius:5px}
+body.dd .dd-formgrid .compare-note{margin:0;padding:0}
+body.dd .dd-import{line-height:1.9}
+body.dd .dd-import p{margin:0;font-size:11px}
 /* 帳票: the design has no preview toggle; the preview stays open while the page is shown */
 body.dd #pageChohyo .btn-preview{display:none}
 /* dark theme: keep the existing hard-coded light surfaces readable */
@@ -1404,14 +1418,14 @@ body.dd small.register-note.dd-only{display:block!important}
 <div id="pageExpenses" class="biz-page app-page">
  <div class="biz-title"><div><h1>支出・現金</h1><div class="biz-muted">材料費・交通費は案件に無理に紐付けません。</div></div></div>
  <div class="biz-section"><div class="biz-section-head"><h2>支出登録</h2></div><div class="biz-form-grid"><div class="biz-field"><label>日付</label><input type="date" id="expDate"></div><div class="biz-field"><label>科目</label><select id="expCategory"><option>材料仕入</option><option>旅費交通費</option><option>外注費</option><option>給与</option><option>地代家賃</option><option>車両費</option><option>通信費</option><option>消耗品費</option><option>租税公課</option><option>その他</option></select></div><div class="biz-field"><label>支払方法</label><select id="expMethod"><option>現金</option><option>代表者立替（交通系IC）</option><option>法人カード決済</option><option>銀行振込</option><option>口座振替</option><option>その他</option></select></div><div class="biz-field"><label>金額</label><input type="number" id="expAmount"></div><div class="biz-field span2"><label>取引先</label><input id="expVendor"></div><div class="biz-field span2"><label>内容・備考</label><input id="expMemo" placeholder="駐車場、ゴミ処理、10月材料前払 等"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="addExpense()">支出登録</button></div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>支出台帳</h2><button type="button" class="biz-btn" id="expenseCsvExport" onclick="accountingExport('expenses')">CSV出力</button><input type="month" id="expenseMonth" onchange="renderExpenses()"></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>科目</th><th>取引先</th><th>内容</th><th>方法</th><th class="biz-money">金額</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
+ <div class="biz-section expense-ledger"><div class="biz-section-head"><h2>支出台帳</h2><button type="button" class="biz-btn" id="expenseCsvExport" onclick="accountingExport('expenses')">CSV出力</button><input type="month" id="expenseMonth" onchange="renderExpenses()"></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>科目</th><th>取引先</th><th>内容</th><th>方法</th><th class="biz-money">金額</th><th></th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
 </div>
 
 
 <div id="pageBank" class="biz-page app-page">
  <div class="biz-title"><div><h1>銀行照合</h1><div class="biz-muted">GMO あおぞらのCSVを読み込み、請求入金と既存支出を照合します。銀行明細だけで費用は追加しません。</div></div></div>
  <div class="biz-section bank-import"><div class="biz-section-head"><h2>CSV取込</h2></div><div class="biz-form-grid"><div class="biz-field span2"><label>銀行CSV</label><input type="file" id="bankFile" accept=".csv,text/csv"></div><div class="biz-field"><label>&nbsp;</label><button class="biz-btn primary" style="width:100%" onclick="importBankCsv()">読込</button></div></div></div>
- <div class="biz-section"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
+ <div class="biz-section bank-transactions"><div class="biz-section-head"><h2>銀行取引</h2></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>摘要</th><th class="biz-money">入金</th><th class="biz-money">出金</th><th>候補</th><th>状態</th></tr></thead><tbody id="bankRows"></tbody></table></div></div>
 </div>
 
 <div id="pageSettings" class="biz-page app-page">
@@ -4027,8 +4041,8 @@ function renderExpenseMetrics(){
  const box=$('ddExpenseMetrics');if(!box||!desktop())return;
  const month=$('expenseMonth')?.value||bizNowMonth();let rows=[];
  try{rows=A_().expenseRegister(U_().homeData().expenses||[],month);}catch{}
- const by=re=>rows.filter(e=>re.test(String(e.paymentMethod||e.method||''))).reduce((n,e)=>n+(Number(e.amount)||0),0),all=rows.reduce((n,e)=>n+(Number(e.amount)||0),0);
- box.innerHTML=metricCards([['支出合計（'+month+'）',bizMoney(all),'total'],['現金支出',bizMoney(by(/^現金$/)),'cash'],['法人カード',bizMoney(by(/法人カード/)),'card'],['代表者立替',bizMoney(by(/代表者立替/)),'advance']]);
+ const by=re=>rows.filter(e=>re.test(String(e.paymentMethod||e.method||''))).reduce((n,e)=>n+(Number(e.amount)||0),0);
+ box.innerHTML=metricCards([['現金支出',bizMoney(by(/^現金$/)),'cash'],['法人カード',bizMoney(by(/法人カード|法人信用カード|クレジットカード/)),'card'],['代表者立替',bizMoney(by(/代表者立替/)),'advance']]);
 }
 // ---------- 銀行照合: metric cards + 月別未照合明細 ----------
 const bankDone=b=>['照合済','除外'].includes(b.status)||!b.status&&!!b.matched;
@@ -4087,7 +4101,7 @@ function renderCompanyInfo(){
  const contact=[...(t?.querySelectorAll('.contact-info-right .contact-line')||[])].map(x=>x.textContent.trim());
  const bank=(typeof DOC_CONFIGS!=='undefined'&&DOC_CONFIGS.invoice?.leftCard?.rows)||[];
  const rows=[['会社名',text('.brand-jp-big')],['英文名',text('.brand-en-classic')],['登録番号',typeof COMPANY_INVOICE_REG_NO!=='undefined'?COMPANY_INVOICE_REG_NO:''],['所在地',contact.filter(x=>!/^(TEL|MAIL)/.test(x)).join(' ')],['連絡先',contact.filter(x=>/^(TEL|MAIL)/.test(x)).join(' / ')],['お振込先',bank.map(([k,v])=>k+' '+v).join(' / ')],['会計年度','10月1日〜翌年9月30日']];
- box.innerHTML='<section class="dd-panel"><h3>会社情報</h3><div class="dd-pad"><dl class="dd-info">'+rows.map(([k,v])=>'<dt>'+esc(k)+'</dt><dd>'+esc(v||'—')+'</dd>').join('')+'</dl><p class="compare-note">帳票に印字している発行元情報です（読み取り専用）。変更には帳票テンプレートの修正が必要なため、この画面では編集できません。</p></div></section><section class="dd-panel"><h3>取込機能</h3><div class="dd-pad dd-import"><b>銀行CSV</b><p class="biz-muted">銀行照合の「CSV取込」で読み込みます。照合は確認後に確定します。</p><b>支出CSV</b><p class="biz-muted">支出・現金の「支出CSV取込」で取込前確認をしてから登録します。</p><div class="dd-toolbar"><button type="button" class="biz-btn" data-dd-import="bank">銀行CSVを選択</button><button type="button" class="biz-btn" data-dd-import="expense">支出CSVを選択</button></div></div></section>';
+ box.innerHTML='<section class="dd-panel"><h3>会社情報</h3><div class="dd-pad dd-formgrid">'+rows.map(([k,v],i)=>'<div'+(i>=3&&i<=5?' class="full"':'')+'><label>'+esc(k)+'</label><input readonly tabindex="-1" value="'+esc(v||'—')+'"></div>').join('')+'<p class="compare-note full">帳票に印字している発行元情報です（読み取り専用）。変更には帳票テンプレートの修正が必要なため、この画面では編集できません。</p></div></section><section class="dd-panel"><h3>取込機能</h3><div class="dd-pad dd-import"><b>銀行CSV</b><p class="biz-muted">銀行照合の「CSV取込」で読み込みます。照合は確認後に確定します。</p><b>支出CSV</b><p class="biz-muted">支出・現金の「支出CSV取込」で取込前確認をしてから登録します。</p><div class="dd-toolbar"><button type="button" class="biz-btn" data-dd-import="bank">銀行CSVを選択</button><button type="button" class="biz-btn" data-dd-import="expense">支出CSVを選択</button></div></div></section>';
 }
 function openFile(page,id){bizSwitchPage(page);const f=$(id);if(!f)return;f.scrollIntoView({behavior:'smooth',block:'center'});f.click();}
 // ---------- 帳票: the preview is always visible on desktop while the page is open ----------
@@ -4131,7 +4145,7 @@ function showDesktopPreview(){
   addHeaderActions('pageSales',[button('＋ 売上登録','primary',()=>{if(typeof openManualSale==='function')openManualSale();}),button('入金登録','',scrollToEl('paymentRegistrationForm'))]);
   const salesRegister=document.querySelector('#pageSales>.sales-register');if(salesRegister)ensure('ddSalesMetrics','biz-grid dd-metrics3',n=>salesRegister.before(n));
   addHeaderActions('pageExpenses',[button('＋ 支出登録','primary',scrollToEl('expDate')),button('CSVインポート','',()=>openFile('expenses','expenseFile'))]);
-  const expFirst=document.querySelector('#pageExpenses>.biz-section');if(expFirst)ensure('ddExpenseMetrics','biz-grid',n=>expFirst.before(n));
+  const expFirst=document.querySelector('#pageExpenses>.biz-section');if(expFirst)ensure('ddExpenseMetrics','biz-grid dd-metrics3',n=>expFirst.before(n));
   addHeaderActions('pageBank',[button('銀行CSVインポート','primary',()=>openFile('bank','bankFile'))]);
   const bankFirst=document.querySelector('#pageBank>.biz-section');
   if(bankFirst){ensure('ddBankMetrics','biz-grid dd-metrics3',n=>bankFirst.before(n));const g=ensure('ddBankMonthly','',n=>bankFirst.before(n));g.addEventListener('click',e=>{const b=e.target.closest('[data-dd-bank]');if(b)focusBank(b.dataset.ddBank);});}
