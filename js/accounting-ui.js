@@ -264,7 +264,6 @@ root.renderSales=function(){
  renderPaymentSaleOptions();
 };
 root.TsukinowaAccountingUI.renderSales=root.renderSales;
-root.TsukinowaAccountingUI.legacyVisibility=legacyVisibility;
 function exportRows(kind){switch(kind){case'monthly':return A.settlementExport(homeData(),homePeriod());
 case'expenses':return A.expenseExport(homeData().expenses||[],value('expenseMonth')||bizNowMonth());
 case'payments':return [['入金ID','売上ID','入金日','金額','入金経路','プラットフォーム名','確認状態'],...(data.payments||[]).filter(p=>homePeriod().includes(p.paymentDate||p.date)).map(p=>[p.id,p.saleId,p.paymentDate||p.date,p.amount,A.paymentChannel(p).channel,A.paymentChannel(p).platformName,p.confirmation])];

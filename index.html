@@ -1632,7 +1632,6 @@ body.dd small.register-note.dd-only{display:block!important}
     <div class="bottom-totals-wrap">
       <div class="totals-classic">
         <div class="totals-row"><span class="lbl">小計</span><span class="val" id="dSubtotal">35,720</span></div>
-        <div class="totals-row" id="dDiscountRow" hidden style="display:none"><span class="lbl">値引き</span><span class="val" id="dDiscount">−0 円</span></div>
         <div class="totals-row non-tax-row hidden" id="dNonTaxRow"><span class="lbl">非課税</span><span class="val" id="dNonTax">0 円</span></div>
         <div class="totals-row"><span class="lbl">消費税【10%】</span><span class="val" id="dTax">3,572</span></div>
         <div class="totals-row" id="dCurrentAmountRow" hidden style="display:none"><span class="lbl">今回請求額</span><span class="val" id="dCurrentAmount"></span></div>
@@ -2319,11 +2318,6 @@ function recalc() {
       rows += '<tr><td class="c1">値引き</td><td class="c2"></td><td class="cu"></td>' +
               '<td class="c3"></td>' +
               '<td class="c4">−' + fmtNum(discount) + '</td></tr>';
-    }
-    const dRow = document.getElementById('dDiscountRow');
-    if (dRow) {
-      dRow.hidden = true;
-      dRow.style.display = 'none';
     }
     const usedRows = items.length + (travelFee > 0 ? 1 : 0) + (discount > 0 ? 1 : 0);
     const fillCount = Math.max(0, 6 - usedRows);
@@ -3121,7 +3115,7 @@ function bizOnDocumentConfirmed(state){
 }
 function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
 function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
-function bizRefreshAll(){const m=bizNowMonth(),auto=window.bizAutoValue||((id,v)=>{const el=document.getElementById(id);if(el&&!el.value)el.value=v});['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
+function bizRefreshAll(){const m=bizNowMonth(),auto=bizAutoValue;['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
 function renderSales(){window.TsukinowaAccountingUI?.renderSales?.()}
 function bizOnodaPaymentHint(){const id=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===id);document.getElementById('onodaPaymentHint').hidden=sale?.docType!=='onoda';}
 function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const previous=sel.value,source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const unpaid=source.filter(s=>TsukinowaAccounting.live(s)&&bizOutstanding(s)>0).slice().sort((a,b)=>String(a.salesDate||a.saleDate).localeCompare(String(b.salesDate||b.saleDate))||String(a.id).localeCompare(String(b.id)));sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('');sel.value=previous;bizOnodaPaymentHint()}
@@ -3908,7 +3902,7 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
  const series=(fy,kind)=>FISCAL_MONTHS.map(m=>monthTotals(fy,m)[kind]);
  const total=a=>a.reduce((x,y)=>x+y,0);
  function bars(values,labels){const max=Math.max(1,...values);return '<div class="compare-bars">'+values.map((v,i)=>'<div class="compare-slot" title="'+esc(labels[i])+': '+esc(yen(v))+'"><div class="compare-value">'+Math.round(v).toLocaleString('ja-JP')+'</div><div class="compare-rail"><div class="compare-fill" style="height:'+Math.max(0,v/max*100)+'%"></div></div><span>'+esc(labels[i])+'</span></div>').join('')+'</div>'}
- const opt=(v,label,sel)=>'<option value="'+v+'"'+(String(v)===String(sel)?' selected':'')+'>'+label+'</option>';
+ const opt=(v,label,sel)=>'<option value="'+esc(v)+'"'+(String(v)===String(sel)?' selected':'')+'>'+esc(label)+'</option>';
  function comparison(){
   const kind=ui.compareMetric,title=kind==='sales'?'売上':'支出',years=fiscalYears(),vals=series(ui.compareFY,kind);
   const cur=ui.compareMode==='monthly'?{values:vals,labels:FISCAL_MONTHS.map(m=>m+'月')}:ui.compareMode==='years'?{values:years.map(y=>total(series(y,kind))),labels:years.map(y=>y+'年度')}:{values:years.map(y=>monthTotals(y,ui.compareMonth)[kind]),labels:years.map(y=>y+'年度')};
@@ -3927,8 +3921,7 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
  +'<div class="balance-foot">'+ui.balanceFY+'年度 '+ui.balanceMonth+'月 / 確認済み入金 − 支出 = '+yen(d)+'</div><div class="compare-note">収支差額はホームの「収支差額」と同じ定義です（会計上の利益ではありません）。売上 − 支出は未回収の売上を含む参考値です。</div></div>';
 }
 function renderHomeAnalytics(){
-  const box=$('ddHomeAnalytics');if(!box||!document.body.classList.contains('dd'))return;
-  if(!window.matchMedia('(min-width: 801px)').matches)return;
+  const box=$('ddHomeAnalytics');if(!box||!desktop())return;
   cache.clear();const fy=currentFY(),m=+bizNowMonth().slice(5);
   ui.compareFY??=fy;ui.balanceFY??=fy;ui.compareMonth??=m;ui.balanceMonth??=m;
   box.innerHTML='<section class="dd-panel"><h3>売上・支出推移比較</h3>'+comparison()+'</section><section class="dd-panel"><h3>月次収支比較</h3>'+balance()+'</section>';
@@ -3954,8 +3947,7 @@ function renderCalendarGrid(){
    :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定</h3>'+dayList+'</div>';
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
  }
- function srcOf(e){return typeof bizCalendarSource==='function'?bizCalendarSource(e):(e.source==='local'?'local':'google');}
- function srcLabel(e){return typeof bizCalendarSourceLabel==='function'?bizCalendarSourceLabel(e):'Google';}
+ const srcOf=e=>bizCalendarSource(e),srcLabel=e=>bizCalendarSourceLabel(e);
  function googlePanel(rows){const g=rows.filter(e=>srcOf(e)!=='local'),l=rows.filter(e=>srcOf(e)==='local');
   return '<section class="dd-panel" id="ddCalendarSources"><h3>日程の保存先</h3><div class="dd-pad"><p class="dd-src-summary"><span class="dd-src src-local">本地</span> '+l.length+'件 <span class="dd-src src-google">Google</span> '+g.length+'件（表示中の月）</p><p class="biz-muted" style="font-size:11px">本地日程はこのシステムに保存され、Google連携がなくても登録・編集・削除できます。Google日程は同期した記録として残り、ここでは読み取り専用です。将来Google連携を外しても日程は消えません。必要なものは「本地にコピー」で編集できる本地日程になります（元の記録は変更しません）。</p>'+(g.length?'<button type="button" class="biz-btn" data-dd-copy-month>この月のGoogle日程を本地にコピー（'+g.length+'件）</button>':'')+'</div></section>';}
  function localDialog(){let d=$('ddLocalEvent');if(d)return d;d=document.createElement('dialog');d.id='ddLocalEvent';d.className='dd-dialog';

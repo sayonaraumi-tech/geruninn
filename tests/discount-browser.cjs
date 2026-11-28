@@ -7,17 +7,18 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.clock.setFixedTime(new Date('2026-11-28T01:00:00Z'));
  await page.goto('http://127.0.0.1:'+server.address().port);
  await page.evaluate(()=>{bizSwitchPage('chohyo');setDocType('invoice');items=[{content:'クロス張替え',qty:1,unit:'式',price:50000,taxable:true}];renderItemEditor();document.getElementById('travelFee').value='0';recalc();});
+ const totalsMention=()=>page.evaluate(()=>[...document.querySelectorAll('.totals-row')].some(r=>r.textContent.includes('値引き')));
  const read=()=>page.evaluate(()=>({subtotal:document.getElementById('dSubtotal').textContent,tax:document.getElementById('dTax').textContent,total:document.getElementById('dGrandTotal').textContent,lines:[...document.querySelectorAll('#invItems tr')].map(r=>r.textContent),state:collectFormState(),domain:TsukinowaBusiness.total(collectFormState())}));
  // The 値引き control is shown for invoices on desktop and mobile.
  assert.equal(await page.locator('#discountToggle').isVisible(),true,width+': 値引き button visible');
  let r=await read();
  assert.deepEqual([r.subtotal,r.tax,r.total],['50,000 円','5,000 円','55,000 円'],width+': no discount');
  assert.equal('discountAmount' in r.state,false,width+': no-discount snapshot has no discountAmount key');assert.equal(r.domain,55000);
- assert.equal(r.lines.some(l=>l.includes('値引き')),false);assert.equal(await page.locator('#dDiscountRow').isVisible(),false);
+ assert.equal(r.lines.some(l=>l.includes('値引き')),false);assert.equal(await totalsMention(),false,width+': no 値引き row in the totals');
  await page.locator('#discountToggle').click();assert.equal(await page.locator('#discountAmount').isVisible(),true,width+': 値引き input visible');
  await page.fill('#discountAmount','10000');r=await read();
  assert.deepEqual([r.subtotal,r.tax,r.total],['40,000 円','4,000 円','44,000 円'],width+': 10,000 off, fee 0');
- assert.equal(r.state.discountAmount,10000);assert.equal(r.domain,44000);assert.equal(r.lines.filter(l=>l.includes('値引き')).length,1);
+ assert.equal(r.state.discountAmount,10000);assert.equal(r.domain,44000);assert.equal(r.lines.filter(l=>l.includes('値引き')).length,1);assert.equal(await totalsMention(),false,width+': 値引き stays on the detail line only');
  await page.fill('#travelFee','4000');r=await read();
  assert.deepEqual([r.subtotal,r.tax,r.total],['44,000 円','4,400 円','48,400 円'],width+': 10,000 off, fee 4,000');assert.equal(r.domain,48400);
  // Clearing the discount returns to exactly the no-discount snapshot.
