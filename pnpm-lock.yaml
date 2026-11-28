@@ -22,8 +22,8 @@ importers:
         specifier: 14.5.1
         version: 14.5.1(@firebase/app-compat@0.5.18)(@firebase/app@0.16.2)(supports-color@7.2.0)
       firebase-tools:
-        specifier: 15.36.0
-        version: 15.36.0(@types/node@26.6.6)(bare-buffer@3.7.2)(supports-color@7.2.0)
+        specifier: 15.37.0
+        version: 15.37.0(@types/node@26.6.6)(bare-buffer@3.7.2)(supports-color@7.2.0)
       playwright:
         specifier: 1.65.1
         version: 1.65.1
@@ -1289,8 +1289,8 @@ packages:
     resolution: {integrity: sha512-3NSWRREeFCET2tyiOd0ENvRFdagi9voBRGCiNbGSIRbwuMJh2Eh/dcmItNWd82rcqd+fyW5/77/oZOZxC27/sA==}
     engines: {node: '>=22'}
 
-  firebase-tools@15.36.0:
-    resolution: {integrity: sha512-z1fnT75IkGmARzRSP9Blb4BzAnYJOhwoSbe/lKpUKy/hpQzLhUM39KUesAfUM5U1PnDu6syFdwV1JsSGcdQ32w==}
+  firebase-tools@15.37.0:
+    resolution: {integrity: sha512-px7Du9nXLHxANs0RzqB5EPnVGNChJju9bTAEJewWniGKtJoFTMYgRIEH30FfA1llYK5LwgYCko3bcl0bIq4BvQ==}
     engines: {node: '>=20.0.0 || >=22.0.0 || >=24.0.0'}
     hasBin: true
 
@@ -4181,7 +4181,7 @@ snapshots:
       - '@firebase/app-compat'
       - supports-color
 
-  firebase-tools@15.36.0(@types/node@26.6.6)(bare-buffer@3.7.2)(supports-color@7.2.0):
+  firebase-tools@15.37.0(@types/node@26.6.6)(bare-buffer@3.7.2)(supports-color@7.2.0):
     dependencies:
       '@electric-sql/pglite': 0.3.16
       '@electric-sql/pglite-tools': 0.2.21(@electric-sql/pglite@0.3.16)
