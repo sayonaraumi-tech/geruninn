@@ -743,3 +743,56 @@ test('staff can retry own operations but cannot read or reserve administrator de
   staff.dispose();
  }
 });
+
+test('operations reads: staff sees own replay and number reservations, never admin backups or full log list',async()=>{
+ const path=id=>doc(db('admin'),`companies/${company}/operations/${id}`);
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const root=ctx.firestore();
+  for(const [id,actorId,result] of [
+   ['admin-sensitive','uid-admin',{backup:{bankAccount:'private-bank',amount:900000}}],
+   ['staff-own','uid-staff',{ok:true}],
+   ['documentNumber_20261116-1000-01','uid-admin',{invoiceNo:'20261116-1000-01',documentId:'doc'}]
+  ])await setDoc(doc(root,`companies/${company}/operations/${id}`),{actorId,fingerprint:'test',createdAt:new Date(),result});
+ });
+ await assertSucceeds(getDoc(path('admin-sensitive')));
+ await assertFails(getDoc(doc(db('staff'),`companies/${company}/operations/admin-sensitive`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/staff-own`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/new-not-yet-created`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
+ await assertFails(getDocs(collection(db('staff'),`companies/${company}/operations`)));
+ await assertSucceeds(getDocs(collection(db('admin'),`companies/${company}/operations`)));
+ await assertFails(getDoc(doc(db('staff','another-company'),`companies/${company}/operations/staff-own`)));
+ await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
+});
+
+test('staff cannot squat invoice numbering with an isolated operation',async()=>{
+ const staff=db('staff');
+ const invoiceNo='20261116-1300-01';
+ const reservation={actorId:'uid-staff',fingerprint:'a'.repeat(64),
+   createdAt:serverTimestamp(),
+   result:{documentId:'nonexistent',invoiceNo,numberingMinute:'20261116-1300',numberingSequence:1}};
+ await assertFails(setDoc(doc(staff,`companies/${company}/operations/documentNumber_${invoiceNo}`),reservation));
+ const exists=await getDoc(doc(db('admin'),`companies/${company}/operations/documentNumber_${invoiceNo}`));
+ assert.equal(exists.exists(),false);
+});
+
+test('hostile direct finance writes require coupled audit and correct tenant identity',async()=>{
+ const admin=db('admin'),staff=db('staff'),other=db('staff','outside-company');
+ const guest=env.unauthenticatedContext().firestore();
+ const broken={schemaVersion:2,companyId:company,payload:{amount:1000000,status:'confirmed'},
+   revision:1,createdBy:'uid-admin',createdAt:serverTimestamp(),
+   updatedBy:'uid-admin',updatedAt:serverTimestamp(),lastOperationId:'fake',lastAuditId:'fake_0'};
+ for(const name of ['bankTransactions','payments','cashLedger','sales','expenses','documents','settings']){
+  await assertFails(setDoc(doc(admin,`companies/${company}/${name}/forged`),broken));
+  await assertFails(setDoc(doc(staff,`companies/${company}/${name}/forged`),broken));
+ }
+ await assertFails(setDoc(doc(other,`companies/${company}/payments/forged`),broken));
+ await assertFails(setDoc(doc(guest,`companies/${company}/payments/forged`),broken));
+ await assertFails(setDoc(doc(staff,`companies/${company}/operations/fake`),
+  {actorId:'uid-admin',fingerprint:'fake',result:{ok:true},createdAt:serverTimestamp()}));
+ await assertFails(setDoc(doc(staff,`companies/${company}/auditLogs/fake_0`),
+  {userId:'uid-admin',entityType:'payments',entityId:'forged',action:'payment',
+   operationId:'fake',before:null,after:{amount:1000000},timestamp:serverTimestamp()}));
+ await assertFails(deleteDoc(doc(admin,`companies/${company}/payments/forged`)));
+ await assertFails(updateDoc(doc(admin,`companies/${company}/payments/forged`),{payload:{amount:0}}));
+});

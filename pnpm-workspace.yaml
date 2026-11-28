@@ -4,3 +4,4 @@ allowBuilds:
   re2: false
 overrides:
   node-forge: 1.4.3
+  '@grpc/grpc-js': 1.13.6
