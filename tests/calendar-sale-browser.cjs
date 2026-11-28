@@ -55,9 +55,19 @@ async function create(page,width,{date,title,amount,method,customer}){
   await create(page,width,{date:'2026-12-02',title:'試験 振込',amount:22000,method:'銀行振込'});
   s=await stored();const b=s.sales.find(x=>!x.deletedAt);assert.deepEqual([b.customer,b.amount,b.paymentMethod,s.payments.filter(p=>!p.deletedAt).length],['現金客',22000,'銀行振込',0]);
   assert.equal(await page.evaluate(()=>document.getElementById('kpiReceivable').textContent),'22,000');
+  // 売上日 = the event's date: follows date changes made after the sale section is open, and a stale field value is never sent
+  await page.locator(newButton(width)).click();await page.fill('#ddLeDate','2026-10-30');await page.fill('#ddLeTitle','試験様・中野・クロス張替・¥70000');await page.locator('#ddLeSaleOn').check();
+  assert.equal(await page.inputValue('#ddLsDate'),'2026-10-30');await page.fill('#ddLeDate','2026-11-27');assert.equal(await page.inputValue('#ddLsDate'),'2026-11-27','follows the event date');
+  await page.evaluate(()=>{document.getElementById('ddLsDate').value='2026-10-30';});// stale value without a user edit
+  await page.fill('#ddLsCustomer','試験様');await page.fill('#ddLsAmount','70000');await page.selectOption('#ddLsMethod','銀行振込');
+  assert.match(await page.locator('#ddLsHint').textContent(),/売上のみ登録します（未収）/);await page.locator('#ddLeSave').click();await page.waitForFunction(()=>!document.getElementById('ddLocalEvent').open,null,{timeout:5000});
+  s=await stored();{const x=s.sales.find(v=>v.customer==='試験様'&&!v.deletedAt);assert.deepEqual([x.saleDate,x.amount,x.paymentMethod],['2026-11-27',70000,'銀行振込']);assert.equal(s.payments.filter(p=>p.saleId===x.id&&!p.deletedAt).length,0,'bank transfer: 売上 only (未収), no 入金');}
+  // a 売上日 the user set stays when the event date changes
+  await page.locator(newButton(width)).click();await page.fill('#ddLeDate','2026-11-20');await page.fill('#ddLeTitle','試験 手入力');await page.locator('#ddLeSaleOn').check();await page.fill('#ddLsDate','2026-11-25');await page.fill('#ddLeDate','2026-11-21');
+  assert.equal(await page.inputValue('#ddLsDate'),'2026-11-25');await page.locator('#ddLeCancel').click();
   // a plain 本地予定 without the checkbox creates no sale
   await page.locator(newButton(width)).click();await page.fill('#ddLeDate','2026-12-03');await page.fill('#ddLeTitle','打合せのみ');await page.locator('#ddLeSave').click();
-  assert.equal((await stored()).sales.length,2);
+  assert.equal((await stored()).sales.length,3);
   if(width===390)assert.ok(await page.evaluate(()=>{const d=document.getElementById('ddLocalEvent');return !d.open||d.scrollWidth<=d.clientWidth;}));
   assert.deepEqual(errors,[]);await page.close();
  }
@@ -84,6 +94,16 @@ async function create(page,width,{date,title,amount,method,customer}){
   assert.deepEqual([(await live('sales'))[0].amount,(await live('payments'))[0].amount,(await live('cashLedger'))[0].amount],[13200,13200,13200]);
   await edit.click();answers.push('取消試験');await page.locator('#ddLsVoid').click();await page.waitForFunction(()=>/取消済み/.test(document.getElementById('ddLeSaleStatus').textContent),null,{timeout:5000});
   assert.deepEqual([(await live('sales')).length,(await live('payments')).length,(await live('cashLedger')).length],[0,0,0]);
+  await page.locator('#ddLeCancel').click();
+  // 「＋ 売上登録」 in cloud: no free-standing sale; choose 請求書／領収書 (帳票) or 帳票なしで入金登録 (today's 本地予定 with 売上・入金 open)
+  const chooser=async()=>{await page.evaluate(()=>bizSwitchPage('sales'));await page.locator('#pageSales .biz-title button:visible:has-text("売上登録")').first().click();
+   assert.equal(await page.locator('#saleEntryChooser').isVisible(),true);return page.$$eval('#saleEntryChooser [data-sale-entry]',b=>b.map(x=>x.textContent));};
+  assert.deepEqual(await chooser(),['請求書を作成','領収書を作成','帳票なしで入金登録','閉じる']);
+  await page.locator('[data-sale-entry="invoice"]').click();assert.equal(await page.evaluate(()=>[document.getElementById('pageChohyo').classList.contains('active'),docType]).then(String),'true,invoice');
+  await chooser();await page.locator('[data-sale-entry="receipt"]').click();assert.equal(await page.evaluate(()=>[document.getElementById('pageChohyo').classList.contains('active'),docType]).then(String),'true,receipt');
+  await chooser();await page.locator('[data-sale-entry="event"]').click();
+  assert.equal(await page.locator('#ddLocalEvent').isVisible(),true);assert.equal(await page.inputValue('#ddLeDate'),'2026-12-05');assert.equal(await page.locator('#ddLeSaleOn').isChecked(),true);assert.equal(await page.locator('#ddLeSaleFields').isVisible(),true);
+  await page.locator('#ddLeCancel').click();assert.equal((await live('sales')).length,0,'the chooser itself writes nothing');
   assert.deepEqual(errors,[]);await page.close();
  }
  console.log('calendar sale browser tests passed');}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exit(1);});

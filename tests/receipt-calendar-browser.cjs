@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');;const {monthText,dayItem}=require('./calendar-month-ui.cjs');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{for(const formalType of ['receipt','invoice','onoda'])for(const width of [390,1280])for(const mode of ['new','legacy']){
  const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:'block'}),errors=[],remote=new Map(),posts=[],patches=[];let failCreate=false;page.on('pageerror',e=>errors.push(e.message));
@@ -38,7 +38,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.waitForFunction(()=>bizState.calendar.length===1&&bizState.sales.length===1&&bizState.payments.length===(testFormalType==='receipt'?1:0));
  await page.evaluate(()=>{document.getElementById('calendarMonth').value='2026-10';bizSwitchPage('calendar');TsukinowaBusinessUI.patchPending();});
  const status=formalType==='receipt'?'領収済':'請求済',amount=formalType==='receipt'?12000:72600,date=formalType==='receipt'?'2026-10-23':'2026-10-30';
- assert.match(await page.locator('#calendarRows').innerText(),new RegExp(status));assert.equal(posts.length,0);assert.equal(patches.length,0);
+ assert.match(await monthText(page),new RegExp(status));assert.equal(posts.length,0);assert.equal(patches.length,0);
  assert(await page.evaluate(()=>bizState.calendar[0].googleCreatePending));assert.equal(await page.evaluate(()=>bizOutstanding(bizState.sales[0])),formalType==='receipt'?0:72600);
  await page.evaluate(()=>openEventModal(bizState.calendar[0].id));assert.match(await page.locator('#bizEventModal').innerText(),new RegExp(status));
  assert.match(await page.locator('#eventSaleStatus').innerText(),formalType==='receipt'?/入金済/:/未収/);

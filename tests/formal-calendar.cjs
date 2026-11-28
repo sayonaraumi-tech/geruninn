@@ -19,6 +19,7 @@ for(const docType of ['invoice','onoda','receipt'])test(docType+' short calendar
  assert.equal(B.formalCalendarTitle(s,72600),expected);
  assert.equal(B.formalCalendarTitle({...s,items:[s.items[0]]},72600),expected);
  assert.match(B.formalCalendarTitle({...s,items:[{content:'CF/クッションフロア'}]},72600),/｜CF\/クッションフロア｜/);
+ assert.equal(B.formalCalendarTitle({...s,items:[{content:'\nカーペット張替\n2F 会議室 32㎡'}]},72600),expected,'first line of the first item');
  for(const field of ['summary','tadashi','content'])assert.equal(B.formalCalendarTitle({...s,items:[{content:'  '}],summary:'',tadashi:'',content:'',[field]:'カーペット張替 / 追加作業'},72600),expected);
  assert.match(B.formalCalendarTitle({docType,customerName:'顧客',items:[]},1),/｜.+｜¥1｜/);
  await save(h,s);const e=h.list('calendarLinks')[0],key='companies/tsukinowa/calendarLinks/'+e.id;

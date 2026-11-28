@@ -41,7 +41,7 @@ const formalContent=s=>s.docType==='receipt'?s.tadashi||summary(s):summary(s);
 const formalDate=s=>s.docType==='receipt'?s.invoiceDate||s.paymentDate:s.workDate||s.salesDate||s.invoiceDate;
 function formalCalendarTitle(s,amount){
  const short=value=>String(value||'').split(/\r?\n|\s*[／/｜|、,]\s*/).map(t=>t.trim()).find(Boolean)?.slice(0,120)||'';
- const content=String(s.items?.[0]?.content||'').trim().slice(0,120)||[s.summary,s.bizJobMemo,s.tadashi,s.content,formalContent(s)].map(short).find(Boolean)||'工事';
+ const content=String(s.items?.[0]?.content||'').split(/\r?\n/).map(t=>t.trim()).find(Boolean)?.slice(0,120)||[s.summary,s.bizJobMemo,s.tadashi,s.content,formalContent(s)].map(short).find(Boolean)||'工事';
  return [s.customerName,content,'¥'+amount.toLocaleString('ja-JP'),s.docType==='receipt'?'領収済':'請求済'].join('｜');
 }
 // Only the document currently owning the schedule's status may refresh its title.
@@ -158,6 +158,8 @@ function createService(client,{now=()=>new Date()}={}){
     if(!['edit','cancel'].includes(cmd.action))throw Error('操作を指定してください。');
     const reason=String(cmd.reason||'').trim();if(!reason)throw Error('修正・取消の理由を入力してください。');if(reason.length>500)throw Error('理由が長すぎます。');
     const id='calendar_cash_'+String(cmd.id||''),row=await read('sales',id);
+    // A repeated cancel (double click, or a retry after a slow answer) finds the sale already cancelled from this 日程: nothing to do.
+    if(cmd.action==='cancel'&&row&&row.payload.deletedAt&&row.payload.documentStatus==='cancelled'&&row.payload.calendarEventId===String(cmd.id)&&String(row.payload.deleteReason||'').startsWith('日程売上を取消'))return {saleId:id,cancelled:true,unchanged:true};
     if(!row||!A.live(row.payload))throw Error('日程から登録した売上が見つかりません。');
     const sale=row.payload,payId='pay_'+id;
     if(!['calendar-cash','calendar-manual'].includes(sale.sourceType)||sale.documentId||sale.calendarEventId!==String(cmd.id))throw Error('帳票に紐づく売上は保存帳票から訂正してください。');

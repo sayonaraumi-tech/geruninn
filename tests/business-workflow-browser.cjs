@@ -1,4 +1,5 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
+const openSavedActions=require('./saved-actions.cjs');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');;const {monthText,dayItem}=require('./calendar-month-ui.cjs');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{for(const width of [390,1280]){
  const page=await browser.newPage({viewport:{width,height:900},hasTouch:width===390,serviceWorkers:'block'}),errors=[],remote=new Map(),posts=[],patches=[];page.on('pageerror',e=>errors.push(e.message));
@@ -48,7 +49,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  await page.evaluate(()=>Promise.all([addPayment(),addPayment()]));await page.waitForFunction(id=>bizState.payments.some(p=>p.saleId===id),sale.id);
  assert.equal(await page.evaluate(id=>bizState.payments.filter(p=>p.saleId===id).length,sale.id),1);assert.equal(await page.evaluate(id=>bizState.payments.find(p=>p.saleId===id).confirmation,sale.id),'bank-confirmed');
  assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),600);
- assert.deepEqual(await page.evaluate(()=>['kpiPayments','kpiReceivable'].map(id=>Number(document.getElementById(id).textContent.replace(/[^0-9.-]/g,'')))),[metrics[0]+500,metrics[1]-500]);assert.match(await page.locator('#salesRows').innerText(),/500/);assert.match(await page.locator('#salesRows').innerText(),/600/);const savedCard=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);assert.match(await savedCard.innerText(),/累計入金額 500/);
+ assert.deepEqual(await page.evaluate(()=>['kpiPayments','kpiReceivable'].map(id=>Number(document.getElementById(id).textContent.replace(/[^0-9.-]/g,'')))),[metrics[0]+500,metrics[1]-500]);assert.match(await page.locator('#salesRows').innerText(),/500/);assert.match(await page.locator('#salesRows').innerText(),/600/);const savedCard=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);await openSavedActions(savedCard);assert.match(await savedCard.innerText(),/累計入金額 500/);
  // A later explicit real deposit with identical details must be a new payment.
  await page.locator('#paymentAmount').fill('500');await page.locator('#paymentMemo').fill('確認済');await page.evaluate(()=>addPayment());
  assert.equal(await page.evaluate(id=>bizState.payments.filter(p=>p.saleId===id).length,sale.id),2);
@@ -56,7 +57,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  // Saved-document balance dialog uses the same registration path.
  await page.evaluate(id=>openInvoiceBalance(id,'payment'),sale.documentId);if(process.env.PREVIEW_DIR)await page.locator('#invoiceBalanceDialog').screenshot({path:path.join(process.env.PREVIEW_DIR,`saved-payment-${width}.png`)});await page.locator('#paymentType').selectOption('銀行振込');await page.locator('#paymentAmount').fill('100');await page.locator('#paymentDate').fill('2026-10-09');await page.locator('#paymentSubmit').click();await page.waitForFunction(()=>document.getElementById('balanceSaveStatus').textContent==='入金を保存しました。');
  await page.waitForFunction(id=>bizOutstanding(bizState.sales.find(s=>s.id===id))===0,sale.id);
- assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),0);assert.equal(await page.locator('#invoiceBalanceDialog #paymentRegistrationForm').count(),0);await page.locator('#balanceClose').click();await page.evaluate(()=>bizSwitchPage('savedDocs'));const card=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);assert.equal(await card.getByRole('button',{name:'入金登録',exact:true}).count(),0);assert.equal(await card.getByRole('button',{name:'入金履歴',exact:true}).count(),1);if(process.env.PREVIEW_DIR)await card.screenshot({path:path.join(process.env.PREVIEW_DIR,`paid-document-${width}.png`)});assert.equal(await page.locator(`button[onclick="selectSaleForPayment('${sale.id}')"]`).count(),0);
+ assert.equal(await page.evaluate(id=>bizOutstanding(bizState.sales.find(s=>s.id===id)),sale.id),0);assert.equal(await page.locator('#invoiceBalanceDialog #paymentRegistrationForm').count(),0);await page.locator('#balanceClose').click();await page.evaluate(()=>bizSwitchPage('savedDocs'));const card=page.locator(`#allSavedDocsList [data-document-id="${sale.documentId}"]`);await openSavedActions(card);assert.equal(await card.getByRole('button',{name:'入金登録',exact:true}).count(),0);assert.equal(await card.getByRole('button',{name:'入金履歴',exact:true}).count(),1);if(process.env.PREVIEW_DIR)await card.screenshot({path:path.join(process.env.PREVIEW_DIR,`paid-document-${width}.png`)});assert.equal(await page.locator(`button[onclick="selectSaleForPayment('${sale.id}')"]`).count(),0);
  assert.deepEqual(await page.evaluate(()=>({docs:JSON.stringify([...testRecords].filter(([p])=>(/\/documents\//.test(p)||/\/operations\/documentNumber_/.test(p)))),pdf:pdfSaves})),beforePayment);
  const estimate=await page.evaluate(()=>bizState.estimates[0]);
  await page.evaluate(id=>bizAcceptEstimate(id),estimate.id);await page.waitForFunction(()=>bizState.calendar.length===4);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).date),'2026-10-20');assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googlePatchPending),true);assert.equal(await page.evaluate(()=>bizState.calendar.find(e=>e.linkedEstimateId).googleCreatePending),true);
@@ -177,11 +178,12 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   return cases.map(event=>bizCalendarReviewReason(event,documents));
  }),['取消','重複','訂正済','','帳票状態を要確認','帳票状態を要確認','Google日程取消','']);
  const formalEventId=await page.evaluate(()=>window.formalEventId);
- const calendarRow=page.locator('#calendarRows tr').filter({has:page.locator(`button[onclick*="${formalEventId}"]`)});
- assert.equal(await calendarRow.count(),0);
+ assert.equal(await page.locator(`#ddCalendar [data-dd-event="${formalEventId}"]`).count(),0,'要確認 event hidden by default');
  await page.locator('#calendarReview').check();
- assert.match(await calendarRow.innerText(),/無効/);
- await calendarRow.getByRole('button',{name:'開く'}).click();
+ const calendarRow=await dayItem(page,formalEventId);
+ assert.equal(await calendarRow.count(),1,'要確認 event reachable from the day list');
+ await calendarRow.locator('[data-dd-open]').click();
+ assert.match(await page.locator('#eventModalBody').innerText(),/無効/);
  assert.equal(await page.locator('[data-calendar-document]').first().isDisabled(),true);
  assert.equal(await page.locator('#eventSaleButton').isVisible(),false);
  await page.evaluate(()=>closeEventModal());

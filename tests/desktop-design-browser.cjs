@@ -4,7 +4,7 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
 const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 const routes=['dashboard','calendar','estimates','chohyo','savedDocs','sales','expenses','bank','settings'];
-const seed=()=>{localStorage.setItem('tsukinowa_business_v1',JSON.stringify({calendar:[{id:'c1',date:'2026-11-12',title:'山田様 クロス張替え',start:{date:'2026-11-12'},googleEventId:'c1'}],sales:[{id:'s1',saleDate:'2026-11-12',salesDate:'2026-11-12',amount:54800,customer:'山田様'}],payments:[],expenses:[{id:'x1',expenseDate:'2026-11-10',date:'2026-11-10',amount:24200,category:'材料仕入'}],bank:[{id:'b1',key:'b1',date:'2026-11-05',desc:'ヤマダ サマ',incoming:54800,outgoing:0,matched:false},{id:'b2',key:'b2',date:'2026-10-30',desc:'カード引落',incoming:0,outgoing:24200,matched:true}],audit:[],estimates:[{id:'e1',date:'2026-11-03',customer:'田中様',amount:77000,status:'見積済',content:'クロス張替'},{id:'e2',date:'2025-09-20',customer:'佐藤様',amount:10000,status:'受注',content:'穴補修'}],projects:[]}));
+const seed=()=>{localStorage.setItem('tsukinowa_business_v1',JSON.stringify({calendar:[{id:'c1',date:'2026-11-12',title:'山田様 クロス張替え',start:{date:'2026-11-12'},googleEventId:'c1'}],sales:[{id:'s1',saleDate:'2026-11-12',salesDate:'2026-11-12',amount:54800,customer:'山田様'}],payments:[],expenses:[{id:'x1',expenseDate:'2026-11-10',date:'2026-11-10',amount:24200,category:'材料仕入',paymentMethod:'法人カード決済'}],bank:[{id:'b1',key:'b1',date:'2026-11-05',desc:'ヤマダ サマ',incoming:54800,outgoing:0,matched:false},{id:'b2',key:'b2',date:'2026-10-30',desc:'カード引落',incoming:0,outgoing:24200,matched:true}],audit:[],estimates:[{id:'e1',date:'2026-11-03',customer:'田中様',amount:77000,status:'見積済',content:'クロス張替'},{id:'e2',date:'2025-09-20',customer:'佐藤様',amount:10000,status:'受注',content:'穴補修'}],projects:[]}));
  localStorage.setItem('tsukinowa_chohyo_confirmed_history_v1',JSON.stringify([{historyId:'h1',docType:'invoice',customerName:'山田様',invoiceNo:'20261112-001',invoiceDate:'2026-11-12',items:[{content:'クロス張替',qty:1,price:49818}],travelFee:0,savedAt:'2026-11-12T03:00:00.000Z'},{historyId:'h2',docType:'receipt',customerName:'佐藤様',invoiceNo:'R-1',invoiceDate:'2025-10-01',receiptTotal:11000,savedAt:'2025-10-01T03:00:00.000Z'}]));localStorage.setItem('tsukinowa_preserved','yes');};
 // The theme key and the editor's existing last-tab/scroll UI keys are not business data.
 const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localStorage).filter(k=>k!=='tsukinowa_ui_theme'&&!/_v1_(lastTab|scrollY)$/.test(k)).sort().map(k=>[k,localStorage.getItem(k)])));
@@ -54,6 +54,9 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     assert.equal(await page.locator('#ddHomeAnalytics [data-dd-balance="difference"]').innerText(),(await page.locator('#kpiDifference').innerText())+' 円','primary = 確認済み入金 − 支出');
     assert.equal(await page.locator('#ddHomeAnalytics [data-dd-balance="reference"]').innerText(),'30,600 円');assert.match(await page.locator('#ddHomeAnalytics .balance-primary').innerText(),/参考：売上 − 支出（未回収を含む）/);
     assert.match(await page.locator('#ddRecentSales').innerText(),/山田様[\s\S]*54,800/,'recent sales from the existing register');
+    assert.deepEqual(await page.locator('#ddRecentSales thead th').allTextContents(),['日付','取引先','工事内容','金額','支払方法','状態','操作'],'design 最近の売上 columns');
+    assert.equal(await page.locator('#ddRecentSales tbody tr').first().locator('td').count(),7);
+    assert.deepEqual(await page.evaluate(()=>['ok','warn'].map(c=>{const b=document.createElement('span');b.className='biz-badge '+c;document.querySelector('#pageDashboard').append(b);const s=getComputedStyle(b);const r=[s.backgroundColor,s.color];b.remove();return r;})),[['rgb(230, 244, 236)','rgb(22, 118, 75)'],['rgb(255, 242, 223)','rgb(148, 91, 18)']],'design 状態 badge colours');
     assert.deepEqual(await page.getByRole('heading',{level:1}).evaluateAll(xs=>xs.filter(x=>x.getClientRects().length).map(x=>x.innerText)),['ホーム'],'design page heading in markup');
     // Calendar grid shows the same rows as the list and opens the existing event dialog.
     await page.evaluate(()=>bizSwitchPage('calendar'));
@@ -78,30 +81,51 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     await page.evaluate(()=>{const c=document.getElementById('customerName');c.value='';c.dispatchEvent(new Event('input',{bubbles:true}));});
     // 見積履歴 filters: client-side over the existing rows.
     await page.evaluate(()=>{bizSwitchPage('estimates');estimateShowIssued.checked=true;renderEstimates();});
-    const estRows=()=>page.locator('#estimateRows tr:not([hidden])').count();assert.equal(await estRows(),2);
+    const estRows=()=>page.locator('#estimateList tr[data-estimate-row]').count();assert.equal(await estRows(),2);
     await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('2026');assert.equal(await estRows(),1);assert.match(await page.locator('#ddEstimateFilters').innerText(),/表示 1 件 ／ 見積書 2 件/);
-    await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('all');await page.locator('#ddEstimateFilters select[data-ddf="state"]').selectOption('受注');assert.equal(await estRows(),1);assert.match(await page.locator('#estimateRows tr:not([hidden])').innerText(),/佐藤様/);
+    await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('all');await page.locator('#ddEstimateFilters select[data-ddf="state"]').selectOption('受注');assert.equal(await estRows(),1);assert.match(await page.locator('#estimateList tr[data-estimate-row]').innerText(),/佐藤様/);
     await page.locator('#ddEstimateFilters select[data-ddf="month"]').selectOption('11');assert.equal(await estRows(),0);
+    assert.match(await page.locator('#estimateGroups .dd-empty').innerText(),/該当する見積書はありません/);
     await page.locator('#ddEstimateFilters [data-ddf-reset]').click();assert.equal(await estRows(),2);
+    // 霧藍 design structure: one filter panel holding the selects, the search and the count; month panels with a title bar.
+    assert.equal(await page.locator('#ddEstimateFilters #estimateSearch').isVisible(),true);assert.equal(await page.locator('#ddEstimateFilters select[data-ddf]').count(),3);
+    for(const t of await page.locator('#estimateGroups .dd-month-group>h3').evaluateAll(hs=>hs.map(h=>h.textContent)))assert.match(t,/^\d{4}年\d{1,2}月 \d+件$/);
+    assert.deepEqual(await page.locator('#estimateGroups thead').first().locator('th').allInnerTexts(),['見積日 ▼','顧客','項目分類 / 内容摘要','金額','状態','日程','操作']);
+    assert.equal(await page.locator('#pageEstimates>.biz-section .biz-table-wrap').first().isVisible(),false,'the mobile table is not shown on desktop');
     // 保存帳票 filters.
-    await page.evaluate(()=>bizSwitchPage('savedDocs'));const savedRows=()=>page.locator('#allSavedDocsList>div:not([hidden])').count();assert.equal(await savedRows(),2);
-    await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('receipt');assert.equal(await savedRows(),1);assert.match(await page.locator('#allSavedDocsList>div:not([hidden])').innerText(),/佐藤様/);
+    await page.evaluate(()=>bizSwitchPage('savedDocs'));const savedRows=()=>page.locator('#allSavedDocsList [data-saved-row]').count();assert.equal(await savedRows(),2);
+    await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('receipt');assert.equal(await savedRows(),1);assert.match(await page.locator('#allSavedDocsList [data-saved-row]').innerText(),/佐藤様/);
     await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('all');await page.locator('#ddSavedFilters select[data-ddf="fy"]').selectOption('2026');assert.equal(await savedRows(),1);
     await page.locator('#ddSavedFilters [data-ddf-reset]').click();assert.equal(await savedRows(),2);
+    // 霧藍 design: month panels, 状態 badge, row actions in the 操作▾ menu (closed until clicked, one open at a time).
+    assert.equal(await page.locator('#ddSavedFilters #savedDocSearch').isVisible(),true);
+    assert.match(await page.locator('#allSavedDocsList .dd-month-group>h3').first().textContent(),/^\d{4}年\d{1,2}月　\d+件$/);
+    assert.deepEqual(await page.locator('#allSavedDocsList thead').first().locator('th').allInnerTexts(),['発行日','書類','取引先','番号','金額','状態','操作']);
+    assert.deepEqual(await page.locator('#allSavedDocsList [data-saved-row] .biz-badge').allInnerTexts(),['発行済・ロック','発行済・ロック']);
+    assert.equal(await page.locator('#allSavedDocsList').getByRole('button',{name:'開く',exact:true}).count(),0);
+    const menus=page.locator('#allSavedDocsList details.action-menu>summary');assert.deepEqual(await menus.allInnerTexts(),['操作 ▾','操作 ▾']);
+    await menus.first().click();assert.equal(await page.locator('#allSavedDocsList').getByRole('button',{name:'開く',exact:true}).count(),1);assert.equal(await page.locator('#allSavedDocsList').getByRole('button',{name:'再ダウンロード',exact:true}).count(),1);
+    await menus.nth(1).click();assert.equal(await page.locator('#allSavedDocsList details.action-menu[open]').count(),1);
+    await page.locator('#ddSavedFilters').click({position:{x:5,y:5}});assert.equal(await page.locator('#allSavedDocsList details.action-menu[open]').count(),0);
     // 売上・入金: one manual-sale entry point and metric cards from the rendered register.
     await page.evaluate(()=>bizSwitchPage('sales'));
     assert.equal(await page.locator('#pageSales .biz-title button',{hasText:'手動売上'}).isVisible(),false);assert.equal(await page.locator('#pageSales .biz-title button:visible',{hasText:'売上登録'}).count(),1);
     assert.deepEqual(await page.locator('#ddSalesMetrics [data-dd-metric]').allInnerTexts(),['54,800','0','54,800']);
     // 支出・現金: metric cards and the CSV button opens the existing 支出CSV取込 file input.
-    await page.evaluate(()=>bizSwitchPage('expenses'));assert.equal(await page.locator('#ddExpenseMetrics [data-dd-metric="total"]').innerText(),'24,200');
+    // panel title bar: 46px, 13px padding, border-bottom (design .panel h3)
+    const titleBar=await page.locator('#paymentRegistrationForm>.biz-section-head').evaluate(h=>{const c=getComputedStyle(h);return [Math.round(h.getBoundingClientRect().height),c.paddingLeft,c.borderBottomWidth,c.fontSize];});
+    assert.deepEqual(titleBar,[46,'13px','1px','13px']);
+    await page.evaluate(()=>bizSwitchPage('expenses'));assert.deepEqual(await page.locator('#ddExpenseMetrics [data-dd-metric]').evaluateAll(xs=>xs.map(x=>x.dataset.ddMetric+'='+x.innerText)),['cash=0','card=24,200','advance=0']);
+    assert(await page.evaluate(()=>{const top=e=>e.getBoundingClientRect().top;return top(document.querySelector('#pageExpenses .expense-ledger'))<top(document.getElementById('expDate'));}),'支出一覧 comes right after the KPI cards');
     const [chooser]=await Promise.all([page.waitForEvent('filechooser'),page.locator('#pageExpenses .biz-title button',{hasText:'CSVインポート'}).click()]);assert.equal(await chooser.element().evaluate(e=>e.id),'expenseFile');
     // 銀行照合: counts and 月別未照合明細 from the existing bank rows.
     await page.evaluate(()=>bizSwitchPage('bank'));assert.deepEqual(await page.locator('#ddBankMetrics [data-dd-metric]').allInnerTexts(),['2 件','1 件','1 件']);
     assert.match(await page.locator('#ddBankMonthly').innerText(),/2026-11　1 件[\s\S]*ヤマダ サマ/);assert.doesNotMatch(await page.locator('#ddBankMonthly').innerText(),/カード引落/);
+    assert(await page.evaluate(()=>{const a=document.querySelector('#pageBank .bank-transactions').getBoundingClientRect(),b=document.getElementById('ddBankMonthly').getBoundingClientRect();return Math.abs(a.top-b.top)<1&&a.right<b.left;}),'銀行取引 | 月別未照合明細 side by side');
     await page.locator('#ddBankMonthly [data-dd-bank="b1"]').click();
     // 設定: design heading and read-only company info from the 帳票 template.
     await page.evaluate(()=>bizSwitchPage('settings'));assert.deepEqual(await page.getByRole('heading',{level:1}).evaluateAll(xs=>xs.filter(x=>x.getClientRects().length).map(x=>x.innerText)),['設定']);
-    const info=await page.locator('#ddCompanyInfo').innerText();for(const v of ['月輪合同会社','T7040003023888','10月1日〜翌年9月30日','読み取り専用'])assert(info.includes(v),v);assert.equal(await page.locator('#ddCompanyInfo input').count(),0,'company info is not editable');
+    const info=await page.locator('#ddCompanyInfo').evaluate(e=>e.innerText+' '+[...e.querySelectorAll('input')].map(i=>i.value).join(' '));for(const v of ['月輪合同会社','T7040003023888','10月1日〜翌年9月30日','読み取り専用'])assert(info.includes(v),v);assert(await page.locator('#ddCompanyInfo input').count()>=7);assert(await page.locator('#ddCompanyInfo input').evaluateAll(xs=>xs.every(x=>x.readOnly)),'company info is not editable');
    }
    assert.equal(await businessStorage(page),before,width+'px leaves business data untouched');
    assert.deepEqual(errors,[]);

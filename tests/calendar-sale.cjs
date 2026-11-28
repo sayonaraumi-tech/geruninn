@@ -29,7 +29,11 @@ test('現金: 売上 + 入金 + 現金出納 at once, idempotent; admin edit kee
  await h.exec({type:'calendarSaleChange',id,action:'cancel',reason:'二重登録'});
  assert.deepEqual(month(h),{count:0,sales:0,paid:0,outstanding:0});assert.equal(live(h.list('payments')).length,0);assert.equal(live(h.list('cashLedger')).length,0);assert.equal(h.list('sales').length,1,'kept as a voided record');
  assert.equal(h.list('calendarLinks')[0].saleId,'');assert.equal(h.list('calendarLinks')[0].cancelledSaleId,r.saleId);
- await assert.rejects(h.exec({type:'calendarSaleChange',id,action:'cancel',reason:'again'}),/見つかりません/);
+ // A repeated cancel is a no-op (no new writes), so a double click or a retried outbox entry cannot block the outbox.
+ const writes=JSON.stringify([h.list('sales'),h.list('payments'),h.list('calendarLinks')]);
+ assert.equal((await h.exec({type:'calendarSaleChange',id,action:'cancel',reason:'again'})).unchanged,true);
+ assert.equal(JSON.stringify([h.list('sales'),h.list('payments'),h.list('calendarLinks')]),writes);
+ await assert.rejects(h.exec({type:'calendarSaleChange',id,action:'edit',reason:'x',sale:sale()}),/見つかりません/,'editing a cancelled sale is still refused');
 });
 test('銀行振込: 売上 only; 入金 later; method change 現金⇄銀行振込 by admin; attached 入金 blocks edit',async()=>{
  const h=await harness(),id=await event(h);

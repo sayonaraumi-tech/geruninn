@@ -138,3 +138,30 @@ test('separate transient snapshot cache never persists server records to outbox 
  assert([...local.keys()].some(k=>k.endsWith('_outbox')));
  sync.stop();
 });
+test('a refused 日程 command holds only its own event; a refused financial command lets only 本地予定 pass',async()=>{
+ const values=new Map(),attempts=[];let online=false;const refuse=new Set(['cancel-a','pay-bad']);
+ const client={getState:()=>({role:'admin',projectId:'demo',companyId:'test',user:{uid:'test'}}),listRecords:async()=>[],transact:async id=>{attempts.push(id);if(refuse.has(id))throw Error('日程から登録した売上が見つかりません。');return {id};}};
+ const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},sync=createSync({client,storage,online:()=>online});
+ sync.enqueue({type:'calendarSaleChange',operationId:'cancel-a',id:'cal_a',action:'edit',reason:'x'});
+ sync.enqueue({type:'calendarLocal',operationId:'delete-a',action:'delete',event:{id:'cal_a'}});
+ sync.enqueue({type:'calendarLocal',operationId:'save-b',action:'save',event:{id:'cal_b',date:'2026-11-10',title:'小野田'}});
+ sync.enqueue({type:'archiveDocument',operationId:'archive',documentId:'doc_x',expectedRevision:2});
+ online=true;await sync.flush();
+ assert.deepEqual(attempts,['cancel-a','save-b','archive']);
+ assert.deepEqual(sync.getQueue().map(x=>[x.command.operationId,!!x.blocked]),[['cancel-a',true],['delete-a',false]]);
+ assert.equal(sync.heldBy('delete-a').command.operationId,'cancel-a');assert.equal(sync.holderFor({type:'archiveDocument'}),null);
+ // A refused financial command holds later financial commands but not plain schedules of other events.
+ sync.enqueue({type:'payment',operationId:'pay-bad',saleId:'s1',amount:1});sync.enqueue({type:'archiveDocument',operationId:'archive2',documentId:'doc_y'});sync.enqueue({type:'calendarLocal',operationId:'save-c',action:'save',event:{id:'cal_c',date:'2026-11-10',title:'予定'}});
+ await sync.flush();
+ assert.deepEqual(attempts.slice(3),['pay-bad','save-c']);assert.equal(sync.heldBy('archive2').command.operationId,'pay-bad');
+ // Cleanup: keep the refused 日程 command as a conflict on the device; the held delete of the same event is then sent.
+ const key=sync.archiveBlocked();assert.equal(JSON.parse(values.get(key)).command.operationId,'cancel-a');await sync.flush();
+ assert.deepEqual(attempts.slice(5),['delete-a']);assert.deepEqual(sync.getQueue().map(x=>x.command.operationId),['pay-bad','archive2']);
+});
+test('a repeated 日程売上 cancel refused by an older version is retried once on start',async()=>{
+ const prefix='tsukinowa_cloud_v2_demo_test_test_',values=new Map(),attempts=[];
+ values.set(prefix+'outbox',JSON.stringify([{command:{type:'calendarSaleChange',operationId:'again',id:'cal_a',action:'cancel',reason:'x'},createdAt:'2026-11-28',blocked:true,error:'日程から登録した売上が見つかりません。'},{command:{type:'calendarSaleChange',operationId:'edit',id:'cal_b',action:'edit',reason:'x'},createdAt:'2026-11-28',blocked:true,error:'日程から登録した売上が見つかりません。'}]));
+ const client={getState:()=>({role:'admin',projectId:'demo',companyId:'test',user:{uid:'test'}}),listRecords:async()=>[],transact:async id=>{attempts.push(id);return {unchanged:true};}};
+ const storage={getItem:k=>values.get(k)||null,setItem:(k,v)=>values.set(k,v)},sync=createSync({client,storage,online:()=>true});
+ await sync.flush();assert.deepEqual(attempts,['again']);assert.deepEqual(sync.getQueue().map(x=>[x.command.operationId,x.blocked]),[['edit',true]],'only the cancel is retried');
+});

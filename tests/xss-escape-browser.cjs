@@ -15,7 +15,7 @@ const business={estimates:[{id:evil,date:'2026-12-01',customer:'試験客',conte
   await page.goto('http://127.0.0.1:'+server.address().port);
   const calls=await page.evaluate(()=>{const seen=[];for(const n of ['openEventModal','deleteExpense','bizEstimateFromHistory','bizAcceptEstimate','requestEstimateInvoice'])window[n]=(...a)=>seen.push([n,a[0]]);window.__seen=seen;
    bizSwitchPage('calendar');renderCalendarEvents();bizSwitchPage('expenses');renderExpenses();bizSwitchPage('estimates');renderEstimates();renderPaymentSaleOptions();
-   const handlers=[...document.querySelectorAll('#calendarRows [onclick],#expenseRows [onclick],#estimateRows [onclick]')].filter(b=>/openEventModal|deleteExpense|bizEstimateFromHistory|bizAcceptEstimate|requestEstimateInvoice/.test(b.getAttribute('onclick')));
+   const handlers=[...document.querySelectorAll('#calendarRows [onclick],#expenseRows [onclick],#estimateList [onclick]')].filter(b=>/openEventModal|deleteExpense|bizEstimateFromHistory|bizAcceptEstimate|requestEstimateInvoice/.test(b.getAttribute('onclick')));
    handlers.forEach(b=>b.click());return {n:handlers.length,seen,option:[...document.querySelectorAll('#paymentSale option')].map(o=>o.value)};});
   assert.ok(calls.n>=4,'handlers rendered: '+calls.n);
   for(const [name,arg] of calls.seen)assert.equal(arg,evil,name+' receives the original ID as data');
