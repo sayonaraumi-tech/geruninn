@@ -72,6 +72,19 @@ test('calendar manual sales are admin-only, cash mirrors atomically and bank sta
  }
  assert.equal((await admin.listRecords('sales')).length,2);assert.equal((await admin.listRecords('cashLedger')).length,1);assert.equal((await admin.listRecords('documents')).length,2);
 });
+test('日程売上 from a 本地 event: admin edit/cancel under real rules, staff denied, cash ledger follows',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ const {id}=await exec(a,{type:'calendarLocal',action:'save',event:{date:'2026-12-03',title:'試験 現地作業'}}),v={salesDate:'2026-12-03',customer:'試験客',content:'穴補修',amount:11000,paymentMethod:'現金'};
+ await exec(a,{type:'registerCalendarSale',id,sale:v});
+ await assert.rejects(exec(s,{type:'calendarSaleChange',id,action:'cancel',reason:'x'}),/管理者/);
+ await exec(a,{type:'calendarSaleChange',id,action:'edit',reason:'金額訂正',sale:{...v,amount:13200}});
+ const live=async n=>(await admin.listRecords(n)).filter(r=>!r.payload.deletedAt);
+ assert.deepEqual((await live('sales')).map(r=>r.payload.amount),[13200]);assert.deepEqual((await live('payments')).map(r=>r.payload.amount),[13200]);assert.deepEqual((await live('cashLedger')).map(r=>r.payload.amount),[13200]);
+ await exec(a,{type:'calendarSaleChange',id,action:'edit',reason:'振込に訂正',sale:{...v,amount:13200,paymentMethod:'銀行振込'}});
+ assert.equal((await live('payments')).length,0);assert.equal((await live('cashLedger')).length,0);assert.equal((await live('sales'))[0].payload.paymentMethod,'銀行振込');
+ await exec(a,{type:'calendarSaleChange',id,action:'cancel',reason:'取消試験'});
+ assert.equal((await live('sales')).length,0);assert.equal((await admin.listRecords('sales')).length,1);
+});
 test('platform channel and optional detail persist under unchanged admin/staff payment rules',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
  await exec(s,{type:'saveDocument',snapshot:snapshot('platform-rules'),expectedRevision:0});
