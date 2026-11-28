@@ -1203,6 +1203,8 @@ body.dd .dd-src{display:inline-block;font-size:10px;font-weight:700;line-height:
 body.dd .dd-src.src-local{background:#e8f4ec;color:#1f7a3d}
 body.dd .dd-src.src-google{background:#e8effc;color:#2456b8}
 body.dd .dd-src.src-ics{background:#f2eee6;color:#7a5a1f}
+body.dd .dd-src.src-system{background:#f1ebfa;color:#5b3a99}
+body.dd .dd-cal .calEvent.src-system{border-left:3px solid #7b57c2}
 body.dd .dd-cal .calEvent.src-local{color:#1f7a3d;background:#e8f4ec;border-left:3px solid #2e9b55}
 body.dd .dd-cal .calEvent.src-google{border-left:3px solid #4a7fe0}
 body.dd .dd-day-actions{display:flex;gap:6px;flex:none}
@@ -1227,7 +1229,7 @@ body.dd small.register-note.dd-only{display:block!important}
 @media screen and (max-width:800px){
 #ddCalendar .dd-m-legend{display:flex;gap:6px;margin:0 0 8px}
 #ddCalendar .dd-src,#ddLocalEvent .dd-src{display:inline-block;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:999px;margin-right:6px;vertical-align:1px}
-#ddCalendar .src-local{background:#e8f4ec;color:#1f7a3d}#ddCalendar .src-google{background:#e8effc;color:#2456b8}#ddCalendar .src-ics{background:#f2eee6;color:#7a5a1f}
+#ddCalendar .src-local{background:#e8f4ec;color:#1f7a3d}#ddCalendar .src-google{background:#e8effc;color:#2456b8}#ddCalendar .src-ics{background:#f2eee6;color:#7a5a1f}#ddCalendar .src-system{background:#f1ebfa;color:#5b3a99}
 #ddCalendar .dd-cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:2px}
 #ddCalendar .dd-cal .dow{text-align:center;font-size:11px;font-weight:700;color:#777;padding:2px 0}
 #ddCalendar .dd-cal .dow.sun{color:#c0392b}#ddCalendar .dd-cal .dow.sat{color:#2456b8}
@@ -1236,7 +1238,7 @@ body.dd small.register-note.dd-only{display:block!important}
 #ddCalendar .dd-cal button.active{outline:2px solid #222;background:#f6f6f6}
 #ddCalendar .calDots{display:flex;gap:2px;align-items:center;height:7px}
 #ddCalendar .calDot{display:block;width:6px;height:6px;border-radius:50%}
-#ddCalendar .calDot.src-local{background:#2e9b55}#ddCalendar .calDot.src-google{background:#4a7fe0}#ddCalendar .calDot.src-ics{background:#a7843f}
+#ddCalendar .calDot.src-local{background:#2e9b55}#ddCalendar .calDot.src-google{background:#4a7fe0}#ddCalendar .calDot.src-ics{background:#a7843f}#ddCalendar .calDot.src-system{background:#7b57c2}
 #ddCalendar .calDots small{font-size:9px;color:#777}
 #ddCalendar .dd-m-day{font-size:14px;margin:14px 0 4px}
 #ddCalendar .dd-day-list{display:grid}
@@ -3754,8 +3756,10 @@ function bizCalendarVisibleRows(documents=bizCalendarDocumentStates()){
 }
 // ---- 本地日程: the system calendar works on its own; Google is an optional mirror ----
 // Source labels: 本地 = created in this system, Google = synced from Google, 取込 = ICS import.
-function bizCalendarSource(e){return e?.source==='local'?'local':e?.googleEventId?'google':'ics';}
-function bizCalendarSourceLabel(e){return {local:'本地',google:'Google',ics:'取込'}[bizCalendarSource(e)];}
+// 帳票・受注 = created by the system from a 受注 (見積) or a formal 請求書 / 領収書; it is changed through that record
+// (施工日 / 保存帳票), stays in calendarLinks without Google, and is never copied to a 本地 event.
+function bizCalendarSource(e){return e?.source==='local'?'local':e&&(e.linkedEstimateId||e.linkedInvoiceId||e.linkedReceiptId||e.projectId||e.documentId)?'system':e?.googleEventId?'google':'ics';}
+function bizCalendarSourceLabel(e){return {local:'本地',system:'帳票・受注',google:'Google',ics:'取込'}[bizCalendarSource(e)];}
 function bizNewGoogleEventId(){return 'tl'+Array.from(crypto.getRandomValues(new Uint8Array(15)),b=>(b%32).toString(32)).join('');}
 // HH:MM in Japan time for a stored start/end (cloud-core stores date-times as UTC ISO strings).
 function bizJstTime(v){const t=String(v||'');if(t.length<=10)return '';const d=new Date(t);return Number.isFinite(d.getTime())?d.toLocaleTimeString('sv-SE',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'}):'';}
@@ -3792,7 +3796,7 @@ async function bizDeleteLocalEvent(id){
 // Google events stay as read-only records. A 本地 copy is a NEW record (copyOf); the original is never changed.
 function bizLocalCopyOf(id){return bizState.calendar.find(x=>!x.deletedAt&&x.source==='local'&&x.copyOf===id);}
 async function bizCopyGoogleEventsToLocal(ids){
-  let n=0;for(const id of ids){const g=bizState.calendar.find(x=>x.id===id);if(!g||g.deletedAt||bizCalendarSource(g)==='local'||bizLocalCopyOf(id))continue;
+  let n=0;for(const id of ids){const g=bizState.calendar.find(x=>x.id===id);if(!g||g.deletedAt||!['google','ics'].includes(bizCalendarSource(g))||bizLocalCopyOf(id))continue;
     await bizSaveLocalEvent({date:g.date,title:g.title,startTime:bizJstTime(g.start),endTime:bizJstTime(g.end),description:g.description||'',location:g.location||'',copyOf:g.id});n++;}
   return n;
 }
@@ -3937,15 +3941,15 @@ function renderCalendarGrid(){
   const chips=list=>wide?list.slice(0,2).map(e=>'<span class="calEvent src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'">'+esc(e.title)+'</span>').join('')+(list.length>2?'<span class="calMore">他 '+(list.length-2)+' 件</span>':''):'<span class="calDots">'+list.slice(0,3).map(e=>'<i class="calDot src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'"></i>').join('')+(list.length>3?'<small>+'+(list.length-3)+'</small>':'')+'</span>';
   let cells=['日','月','火','水','木','金','土'].map((d,i)=>'<div class="dow'+(i===0?' sun':i===6?' sat':'')+'">'+d+'</div>').join('')+'<span></span>'.repeat(first);
   for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" aria-label="'+k+' 予定'+list.length+'件" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+chips(list)+'</button>';}
-  const dayRows=byDay.get(calDay)||[],dayList='<div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button><button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。「＋ 本地予定」で登録するか、Google日程を同期すると表示されます。</p>')+'</div>';
+  const dayRows=byDay.get(calDay)||[],dayList='<div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(src==='system'?' ・見積・帳票から自動（変更は見積履歴・保存帳票）':!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':(src==='system'?'':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button>')+'<button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。「＋ 本地予定」で登録するか、Google日程を同期すると表示されます。</p>')+'</div>';
   box.innerHTML=wide
    ?'<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad">'+dayList+'</div></section>'+googlePanel(rows)
-   :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定</h3>'+dayList+'</div>';
+   :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-system">帳票・受注</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定</h3>'+dayList+'</div>';
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
  }
  const srcOf=e=>bizCalendarSource(e),srcLabel=e=>bizCalendarSourceLabel(e);
- function googlePanel(rows){const g=rows.filter(e=>srcOf(e)!=='local'),l=rows.filter(e=>srcOf(e)==='local');
-  return '<section class="dd-panel" id="ddCalendarSources"><h3>日程の保存先</h3><div class="dd-pad"><p class="dd-src-summary"><span class="dd-src src-local">本地</span> '+l.length+'件 <span class="dd-src src-google">Google</span> '+g.length+'件（表示中の月）</p><p class="biz-muted" style="font-size:11px">本地日程はこのシステムに保存され、Google連携がなくても登録・編集・削除できます。Google日程は同期した記録として残り、ここでは読み取り専用です。将来Google連携を外しても日程は消えません。必要なものは「本地にコピー」で編集できる本地日程になります（元の記録は変更しません）。</p>'+(g.length?'<button type="button" class="biz-btn" data-dd-copy-month>この月のGoogle日程を本地にコピー（'+g.length+'件）</button>':'')+'</div></section>';}
+ function googlePanel(rows){const g=rows.filter(e=>['google','ics'].includes(srcOf(e))),l=rows.filter(e=>srcOf(e)==='local'),sys=rows.filter(e=>srcOf(e)==='system');
+  return '<section class="dd-panel" id="ddCalendarSources"><h3>日程の保存先</h3><div class="dd-pad"><p class="dd-src-summary"><span class="dd-src src-local">本地</span> '+l.length+'件 <span class="dd-src src-system">帳票・受注</span> '+sys.length+'件 <span class="dd-src src-google">Google</span> '+g.length+'件（表示中の月）</p><p class="biz-muted" style="font-size:11px">本地日程はこのシステムに保存され、Google連携がなくても登録・編集・削除できます。Google日程は同期した記録として残り、ここでは読み取り専用です。将来Google連携を外しても日程は消えません。必要なものは「本地にコピー」で編集できる本地日程になります（元の記録は変更しません）。帳票・受注の日程は受注の施工日・保存帳票から自動で作成・更新され、Google連携がなくても残ります。</p>'+(g.length?'<button type="button" class="biz-btn" data-dd-copy-month>この月のGoogle日程を本地にコピー（'+g.length+'件）</button>':'')+'</div></section>';}
  function localDialog(){let d=$('ddLocalEvent');if(d)return d;d=document.createElement('dialog');d.id='ddLocalEvent';d.className='dd-dialog';
   d.innerHTML='<form method="dialog"><h3 id="ddLocalTitle">本地予定</h3><div class="dd-form"><label>日付<input type="date" id="ddLeDate" required></label><label>開始<input type="time" id="ddLeStart"></label><label>終了<input type="time" id="ddLeEnd"></label><label class="wide">タイトル<input id="ddLeTitle" required placeholder="例：佐藤様 現地調査"></label><label class="wide">場所<input id="ddLeLocation"></label><label class="wide">メモ<textarea id="ddLeMemo" rows="3"></textarea></label><label class="wide check"><input type="checkbox" id="ddLePush"> Googleカレンダーにも登録する（接続中のみ送信、未接続なら次回接続後）</label></div><p class="dd-error" id="ddLeError" role="alert"></p><div class="dd-dialog-actions"><button type="button" class="biz-btn danger" id="ddLeDelete">削除</button><span></span><button type="button" class="biz-btn" id="ddLeCancel">キャンセル</button><button type="button" class="biz-btn primary" id="ddLeSave">保存</button></div></form>';
   document.body.append(d);

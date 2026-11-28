@@ -3,7 +3,9 @@
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 const google={id:'g_shared_gev1',googleEventId:'gev1',googleCalendarId:'shared',calendarId:'shared',source:'google',date:'2026-12-05',start:'2026-12-05T13:00:00+09:00',end:'2026-12-05T15:00:00+09:00',title:'Google 打合せ',originalTitle:'Google 打合せ',description:'',location:'',googleStatus:'confirmed'};
-const business={estimates:[],projects:[],calendar:[google],audit:[],expenses:[],bank:[],payments:[],sales:[]};
+// Created by the system from a formal 請求書 (cloud saveDocument): planned Google id, never pushed, no Google connection.
+const system={id:'cal_sys1',source:'google',googleEventId:'iabc123',googleCalendarId:'',calendarId:'',googleCreatePending:true,googlePatchPending:true,linkedInvoiceId:'inv_sys1',documentId:'inv_sys1',saleId:'sale_sys1',status:'請求済',date:'2026-12-06',workDate:'2026-12-06',start:'2026-12-06',end:'2026-12-07',title:'試験顧客｜クロス張替｜¥38,500｜請求済',customerName:'試験顧客',officialAmount:38500};
+const business={estimates:[],projects:[],calendar:[google,system],audit:[],expenses:[],bank:[],payments:[],sales:[]};
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});try{
  for(const width of [1280,390]){
  const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:'block'}),errors=[],posts=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
@@ -46,6 +48,14 @@ const business={estimates:[],projects:[],calendar:[google],audit:[],expenses:[],
  assert.equal(JSON.stringify(all.find(e=>e.id==='g_shared_gev1')),original,'the Google record is not modified');
  assert.equal(await page.locator('#ddCalendar [data-dd-event="g_shared_gev1"]').count(),0,'copied Google row is shown once, as 本地');
  assert.equal(await page.locator('#ddCalendar [data-dd-event="'+copy.id+'"]').count(),1);
+ // 帳票・受注 event (from a formal document / 受注): own label, no edit, no copy to 本地 (single or month copy), kept as is
+ await page.locator('#ddCalendar [data-dd-day="2026-12-06"]').click();
+ assert.equal(await page.locator('#ddCalendar [data-dd-day="2026-12-06"] [data-dd-src="system"]').count(),1);
+ const sItem=page.locator('#ddCalendar [data-dd-event="cal_sys1"]');assert.match(await sItem.innerText(),/帳票・受注[\s\S]*試験顧客｜クロス張替[\s\S]*見積・帳票から自動/);
+ assert.deepEqual([await sItem.locator('[data-dd-edit]').count(),await sItem.locator('[data-dd-copy]').count(),await sItem.locator('[data-dd-open]').count()],[0,0,1]);
+ const sysBefore=JSON.stringify((await stored()).find(e=>e.id==='cal_sys1'));
+ assert.equal(await page.evaluate(()=>bizCopyGoogleEventsToLocal(['cal_sys1'])),0);assert.equal((await stored()).filter(e=>e.copyOf==='cal_sys1').length,0);assert.equal(JSON.stringify((await stored()).find(e=>e.id==='cal_sys1')),sysBefore);
+ if(!mobile)assert.match(await page.locator('#ddCalendarSources').innerText(),/帳票・受注 1件[\s\S]*Google 0件/);
  // User text is rendered as text (grid, day list, dialog): no markup or handler runs
  await page.locator(newButton).click();await page.fill('#ddLeDate','2026-12-04');await page.fill('#ddLeTitle','<img src=x onerror="window.__xss=1"><b>太字</b>');await page.fill('#ddLeMemo','<script>window.__xss=2</script>');await page.locator('#ddLeSave').click();
  assert.equal(await page.locator('#ddCalendar img, #calendarRows img').count(),0);assert.equal(await page.evaluate(()=>[...document.querySelectorAll('#ddCalendar b,#calendarRows b')].some(b=>b.textContent==='太字')),false);assert.equal(await page.evaluate(()=>window.__xss),undefined);
