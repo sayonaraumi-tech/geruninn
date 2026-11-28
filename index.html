@@ -1030,6 +1030,7 @@ body.dd{--dd-side-w:205px;--dd-top-h:57px;font-feature-settings:"tnum" 1;padding
 body.dd .dd-only{display:revert!important}
 body.dd span.dd-only,body.dd button.dd-only{display:inline-flex!important;align-items:center}
 body.dd section.dd-only,body.dd div.dd-only{display:block!important}
+body.dd .dd-hide{display:none!important}
 /* shell: top header + left sidebar (existing #bizNav, brand, sync, user and cloud controls are reused) */
 body.dd .biz-topbar{left:var(--dd-side-w);height:var(--dd-top-h);background:var(--dd-panel);color:var(--dd-fg);border-bottom:1px solid var(--dd-line);box-shadow:none;padding:0 23px;gap:12px}
 body.dd .biz-brand{position:fixed;left:0;top:0;width:var(--dd-side-w);height:72px;padding:22px 21px 0;background:var(--dd-side);color:var(--dd-side-fg);font-size:18px;letter-spacing:.01em;border-right:1px solid var(--dd-line);z-index:1}
@@ -1201,7 +1202,7 @@ body.dd[data-dd-theme="dark"] .biz-table tr:hover td{background:transparent}
 </dialog>
 
 <div id="pageDashboard" class="biz-page app-page active">
- <div class="biz-title"><div><h1>経営ダッシュボード</h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
+ <div class="biz-title"><div><h1><span class="dd-only">ホーム</span><span class="dd-hide">経営ダッシュボード</span></h1><div class="biz-muted" id="dashPeriod"></div></div><div class="biz-actions"><button class="biz-btn" onclick="bizRefreshAll()">更新</button></div></div>
  <div class="biz-section home-period"><div class="biz-form-grid">
  <div class="biz-field"><label for="homePeriodMode">対象期間</label><select id="homePeriodMode" onchange="renderDashboard()"><option value="month">月次</option><option value="year">年度（10月〜翌9月）</option><option value="custom">指定期間</option></select></div>
  <div class="biz-field" id="homeMonthField"><label for="homeMonth">対象月</label><input type="month" id="homeMonth" onchange="renderDashboard()"></div>
@@ -1273,7 +1274,7 @@ body.dd[data-dd-theme="dark"] .biz-table tr:hover td{background:transparent}
 </div>
 
 <div id="pageSettings" class="biz-page app-page">
- <div class="biz-title"><div><h1>Google Calendar API 接続設定</h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
+ <div class="biz-title"><div><h1><span class="dd-only">設定</span><span class="dd-hide">Google Calendar API 接続設定</span></h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
  <div class="biz-section">
   <div class="biz-section-head"><h2>Google Calendar 接続</h2><div id="googleCalendarStatus" class="biz-badge warn">未接続</div></div>
   <div class="biz-form-grid">
