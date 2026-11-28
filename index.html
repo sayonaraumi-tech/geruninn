@@ -1223,8 +1223,12 @@ body.dd .dd-dialog-actions span{flex:1}
 /* 旧データ notes in 売上 (desktop only; mobile unchanged) */
 body.dd small.register-note.dd-only{display:block!important}
 }
-/* 2026-11-28 live fixes: 日程 toolbar, day ＋, Google setting */
+/* 2026-11-28 live fixes: 日程 toolbar, day ＋, 売上登録 chooser, Google setting */
 .google-off [data-google]{display:none!important}
+.sale-entry{padding:18px!important;width:min(420px,92vw)}
+.sale-entry h3{margin:0 0 6px}
+.sale-entry-options{display:grid;gap:8px;margin:12px 0}
+.sale-entry-options .biz-btn{width:100%;text-align:left}
 #pageCalendar .cal-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
 #pageCalendar .cal-tools .cal-tool,body.dd #pageCalendar .cal-tools .cal-tool{font-size:11px;padding:4px 9px;min-height:0;height:auto;width:auto;font-weight:600}
 #pageCalendar .cal-review{font-size:12px;margin-right:auto}
@@ -3948,6 +3952,8 @@ function renderCalendarGrid(){
   $('ddLsVoid').addEventListener('click',async()=>{const id=d.dataset.id,b=$('ddLsVoid');if(!id||b.disabled)return;const reason=prompt('売上を取消する理由（必須）\n取消後も記録は「取消済み」として残ります。','');if(reason===null)return;b.disabled=true;try{$('ddLeError').textContent='';await saleApi().change(id,'cancel',null,reason);renderCalendarGrid();renderSale(id);}catch(e){$('ddLeError').textContent=e.message;}finally{b.disabled=false;}});
   $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(id&&saleApi()?.state(id).sale){$('ddLeError').textContent='この予定には売上が登録されています。先に売上を取消してください。';return;}if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   return d;}
+ // Opens 本地予定を登録 for a date, optionally with 売上・入金 ready (売上登録 → 帳票なしで入金登録).
+ window.bizNewLocalEvent=function(date,withSale){calDay=date;bizSwitchPage('calendar');renderCalendarGrid();openLocalEvent('');if(withSale&&!$('ddLeSaleToggle').hidden){$('ddLeSaleOn').checked=true;$('ddLeSaleOn').dispatchEvent(new Event('change'));}};
  function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=bizJstTime;d.dataset.id=e?.id||'';
   $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=e&&e.end===e.start?'':t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';renderSale(e?.id||'');
   d.showModal();}

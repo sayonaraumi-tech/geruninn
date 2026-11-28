@@ -188,7 +188,15 @@ async function registerPayment(value){
 }
 root.selectSaleForPayment=function(id){if(enabled&&!ready())return;return original.selectSaleForPayment(id);};
 root.matchBankSale=function(bankId,saleId){if(!enabled)return original.matchBankSale(bankId,saleId);if(!ready()||client.getState().role!=='admin')return;const b=bizState.bank.find(x=>x.id===bankId);if(!b)return;const pending=bizState.payments.filter(p=>p.saleId===saleId&&p.confirmation==='pending-bank'&&p.amount===b.incoming);if(pending.length>1)return alert('同額の仮入金が複数あります。照合前に管理者が確認してください。');command({type:'confirmBank',bankId:b.key||bankId,localBankId:bankId, saleId,amount:b.incoming,paymentDate:b.date,pendingPaymentId:pending[0]?.id||''});};
-root.openManualSale=function(){if(!enabled)return original.openManualSale();alert('売上は請求書の正式保存から登録してください。');};
+// Cloud: a sale comes from a formal 請求書／領収書 or from a 日程 (帳票なしで入金登録); never a free-standing manual sale.
+root.openManualSale=function(){if(!enabled)return original.openManualSale();
+ let d=el('saleEntryChooser');
+ if(!d){d=document.createElement('dialog');d.id='saleEntryChooser';d.className='dd-dialog sale-entry';
+  d.innerHTML='<h3>売上登録</h3><p class="biz-muted">売上は正式帳票の保存、または日程から登録します。</p><div class="sale-entry-options"><button type="button" class="biz-btn primary" data-sale-entry="invoice">請求書を作成</button><button type="button" class="biz-btn" data-sale-entry="receipt">領収書を作成</button><button type="button" class="biz-btn" data-sale-entry="event">帳票なしで入金登録</button></div><div class="biz-actions"><button type="button" class="biz-btn" data-sale-entry="">閉じる</button></div>';
+  d.addEventListener('click',e=>{const b=e.target.closest('[data-sale-entry]');if(!b)return;d.close();const v=b.dataset.saleEntry;
+   if(v==='invoice'||v==='receipt'){root.bizSwitchPage('chohyo');root.setDocType(v);}else if(v==='event')root.bizNewLocalEvent(root.todayISO(),true);});
+  document.body.append(d);}
+ d.showModal();};
 root.bizGoogleMergeEvent=function(e){if(!enabled)return original.bizGoogleMergeEvent(e);if(!ready())throw Error('クラウドにログインしてください。');const exists=bizState.calendar.some(x=>x.googleEventId===e.googleEventId);command({type:'calendar',event:copy(e)});return exists?'updated':'added';};
 root.bizLoadDocFromEvent=function(e,type){if(!enabled)return original.bizLoadDocFromEvent(e,type);if(!ready())return;if(original.bizLoadDocFromEvent(e,type)===false)return;if(viewBaseline)bizRestoreDocumentLinks(formBase);if(!docRevision&&type!=='receipt'){docId=type+'_'+e.id;docRevision=sync.getRevision('documents',docId);}if(type==='receipt'){const sale=bizState.sales.find(x=>x.calendarEventId===e.id);if(sale)el('receiptSale').value=sale.id;}};
 root.bizGooglePatchNow=async function(id){if(!enabled)return original.bizGooglePatchNow(id);if(!sync)return;await original.bizGooglePatchNow(id);const records=await client.listRecords('calendarLinks');const revision=records.find(r=>r.id===id)?.revision;const persisted=records.find(r=>r.id===id)?.payload;const e=bizState.calendar.find(x=>x.id===id);if(e&&!e.googlePatchPending)googleErrors.delete(id);if(e&&!e.googlePatchPending&&persisted&&e.title===persisted.title&&e.workDate===persisted.workDate&&!persisted.googleCreatePending)command({type:'calendarPatched',id,expectedRevision:revision,at:e.googlePatchedAt});};

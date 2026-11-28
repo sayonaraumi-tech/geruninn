@@ -84,6 +84,16 @@ async function create(page,width,{date,title,amount,method,customer}){
   assert.deepEqual([(await live('sales'))[0].amount,(await live('payments'))[0].amount,(await live('cashLedger'))[0].amount],[13200,13200,13200]);
   await edit.click();answers.push('取消試験');await page.locator('#ddLsVoid').click();await page.waitForFunction(()=>/取消済み/.test(document.getElementById('ddLeSaleStatus').textContent),null,{timeout:5000});
   assert.deepEqual([(await live('sales')).length,(await live('payments')).length,(await live('cashLedger')).length],[0,0,0]);
+  await page.locator('#ddLeCancel').click();
+  // 「＋ 売上登録」 in cloud: no free-standing sale; choose 請求書／領収書 (帳票) or 帳票なしで入金登録 (today's 本地予定 with 売上・入金 open)
+  const chooser=async()=>{await page.evaluate(()=>bizSwitchPage('sales'));await page.locator('#pageSales .biz-title button:visible:has-text("売上登録")').first().click();
+   assert.equal(await page.locator('#saleEntryChooser').isVisible(),true);return page.$$eval('#saleEntryChooser [data-sale-entry]',b=>b.map(x=>x.textContent));};
+  assert.deepEqual(await chooser(),['請求書を作成','領収書を作成','帳票なしで入金登録','閉じる']);
+  await page.locator('[data-sale-entry="invoice"]').click();assert.equal(await page.evaluate(()=>[document.getElementById('pageChohyo').classList.contains('active'),docType]).then(String),'true,invoice');
+  await chooser();await page.locator('[data-sale-entry="receipt"]').click();assert.equal(await page.evaluate(()=>[document.getElementById('pageChohyo').classList.contains('active'),docType]).then(String),'true,receipt');
+  await chooser();await page.locator('[data-sale-entry="event"]').click();
+  assert.equal(await page.locator('#ddLocalEvent').isVisible(),true);assert.equal(await page.inputValue('#ddLeDate'),'2026-12-05');assert.equal(await page.locator('#ddLeSaleOn').isChecked(),true);assert.equal(await page.locator('#ddLeSaleFields').isVisible(),true);
+  await page.locator('#ddLeCancel').click();assert.equal((await live('sales')).length,0,'the chooser itself writes nothing');
   assert.deepEqual(errors,[]);await page.close();
  }
  console.log('calendar sale browser tests passed');}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exit(1);});
