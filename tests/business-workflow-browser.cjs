@@ -1,4 +1,4 @@
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
+const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');;const {monthText,dayItem}=require('./calendar-month-ui.cjs');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true});try{for(const width of [390,1280]){
  const page=await browser.newPage({viewport:{width,height:900},hasTouch:width===390,serviceWorkers:'block'}),errors=[],remote=new Map(),posts=[],patches=[];page.on('pageerror',e=>errors.push(e.message));
@@ -177,11 +177,12 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
   return cases.map(event=>bizCalendarReviewReason(event,documents));
  }),['取消','重複','訂正済','','帳票状態を要確認','帳票状態を要確認','Google日程取消','']);
  const formalEventId=await page.evaluate(()=>window.formalEventId);
- const calendarRow=page.locator('#calendarRows tr').filter({has:page.locator(`button[onclick*="${formalEventId}"]`)});
- assert.equal(await calendarRow.count(),0);
+ assert.equal(await page.locator(`#ddCalendar [data-dd-event="${formalEventId}"]`).count(),0,'要確認 event hidden by default');
  await page.locator('#calendarReview').check();
- assert.match(await calendarRow.innerText(),/無効/);
- await calendarRow.getByRole('button',{name:'開く'}).click();
+ const calendarRow=await dayItem(page,formalEventId);
+ assert.equal(await calendarRow.count(),1,'要確認 event reachable from the day list');
+ await calendarRow.locator('[data-dd-open]').click();
+ assert.match(await page.locator('#eventModalBody').innerText(),/無効/);
  assert.equal(await page.locator('[data-calendar-document]').first().isDisabled(),true);
  assert.equal(await page.locator('#eventSaleButton').isVisible(),false);
  await page.evaluate(()=>closeEventModal());

@@ -1223,6 +1223,12 @@ body.dd .dd-dialog-actions span{flex:1}
 /* 旧データ notes in 売上 (desktop only; mobile unchanged) */
 body.dd small.register-note.dd-only{display:block!important}
 }
+/* 2026-11-28 live fixes: 日程 toolbar, day ＋, Google setting */
+.google-off [data-google]{display:none!important}
+#pageCalendar .cal-tools{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+#pageCalendar .cal-tools .cal-tool,body.dd #pageCalendar .cal-tools .cal-tool{font-size:11px;padding:4px 9px;min-height:0;height:auto;width:auto;font-weight:600}
+#pageCalendar .cal-review{font-size:12px;margin-right:auto}
+#ddCalendar .dd-day-add{font-size:12px;padding:2px 9px;min-height:0;line-height:1.4}
 /* mobile 日程 (screen <=800px): month grid, 本地/Google labels and the 本地予定 dialog, in the existing card style */
 @media screen and (max-width:800px){
 #ddCalendar .dd-m-legend{display:flex;gap:6px;margin:0 0 8px}
@@ -1238,7 +1244,8 @@ body.dd small.register-note.dd-only{display:block!important}
 #ddCalendar .calDot{display:block;width:6px;height:6px;border-radius:50%}
 #ddCalendar .calDot.src-local{background:#2e9b55}#ddCalendar .calDot.src-google{background:#4a7fe0}#ddCalendar .calDot.src-ics{background:#a7843f}#ddCalendar .calDot.src-system{background:#7b57c2}
 #ddCalendar .calDots small{font-size:9px;color:#777}
-#ddCalendar .dd-m-day{font-size:14px;margin:14px 0 4px}
+#ddCalendar .dd-m-day{font-size:14px;margin:14px 0 4px;display:flex;justify-content:space-between;align-items:center}
+
 #ddCalendar .dd-day-list{display:grid}
 #ddCalendar .dd-day-item{display:flex;justify-content:space-between;align-items:center;gap:8px;border-bottom:1px solid #eee;padding:10px 0;font-size:13px}
 #ddCalendar .dd-day-item>div:first-child{min-width:0;overflow-wrap:anywhere}
@@ -1336,12 +1343,10 @@ body.dd small.register-note.dd-only{display:block!important}
  <div class="biz-section">
   <div class="biz-form-grid">
    <div class="biz-field"><label for="calendarMonth">対象月</label><input type="month" id="calendarMonth" onchange="renderCalendarEvents()"></div>
-   <div class="biz-field"><label>&nbsp;</label><button id="googleCalendarSync" class="biz-btn ok" style="width:100%" onclick="bizGoogleSyncMonth()">Google日程を同期</button></div>
    <div class="biz-field span2"><label for="calendarKeyword">検索 / 絞り込み</label><input id="calendarKeyword" placeholder="例：小野田" oninput="renderCalendarEvents()"></div>
   </div>
-  <button id="googleCalendarReconnect" class="biz-btn primary" hidden onclick="bizGoogleConnect()">Googleに再接続</button>
+  <div class="biz-actions cal-tools"><label class="cal-review"><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><button class="biz-btn cal-tool" type="button" onclick="importOnodaFromCalendar()">小野田明細読込 → 請求書</button><button id="googleCalendarSync" class="biz-btn cal-tool" type="button" data-google onclick="bizGoogleSyncMonth()">Google日程を同期</button><button id="googleCalendarReconnect" class="biz-btn cal-tool primary" type="button" data-google hidden onclick="bizGoogleConnect()">Googleに再接続</button></div>
  </div>
- <div class="biz-section"><div class="biz-section-head"><h2>同期済み日程</h2><label><input id="calendarReview" type="checkbox" onchange="renderCalendarEvents()"> 非表示・要確認の日程</label><div class="biz-actions"><button class="biz-btn" onclick="importOnodaFromCalendar()">小野田明細に取込</button></div></div><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>タイトル</th><th>時刻</th><th>状態</th><th></th></tr></thead><tbody id="calendarRows"></tbody></table></div></div>
 </div>
 
 
@@ -1383,6 +1388,11 @@ body.dd small.register-note.dd-only{display:block!important}
 <div id="pageSettings" class="biz-page app-page">
  <div class="biz-title"><div><h1><span class="dd-only">設定</span><span class="dd-hide">Google Calendar API 接続設定</span></h1><div class="biz-muted">Google Calendar API は接続済みです。日程の取得と、帳票確定後の元イベントへの反映を行います。</div></div></div>
  <div class="biz-section">
+  <div class="biz-section-head"><h2>Googleカレンダー連携</h2></div>
+  <label class="check"><input type="checkbox" id="googleCalendarEnabled" checked onchange="bizGoogleSetEnabled(this.checked)"> Googleカレンダー連携を使う</label>
+  <p class="biz-muted">オフにすると、Google日程の同期・本地予定のGoogle登録・帳票の予定のGoogle自動反映を行いません（この端末の設定）。取込済みのGoogle日程は読み取り専用で表示され、本地にコピーできます。</p>
+ </div>
+ <div class="biz-section" data-google>
   <div class="biz-section-head"><h2>Google Calendar 接続</h2><div id="googleCalendarStatus" class="biz-badge warn">未接続</div></div>
   <div class="biz-form-grid">
    <div class="biz-field"><button class="biz-btn primary" onclick="bizGoogleConnect()">Googleに接続</button></div>
@@ -1437,9 +1447,10 @@ body.dd small.register-note.dd-only{display:block!important}
    <div class="biz-actions"><button id="eventSaleConfirm" class="biz-btn primary" type="submit">確認して登録</button><button class="biz-btn" type="button" onclick="document.getElementById('eventSaleForm').classList.add('biz-hidden')">キャンセル</button></div>
   </form>
   <div class="biz-actions" style="margin-top:16px">
-   <button class="biz-btn" data-calendar-document onclick="bizCreateDocFromCurrentEvent('estimate')">見積書作成</button>
-   <button class="biz-btn primary" data-calendar-document onclick="bizCreateDocFromCurrentEvent('invoice')">請求書作成</button>
-   <button class="biz-btn" data-calendar-document onclick="bizCreateDocFromCurrentEvent('receipt')">領収書作成</button>
+   <button id="eventOpenDocument" class="biz-btn primary" hidden onclick="bizOpenEventDocument()">開く</button>
+   <button class="biz-btn" data-calendar-document="estimate" onclick="bizCreateDocFromCurrentEvent('estimate')">見積書作成</button>
+   <button class="biz-btn primary" data-calendar-document="invoice" onclick="bizCreateDocFromCurrentEvent('invoice')">請求書作成</button>
+   <button class="biz-btn" data-calendar-document="receipt" onclick="bizCreateDocFromCurrentEvent('receipt')">領収書作成</button>
    <button id="eventSaleButton" class="biz-btn primary" hidden onclick="bizOpenCalendarSale()">売上登録</button>
   </div>
  </div>
@@ -3263,6 +3274,13 @@ let bizGoogleTokenExpiresAt=0;
 let bizGoogleTokenRequest=null;
 let bizGoogleSyncing=false;
 let bizGoogleAuthFailed=false;
+// 設定「Googleカレンダー連携を使う」(this device, default on). Off: no Google sync, no Google push of 本地/帳票 events,
+// no token; already synced Google events stay visible read-only and can still be copied to 本地.
+const BIZ_GOOGLE_ENABLED_KEY='tsukinowa_google_calendar_enabled';
+function bizGoogleEnabled(){try{return localStorage.getItem(BIZ_GOOGLE_ENABLED_KEY)!=='off';}catch(_){return true;}}
+function bizGoogleApplyEnabled(){const on=bizGoogleEnabled();document.documentElement.classList.toggle('google-off',!on);const box=document.getElementById('googleCalendarEnabled');if(box)box.checked=on;}
+function bizGoogleSetEnabled(on){try{localStorage.setItem(BIZ_GOOGLE_ENABLED_KEY,on?'on':'off');}catch(_){}if(!on){bizGoogleAccessToken='';bizGoogleTokenExpiresAt=0;bizGoogleTokenRequest=null;}bizGoogleApplyEnabled();bizGoogleRefreshAuthUI();renderCalendarEvents();}
+document.addEventListener('DOMContentLoaded',bizGoogleApplyEnabled);
 function bizGoogleRefreshAuthUI(){
   const button=document.getElementById('googleCalendarReconnect');
   if(button)button.hidden=!(bizGoogleAuthFailed||(bizGoogleTokenExpiresAt>0&&bizGoogleNeedToken()));
@@ -3280,6 +3298,7 @@ function bizGoogleInit(){
 }
 function bizGoogleNeedToken(){return !bizGoogleAccessToken || Date.now()>bizGoogleTokenExpiresAt-60000;}
 function bizGoogleRequestToken(promptMode=''){
+  if(!bizGoogleEnabled())return Promise.reject(new Error('Googleカレンダー連携はオフです（設定）。'));
   if(bizGoogleTokenRequest)return bizGoogleTokenRequest;
   bizGoogleTokenRequest=new Promise((resolve,reject)=>{
     if(!bizGoogleInit())return reject(new Error('Google認証ライブラリの読み込み待ちです。数秒後に再度押してください。'));
@@ -3375,7 +3394,7 @@ function bizGoogleMergeEvent(x){
   bizState.calendar[i]=merged;return 'updated';
 }
 async function bizGoogleSyncMonth(){
-  if(bizGoogleSyncing)return;
+  if(bizGoogleSyncing||!bizGoogleEnabled())return;
   bizGoogleSyncing=true;
   const syncButton=document.getElementById('googleCalendarSync');if(syncButton)syncButton.disabled=true;
   const month=document.getElementById('calendarMonth')?.value||bizNowMonth();
@@ -3444,6 +3463,7 @@ async function bizGoogleCreatePending(e){
   e.googleCreatePending=false;return e;
 }
 async function bizGooglePatchNow(id){
+  if(!bizGoogleEnabled())return;
   let e=bizState.calendar.find(x=>x.id===id);if(!e)return;
   try{
     e=await bizGoogleCreatePending(e);
@@ -3511,20 +3531,38 @@ function bizReverseUpdateCalendar(eventId,info){
   const e=(bizState.calendar||[]).find(x=>x.id===eventId);if(!e)return;
   if(!e.originalTitle)e.originalTitle=e.title||'';
   Object.assign(e,info||{});
-  e.title=bizBuildCalendarTitle(e,info||{});
+  e.title=info?.title||bizBuildCalendarTitle(e,info||{});
   e.systemNote=[e.systemNote||'',`${new Date().toLocaleString('ja-JP')} 系統更新: ${e.title}`].filter(Boolean).join('\n');
   bizAudit('日程反向更新',`${bizFmtDate(e.date)} ${e.title}`);
   if(e.source==='google'&&e.googleEventId){e.googlePatchPending=true;bizPersist();bizGooglePatchEvent(e);}
 }
+// An issued 請求書／領収書 (or 見積) owns its event: the detail offers 開く (the saved document, where 訂正版 lives)
+// instead of creating the same documents again. From an issued 請求書 only the normal next step 領収書作成 stays.
+function bizEventIssuedDocument(e){
+  if(e.linkedReceiptId)return {type:'receipt',id:e.linkedReceiptId};
+  if(e.linkedInvoiceId)return {type:'invoice',id:e.linkedInvoiceId};
+  if(e.linkedEstimateId)return {type:'estimate',id:e.linkedEstimateId};
+  return null;
+}
 function openEventModal(id){
   bizEnsureV5State(); const e=bizState.calendar.find(x=>x.id===id); if(!e)return;
   bizCurrentCalendarId=id;
-  const review=bizCalendarReviewReason(e,bizCalendarDocumentStates());
-  for(const button of document.querySelectorAll('[data-calendar-document]'))button.disabled=!!review;
+  const review=bizCalendarReviewReason(e,bizCalendarDocumentStates()),issued=review?null:bizEventIssuedDocument(e);
+  const offered={receipt:[],invoice:['receipt'],estimate:['invoice','receipt']}[issued?.type]||['estimate','invoice','receipt'];
+  for(const button of document.querySelectorAll('[data-calendar-document]')){button.disabled=!!review;button.hidden=!review&&!offered.includes(button.dataset.calendarDocument);}
+  document.getElementById('eventOpenDocument').hidden=!issued;
   const p=bizParseShortTitle(e.title||e.originalTitle||'');
+  const note=issued&&issued.type!=='estimate'?'正式帳票に連動した予定です。内容の変更は保存帳票の「訂正版を作成」（再発行）から行います。':(bizGoogleEnabled()&&e.googleEventId?'Googleカレンダーと連携しています。':'')+'帳票確定後はこの予定へ正式情報を反映します。';
   document.getElementById('eventModalTitle').textContent=`${bizFmtDate(e.date)} ${e.title||''}`;
-  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(review||bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(e.paymentMethod||p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">Google Calendar API連動中。帳票確定後はこの予定へ正式情報を反映します。</span>`;
+  document.getElementById('eventModalBody').innerHTML=`<b>原始日程</b>：${bizEsc(e.originalTitle||e.title||'')}<br><b>系统状态</b>：${bizEsc(review||bizEventStatus(e))}<br><b>暂定金额</b>：${p.amount?bizMoney(p.amount):'未识别'}<br><b>付款</b>：${bizEsc(e.paymentMethod||p.payment||'未指定')}<br>${e.linkedEstimateId?'見積履歴あり<br>':''}${e.projectId?'正式案件あり<br>':''}<span style="color:#999">${bizEsc(note)}</span>`;
   document.getElementById('bizEventModal').classList.remove('biz-hidden');
+}
+function bizOpenEventDocument(){
+  const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId),issued=e&&bizEventIssuedDocument(e);if(!issued)return;
+  if(issued.type==='estimate'){bizLoadDocFromEvent(e,'estimate');return;}
+  const index=loadConfirmedHistory().findIndex(h=>h.documentId===issued.id||h.historyId===issued.id);
+  if(index<0)return alert('保存帳票が見つかりません。保存帳票の一覧を確認してください。');
+  closeEventModal();openSavedDoc(index);
 }
 function closeEventModal(){document.getElementById('bizEventModal')?.classList.add('biz-hidden')}
 function bizLoadDocFromEvent(e,type){
@@ -3633,10 +3671,10 @@ bizOnDocumentConfirmed=function(state){
     const sourceId=state.historyId||('doc_'+state.invoiceNo);const sale=bizState.sales.find(x=>x.sourceId===sourceId);const amount=sale?.amount||bizCalcDocumentTotal(state);
     if(sale){sale.estimateId=bizCurrentEstimateId||sale.estimateId||'';sale.projectId=bizCurrentProjectId||sale.projectId||'';sale.calendarEventId=bizCurrentCalendarId||sale.calendarEventId||''}
     if(bizCurrentEstimateId){const er=bizState.estimates.find(x=>x.id===bizCurrentEstimateId);if(er){er.status='請求書へ変換済';if(!er.projectId&&bizCurrentProjectId)er.projectId=bizCurrentProjectId}}
-    if(bizCurrentCalendarId){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e){e.linkedInvoiceId=sourceId;bizReverseUpdateCalendar(e.id,{customerName:state.customerName||'',officialAmount:amount,paymentMethod:state.paymentMethod||'',status:'請求済'})}}
+    if(bizCurrentCalendarId){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e){e.linkedInvoiceId=sourceId;bizReverseUpdateCalendar(e.id,{customerName:state.customerName||'',officialAmount:amount,paymentMethod:state.paymentMethod||'',status:'請求済',title:TsukinowaBusiness.formalCalendarTitle(state,amount)})}}
     bizPersist();bizRefreshAll();
   }else if(state?.docType==='receipt'&&state.saleId){
-    if(bizCurrentCalendarId){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e){e.linkedReceiptId=state.historyId||'';bizReverseUpdateCalendar(e.id,{customerName:state.customerName||'',officialAmount:e.linkedInvoiceId?(e.officialAmount??0):(Number(state.receiptTotal)||0),paymentMethod:state.paymentMethod||'現金',status:'領収済'})}}
+    if(bizCurrentCalendarId){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(e){e.linkedReceiptId=state.historyId||'';{const amount=e.linkedInvoiceId?(e.officialAmount??0):(Number(state.receiptTotal)||0);bizReverseUpdateCalendar(e.id,{customerName:state.customerName||'',officialAmount:amount,paymentMethod:state.paymentMethod||'現金',status:'領収済',title:TsukinowaBusiness.formalCalendarTitle({...state,docType:'receipt'},amount)});}}}
     bizPersist();bizRefreshAll();
   }
 };
@@ -3700,7 +3738,10 @@ function bizCalendarVisibleRows(documents=bizCalendarDocumentStates()){
 // 帳票・受注 = created by the system from a 受注 (見積) or a formal 請求書 / 領収書; it is changed through that record
 // (施工日 / 保存帳票), stays in calendarLinks without Google, and is never copied to a 本地 event.
 function bizCalendarSource(e){return e?.source==='local'?'local':e&&(e.linkedEstimateId||e.linkedInvoiceId||e.linkedReceiptId||e.projectId||e.documentId)?'system':e?.googleEventId?'google':'ics';}
-function bizCalendarSourceLabel(e){return {local:'本地',system:'帳票・受注',google:'Google',ics:'取込'}[bizCalendarSource(e)];}
+// 帳票 events are labelled by origin: from a 見積 受注 (even after 請求書／領収書) → 帳票・受注; a standalone 請求書 → 請求書
+// (also after its 領収書); a standalone 領収書 → 領収書.
+function bizCalendarSourceLabel(e){const src=bizCalendarSource(e);if(src!=='system')return {local:'本地',google:'Google',ics:'取込'}[src];
+  return e.linkedEstimateId||e.estimateId||e.projectId?'帳票・受注':e.linkedInvoiceId?'請求書':e.linkedReceiptId?'領収書':'帳票・受注';}
 function bizNewGoogleEventId(){return 'tl'+Array.from(crypto.getRandomValues(new Uint8Array(15)),b=>(b%32).toString(32)).join('');}
 // HH:MM in Japan time for a stored start/end (cloud-core stores date-times as UTC ISO strings).
 function bizJstTime(v){const t=String(v||'');if(t.length<=10)return '';const d=new Date(t);return Number.isFinite(d.getTime())?d.toLocaleTimeString('sv-SE',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'}):'';}
@@ -3708,7 +3749,7 @@ function bizNextDate(d){const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDa
 function bizLocalEventFields(input){
   const date=TsukinowaAccounting.date(input.date),title=String(input.title||'').trim();if(!title)throw Error('タイトルを入力してください。');
   const time=v=>/^\d{2}:\d{2}$/.test(v||'')?v:'';const st=time(input.startTime),et=time(input.endTime);if(et&&!st)throw Error('開始時刻を入力してください。');if(st&&et&&et<=st)throw Error('終了時刻は開始時刻より後にしてください。');
-  return {date,title,start:st?date+'T'+st+':00+09:00':date,end:st?date+'T'+(et||st)+':00+09:00':bizNextDate(date),description:String(input.description||''),location:String(input.location||''),pushToGoogle:!!input.pushToGoogle,...(input.copyOf?{copyOf:String(input.copyOf)}:{})};
+  return {date,title,start:st?date+'T'+st+':00+09:00':date,end:st?date+'T'+(et||st)+':00+09:00':bizNextDate(date),description:String(input.description||''),location:String(input.location||''),pushToGoogle:!!input.pushToGoogle&&bizGoogleEnabled(),...(input.copyOf?{copyOf:String(input.copyOf)}:{})};
 }
 async function bizSaveLocalEvent(input){
   const fields=bizLocalEventFields(input),ui=window.TsukinowaBusinessUI,old=input.id?bizState.calendar.find(e=>e.id===input.id):null;
@@ -3741,10 +3782,8 @@ async function bizCopyGoogleEventsToLocal(ids){
     await bizSaveLocalEvent({date:g.date,title:g.title,startTime:bizJstTime(g.start),endTime:bizJstTime(g.end),description:g.description||'',location:g.location||'',copyOf:g.id});n++;}
   return n;
 }
-function renderCalendarEvents(){
-  bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const documents=bizCalendarDocumentStates(),rows=bizCalendarVisibleRows(documents);
-  tbody.innerHTML=rows.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal(${bizJsArg(e.id)})">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">対象月の日程はまだ取り込まれていません。</td></tr>';
-}
+// The 日程 page shows the month grid + day list (renderCalendarGrid, wired to this name by the design view).
+function renderCalendarEvents(){bizEnsureV5State();}
 // 新規帳票へ移った時は必要に応じてリンクを解除するヘルパー
 function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCurrentProjectId='';const b=document.getElementById('bizLinkedSource');if(b)b.style.display='none'}
 
@@ -3881,19 +3920,17 @@ function renderCalendarGrid(){
   const byDay=new Map();for(const e of rows){const k=String(e.date||'').slice(0,10);if(!byDay.has(k))byDay.set(k,[]);byDay.get(k).push(e);}
   const chips=list=>wide?list.slice(0,2).map(e=>'<span class="calEvent src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'">'+esc(e.title)+'</span>').join('')+(list.length>2?'<span class="calMore">他 '+(list.length-2)+' 件</span>':''):'<span class="calDots">'+list.slice(0,3).map(e=>'<i class="calDot src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'"></i>').join('')+(list.length>3?'<small>+'+(list.length-3)+'</small>':'')+'</span>';
   let cells=['日','月','火','水','木','金','土'].map((d,i)=>'<div class="dow'+(i===0?' sun':i===6?' sat':'')+'">'+d+'</div>').join('')+'<span></span>'.repeat(first);
-  for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" aria-label="'+k+' 予定'+list.length+'件" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+chips(list)+'</button>';}
-  const dayRows=byDay.get(calDay)||[],dayList='<div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(src==='system'?' ・見積・帳票から自動（変更は見積履歴・保存帳票）':!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':(src==='system'?'':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button>')+'<button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。「＋ 本地予定」で登録するか、Google日程を同期すると表示されます。</p>')+'</div>';
+  for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" data-dd-count="'+list.length+'" aria-label="'+k+' 予定'+list.length+'件" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+chips(list)+'</button>';}
+  const dayRows=byDay.get(calDay)||[],dayList='<div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(src==='system'?' ・見積・帳票から自動（変更は見積履歴・保存帳票）':!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':(src==='system'?'':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button>')+'<button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。日付をクリックするか「＋」で本地予定を登録できます。</p>')+'</div>';
   box.innerHTML=wide
-   ?'<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad">'+dayList+'</div></section>'+googlePanel(rows)
-   :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-system">帳票・受注</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定</h3>'+dayList+'</div>';
+   ?'<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定 <button type="button" class="biz-btn dd-day-add" data-dd-new-day aria-label="'+esc(calDay)+' に本地予定を登録">＋</button></h3><div class="dd-pad">'+dayList+'</div></section>'
+   :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-system">帳票・受注</span><span class="dd-src src-system">請求書</span><span class="dd-src src-system">領収書</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定 <button type="button" class="biz-btn dd-day-add" data-dd-new-day aria-label="'+esc(calDay)+' に本地予定を登録">＋</button></h3>'+dayList+'</div>';
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
   refreshOpenSale();
  }
  const srcOf=e=>bizCalendarSource(e),srcLabel=e=>bizCalendarSourceLabel(e);
- function googlePanel(rows){const g=rows.filter(e=>['google','ics'].includes(srcOf(e))),l=rows.filter(e=>srcOf(e)==='local'),sys=rows.filter(e=>srcOf(e)==='system');
-  return '<section class="dd-panel" id="ddCalendarSources"><h3>日程の保存先</h3><div class="dd-pad"><p class="dd-src-summary"><span class="dd-src src-local">本地</span> '+l.length+'件 <span class="dd-src src-system">帳票・受注</span> '+sys.length+'件 <span class="dd-src src-google">Google</span> '+g.length+'件（表示中の月）</p><p class="biz-muted" style="font-size:11px">本地日程はこのシステムに保存され、Google連携がなくても登録・編集・削除できます。Google日程は同期した記録として残り、ここでは読み取り専用です。将来Google連携を外しても日程は消えません。必要なものは「本地にコピー」で編集できる本地日程になります（元の記録は変更しません）。帳票・受注の日程は受注の施工日・保存帳票から自動で作成・更新され、Google連携がなくても残ります。</p>'+(g.length?'<button type="button" class="biz-btn" data-dd-copy-month>この月のGoogle日程を本地にコピー（'+g.length+'件）</button>':'')+'</div></section>';}
  function localDialog(){let d=$('ddLocalEvent');if(d)return d;d=document.createElement('dialog');d.id='ddLocalEvent';d.className='dd-dialog';
-  d.innerHTML='<form method="dialog"><h3 id="ddLocalTitle">本地予定</h3><div class="dd-form"><label>日付<input type="date" id="ddLeDate" required></label><label>開始<input type="time" id="ddLeStart"></label><label>終了<input type="time" id="ddLeEnd"></label><label class="wide">タイトル<input id="ddLeTitle" required placeholder="例：佐藤様 現地調査"></label><label class="wide">場所<input id="ddLeLocation"></label><label class="wide">メモ<textarea id="ddLeMemo" rows="3"></textarea></label><label class="wide check"><input type="checkbox" id="ddLePush"> Googleカレンダーにも登録する（接続中のみ送信、未接続なら次回接続後）</label></div><section class="dd-sale" id="ddLeSale"><h4>売上・入金（請求書・領収書なし）</h4><p class="dd-sale-status" id="ddLeSaleStatus" role="status"></p><label class="check" id="ddLeSaleToggle"><input type="checkbox" id="ddLeSaleOn"> この予定の売上・入金も登録する</label><div class="dd-form" id="ddLeSaleFields" hidden><label>売上日<input type="date" id="ddLsDate"></label><label>入金方法<select id="ddLsMethod"><option>現金</option><option>銀行振込</option><option>プラットフォーム経由</option><option>その他</option></select></label><label class="wide">取引先（お客様名・宛名）<input id="ddLsCustomer" placeholder="未入力なら「現金客」"></label><label class="wide">内容<input id="ddLsContent" placeholder="例：網戸張替え"></label><label>金額（税込・円）<input type="number" id="ddLsAmount" min="1" step="1" inputmode="numeric"></label><p class="dd-sale-hint wide" id="ddLsHint"></p></div><div class="dd-sale-actions" id="ddLeSaleAdmin" hidden><button type="button" class="biz-btn" id="ddLsEdit">売上を修正</button><button type="button" class="biz-btn danger" id="ddLsVoid">売上を取消</button></div></section><p class="dd-error" id="ddLeError" role="alert"></p><div class="dd-dialog-actions"><button type="button" class="biz-btn danger" id="ddLeDelete">削除</button><span></span><button type="button" class="biz-btn" id="ddLeCancel">キャンセル</button><button type="button" class="biz-btn primary" id="ddLeSave">保存</button></div></form>';
+  d.innerHTML='<form method="dialog"><h3 id="ddLocalTitle">本地予定</h3><div class="dd-form"><label>日付<input type="date" id="ddLeDate" required></label><label>開始<input type="time" id="ddLeStart"></label><label>終了<input type="time" id="ddLeEnd"></label><label class="wide">タイトル<input id="ddLeTitle" required placeholder="例：佐藤様 現地調査"></label><label class="wide">場所<input id="ddLeLocation"></label><label class="wide">メモ<textarea id="ddLeMemo" rows="3"></textarea></label><label class="wide check" data-google><input type="checkbox" id="ddLePush"> Googleカレンダーにも登録する（接続中のみ送信、未接続なら次回接続後）</label></div><section class="dd-sale" id="ddLeSale"><h4>売上・入金（請求書・領収書なし）</h4><p class="dd-sale-status" id="ddLeSaleStatus" role="status"></p><label class="check" id="ddLeSaleToggle"><input type="checkbox" id="ddLeSaleOn"> この予定の売上・入金も登録する</label><div class="dd-form" id="ddLeSaleFields" hidden><label>売上日<input type="date" id="ddLsDate"></label><label>入金方法<select id="ddLsMethod"><option>現金</option><option>銀行振込</option><option>プラットフォーム経由</option><option>その他</option></select></label><label class="wide">取引先（お客様名・宛名）<input id="ddLsCustomer" placeholder="未入力なら「現金客」"></label><label class="wide">内容<input id="ddLsContent" placeholder="例：網戸張替え"></label><label>金額（税込・円）<input type="number" id="ddLsAmount" min="1" step="1" inputmode="numeric"></label><p class="dd-sale-hint wide" id="ddLsHint"></p></div><div class="dd-sale-actions" id="ddLeSaleAdmin" hidden><button type="button" class="biz-btn" id="ddLsEdit">売上を修正</button><button type="button" class="biz-btn danger" id="ddLsVoid">売上を取消</button></div></section><p class="dd-error" id="ddLeError" role="alert"></p><div class="dd-dialog-actions"><button type="button" class="biz-btn danger" id="ddLeDelete">削除</button><span></span><button type="button" class="biz-btn" id="ddLeCancel">キャンセル</button><button type="button" class="biz-btn primary" id="ddLeSave">保存</button></div></form>';
   document.body.append(d);
   $('ddLeCancel').addEventListener('click',()=>d.close());
   $('ddLeSave').addEventListener('click',async()=>{try{$('ddLeError').textContent='';
@@ -4041,10 +4078,10 @@ function showDesktopPreview(){
    const r=document.createElement('div');r.id='ddRecentSales';r.className='dd-only';a.after(r);
    r.addEventListener('click',e=>{const g=e.target.closest('[data-dd-go]');if(g)bizSwitchPage(g.dataset.ddGo);});}
   // Calendar
-  addHeaderActions('pageCalendar',[button('＋ 本地予定','primary',()=>openLocalEvent('')),button('‹ 前月','',()=>shiftMonth(-1)),Object.assign(document.createElement('b'),{id:'ddCalMonthLabel',className:'dd-month-label dd-only'}),button('翌月 ›','',()=>shiftMonth(1)),button('小野田明細読込 → 請求書','',()=>importOnodaFromCalendar())]);
+  addHeaderActions('pageCalendar',[button('＋ 本地予定','primary',()=>openLocalEvent('')),button('‹ 前月','',()=>shiftMonth(-1)),Object.assign(document.createElement('b'),{id:'ddCalMonthLabel',className:'dd-month-label dd-only'}),button('翌月 ›','',()=>shiftMonth(1))]);
   const calSection=document.querySelector('#pageCalendar>.biz-section');
   if(calSection){const c=document.createElement('div');c.id='ddCalendar';calSection.after(c);
-   c.addEventListener('click',e=>{if(e.target.closest('[data-dd-new]')){openLocalEvent('');return;}const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);const edit=e.target.closest('[data-dd-edit]');if(edit)openLocalEvent(edit.dataset.ddEdit);const copy=e.target.closest('[data-dd-copy]');if(copy)copyToLocal([copy.dataset.ddCopy]);if(e.target.closest('[data-dd-copy-month]'))copyToLocal(bizCalendarVisibleRows().filter(x=>srcOf(x)!=='local').map(x=>x.id));});}
+   c.addEventListener('click',e=>{if(e.target.closest('[data-dd-new],[data-dd-new-day]')){openLocalEvent('');return;}const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();if(day.dataset.ddCount==='0')openLocalEvent('');return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);const edit=e.target.closest('[data-dd-edit]');if(edit)openLocalEvent(edit.dataset.ddEdit);const copy=e.target.closest('[data-dd-copy]');if(copy)copyToLocal([copy.dataset.ddCopy]);});}
   // 帳票
   const chohyo=$('pageChohyo');
   if(chohyo){const h=document.createElement('div');h.id='ddChohyoHead';h.className='dd-only';h.innerHTML='<h1>帳票</h1>';h.append(button('保存帳票へ','',go('savedDocs')));chohyo.prepend(h);

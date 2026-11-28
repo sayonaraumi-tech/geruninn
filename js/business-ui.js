@@ -11,7 +11,7 @@ function command(value){if(!ready())return;try{return sync.enqueue({...value,ope
 function showError(message){el('cloudError').textContent=message;el('coreSyncStatus').textContent='Firestore同期失敗：'+message;}
 function status(value){lastStatus=value;el('coreSyncStatus').textContent=({synced:'クラウド同期済',syncing:'同期中',offline:'オフライン',error:'Firestore同期失敗'})[value.state]||'';if(value.error){el('coreSyncStatus').textContent+='：'+value.error;el('cloudError').textContent=value.error;}else el('cloudError').textContent='';el('cloudRealtime').textContent=(value.pending?`未同期 ${value.pending}件。`:'')+(value.error||'');el('cloudRetryQueue').hidden=!value.error;el('cloudArchiveQueue').hidden=!sync?.getQueue().some(x=>x.blocked);showGooglePending();}
 function showGooglePending(){
- if(lastStatus.state!=='synced')return;
+ if(lastStatus.state!=='synced'||!root.bizGoogleEnabled())return;
  const pending=(rows.calendarLinks||[]).filter(r=>r.payload.googlePatchPending||r.payload.googleCreatePending);
  if(!pending.length)return;
  const message=pending.map(r=>googleErrors.get(r.id)).find(Boolean)||'';
@@ -29,7 +29,7 @@ function calendarSaleEvent(){
 }
 function refreshCalendarSale(){
  const button=el('eventSaleButton');if(!button)return;const sale=eventSale();
- button.hidden=!calendarSaleEvent()||!enabled||client?.getState().role!=='admin';button.disabled=!!sale||calendarSaleSaving;button.textContent=sale?'登録済':'売上登録';
+ const e=calendarSaleEvent();button.hidden=!e||!!(e.linkedInvoiceId||e.linkedReceiptId)||!enabled||client?.getState().role!=='admin';button.disabled=!!sale||calendarSaleSaving;button.textContent=sale?'登録済':'売上登録';
  el('eventSaleStatus').textContent=sale?`売上：登録済 ／ 金額 ${bizMoney(sale.amount)} ／ 入金状況 ${bizOutstanding(sale)===0?'入金済':'未収 '+bizMoney(bizOutstanding(sale))}`:'売上：未登録';
  if(sale)el('eventSaleForm').classList.add('biz-hidden');
 }
@@ -193,7 +193,7 @@ root.bizGoogleMergeEvent=function(e){if(!enabled)return original.bizGoogleMergeE
 root.bizLoadDocFromEvent=function(e,type){if(!enabled)return original.bizLoadDocFromEvent(e,type);if(!ready())return;if(original.bizLoadDocFromEvent(e,type)===false)return;if(viewBaseline)bizRestoreDocumentLinks(formBase);if(!docRevision&&type!=='receipt'){docId=type+'_'+e.id;docRevision=sync.getRevision('documents',docId);}if(type==='receipt'){const sale=bizState.sales.find(x=>x.calendarEventId===e.id);if(sale)el('receiptSale').value=sale.id;}};
 root.bizGooglePatchNow=async function(id){if(!enabled)return original.bizGooglePatchNow(id);if(!sync)return;await original.bizGooglePatchNow(id);const records=await client.listRecords('calendarLinks');const revision=records.find(r=>r.id===id)?.revision;const persisted=records.find(r=>r.id===id)?.payload;const e=bizState.calendar.find(x=>x.id===id);if(e&&!e.googlePatchPending)googleErrors.delete(id);if(e&&!e.googlePatchPending&&persisted&&e.title===persisted.title&&e.workDate===persisted.workDate&&!persisted.googleCreatePending)command({type:'calendarPatched',id,expectedRevision:revision,at:e.googlePatchedAt});};
 root.bizSwitchPage=function(page){if(enabled&&client?.getState().role==='staff'&&!['calendar','estimates','chohyo','savedDocs'].includes(page))page='calendar';if(page!==document.querySelector('#bizNav button.active')?.dataset.page)pendingInvoice=null;return original.bizSwitchPage(page);};
-function patchPending(){if(!sync||!navigator.onLine||lastStatus.state==='error')return;const pending=bizState.calendar.filter(e=>e.googlePatchPending);if(pending.length&&bizGoogleNeedToken()){el('coreSyncStatus').textContent='Google未接続・システム保存済（反映待ち '+pending.length+'件）';return;}for(const e of bizState.calendar.filter(x=>x.googlePatchPending&&x.googleEventId))if(!bizGooglePatchJobs.has(e.id))bizGooglePatchEvent(e);}
+function patchPending(){if(!sync||!navigator.onLine||lastStatus.state==='error'||!root.bizGoogleEnabled())return;const pending=bizState.calendar.filter(e=>e.googlePatchPending);if(pending.length&&bizGoogleNeedToken()){el('coreSyncStatus').textContent='Google未接続・システム保存済（反映待ち '+pending.length+'件）';return;}for(const e of bizState.calendar.filter(x=>x.googlePatchPending&&x.googleEventId))if(!bizGooglePatchJobs.has(e.id))bizGooglePatchEvent(e);}
 function clearView(){googleErrors.clear();readOnly(false);viewBaseline=null;formBase={};root.TsukinowaHistoricalUI?.close();root.TsukinowaBalanceUI?.close();pendingInvoice=null;revisionSource=null;history=[];rows={};root.TsukinowaAccountingUI?.hydrate({});for(const key of ['estimates','projects','sales','payments','calendar','audit','expenses','bank'])bizState[key]=[];try{bizRefreshAll();renderConfirmedHistory();if(docType==='onoda')makeBlankOnodaMonth();else resetNormalFormBlank();if(el('bizJobMemo'))el('bizJobMemo').value='';if(el('receiptSale'))el('receiptSale').value='';docId='';docRevision=0;bizClearDocLink();}finally{}}
 const documentLabels={active:'有効',void:'無効',cancelled:'取消',duplicate:'重複',revised:'訂正済'};
 function manageDocument(index,action){

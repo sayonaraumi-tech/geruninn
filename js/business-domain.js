@@ -41,7 +41,7 @@ const formalContent=s=>s.docType==='receipt'?s.tadashi||summary(s):summary(s);
 const formalDate=s=>s.docType==='receipt'?s.invoiceDate||s.paymentDate:s.workDate||s.salesDate||s.invoiceDate;
 function formalCalendarTitle(s,amount){
  const short=value=>String(value||'').split(/\r?\n|\s*[／/｜|、,]\s*/).map(t=>t.trim()).find(Boolean)?.slice(0,120)||'';
- const content=String(s.items?.[0]?.content||'').trim().slice(0,120)||[s.summary,s.bizJobMemo,s.tadashi,s.content,formalContent(s)].map(short).find(Boolean)||'工事';
+ const content=String(s.items?.[0]?.content||'').split(/\r?\n/).map(t=>t.trim()).find(Boolean)?.slice(0,120)||[s.summary,s.bizJobMemo,s.tadashi,s.content,formalContent(s)].map(short).find(Boolean)||'工事';
  return [s.customerName,content,'¥'+amount.toLocaleString('ja-JP'),s.docType==='receipt'?'領収済':'請求済'].join('｜');
 }
 // Only the document currently owning the schedule's status may refresh its title.

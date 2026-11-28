@@ -1,6 +1,6 @@
 // Desktop 日程: 本地 events can be created, edited and deleted with no Google connection; Google events stay read-only
 // and can be copied to 本地 without changing the original; the per-event push uses the existing Google create path.
-const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
+const {monthText,dayItem}=require('./calendar-month-ui.cjs');const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 const google={id:'g_shared_gev1',googleEventId:'gev1',googleCalendarId:'shared',calendarId:'shared',source:'google',date:'2026-12-05',start:'2026-12-05T13:00:00+09:00',end:'2026-12-05T15:00:00+09:00',title:'Google 打合せ',originalTitle:'Google 打合せ',description:'',location:'',googleStatus:'confirmed'};
 // Created by the system from a formal 請求書 (cloud saveDocument): planned Google id, never pushed, no Google connection.
@@ -19,8 +19,8 @@ const business={estimates:[],projects:[],calendar:[google,system],audit:[],expen
  if(mobile){
   // Mobile: the month grid and the 本地予定 dialog are added; the desktop header controls stay hidden and the existing list keeps its five columns.
   assert.equal(await page.locator('#pageCalendar .biz-title button:has-text("本地予定")').isVisible(),false);
-  assert.deepEqual(await page.$$eval('#pageCalendar thead th',t=>t.map(x=>x.textContent)),['日付','タイトル','時刻','状態','']);
-  assert.match(await page.locator('#calendarRows').innerText(),/Google 打合せ/);
+  assert.equal(await page.locator('#pageCalendar table').count(),0,'no duplicate 同期済み日程 table');
+  assert.match(await monthText(page),/Google 打合せ/);
   assert.equal(await page.locator('#ddCalendar .dd-cal').isVisible(),true,'mobile month grid');assert.equal(await page.locator('#ddCalendar [data-dd-day]').count(),31);
   assert.equal(await page.locator('#ddCalendar [data-dd-day="2026-12-05"] [data-dd-src="google"]').count(),1);
   assert.ok(await page.evaluate(()=>document.querySelector('#ddCalendar .dd-cal').scrollWidth<=document.querySelector('#ddCalendar .dd-cal').clientWidth),'grid fits 390px');
@@ -48,17 +48,17 @@ const business={estimates:[],projects:[],calendar:[google,system],audit:[],expen
  assert.equal(JSON.stringify(all.find(e=>e.id==='g_shared_gev1')),original,'the Google record is not modified');
  assert.equal(await page.locator('#ddCalendar [data-dd-event="g_shared_gev1"]').count(),0,'copied Google row is shown once, as 本地');
  assert.equal(await page.locator('#ddCalendar [data-dd-event="'+copy.id+'"]').count(),1);
- // 帳票・受注 event (from a formal document / 受注): own label, no edit, no copy to 本地 (single or month copy), kept as is
+ // 帳票 event (standalone 請求書 → label 請求書), no edit, no copy to 本地 (single copy), kept as is
  await page.locator('#ddCalendar [data-dd-day="2026-12-06"]').click();
  assert.equal(await page.locator('#ddCalendar [data-dd-day="2026-12-06"] [data-dd-src="system"]').count(),1);
- const sItem=page.locator('#ddCalendar [data-dd-event="cal_sys1"]');assert.match(await sItem.innerText(),/帳票・受注[\s\S]*試験顧客｜クロス張替[\s\S]*見積・帳票から自動/);
+ const sItem=page.locator('#ddCalendar [data-dd-event="cal_sys1"]');assert.match(await sItem.innerText(),/請求書[\s\S]*試験顧客｜クロス張替[\s\S]*見積・帳票から自動/);
  assert.deepEqual([await sItem.locator('[data-dd-edit]').count(),await sItem.locator('[data-dd-copy]').count(),await sItem.locator('[data-dd-open]').count()],[0,0,1]);
  const sysBefore=JSON.stringify((await stored()).find(e=>e.id==='cal_sys1'));
  assert.equal(await page.evaluate(()=>bizCopyGoogleEventsToLocal(['cal_sys1'])),0);assert.equal((await stored()).filter(e=>e.copyOf==='cal_sys1').length,0);assert.equal(JSON.stringify((await stored()).find(e=>e.id==='cal_sys1')),sysBefore);
- if(!mobile)assert.match(await page.locator('#ddCalendarSources').innerText(),/帳票・受注 1件[\s\S]*Google 0件/);
+ assert.equal(await page.locator('#ddCalendarSources,[data-dd-copy-month]').count(),0,'日程の保存先 panel removed');
  // User text is rendered as text (grid, day list, dialog): no markup or handler runs
  await page.locator(newButton).click();await page.fill('#ddLeDate','2026-12-04');await page.fill('#ddLeTitle','<img src=x onerror="window.__xss=1"><b>太字</b>');await page.fill('#ddLeMemo','<script>window.__xss=2</script>');await page.locator('#ddLeSave').click();
- assert.equal(await page.locator('#ddCalendar img, #calendarRows img').count(),0);assert.equal(await page.evaluate(()=>[...document.querySelectorAll('#ddCalendar b,#calendarRows b')].some(b=>b.textContent==='太字')),false);assert.equal(await page.evaluate(()=>window.__xss),undefined);
+ assert.equal(await page.locator('#ddCalendar img').count(),0);assert.equal(await page.evaluate(()=>[...document.querySelectorAll('#ddCalendar b')].some(b=>b.textContent==='太字')),false);assert.equal(await page.evaluate(()=>window.__xss),undefined);
  assert.match(await page.locator('#ddCalendar [data-dd-event]').first().innerText(),/<img src=x/);
   // Delete (soft): the record stays in storage
  await page.locator('#ddCalendar [data-dd-day="2026-12-03"]').click();await page.locator('#ddCalendar [data-dd-edit="'+local.id+'"]').click();await page.locator('#ddLeDelete').click();
