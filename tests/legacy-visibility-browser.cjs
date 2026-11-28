@@ -26,6 +26,7 @@ const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)
  assert.equal(rows['旧A 振込'].notes.length,1);assert.match(rows['旧A 振込'].notes[0],/^入金確認待ち .*110,000.*2026-08-25.*未計上/);
  assert.deepEqual(rows['旧D 帳票だけ入金日'].notes,['帳票の入金日 2026-08-20（入金記録なし・未計上）']);
  assert.deepEqual([rows['旧B 現金'].notes,rows['旧C 銀行照合済'].notes],[[],[]]);
+ assert.equal(await page.locator('#salesRows [data-legacy-note]').first().isVisible(),width>800,width+': notes are desktop-only (mobile layout unchanged)');assert.equal(await page.locator('#salesUnlinkedDocs').isVisible(),width>800);
  const unlinked=await page.$$eval('#salesUnlinkedDocs tbody tr',rs=>rs.map(r=>[...r.cells].map(c=>c.textContent)));
  assert.equal(unlinked.length,1);assert.equal(unlinked[0][3],'旧E 売上行なし');assert.match(unlinked[0][4],/44,000/);
  // Totals are exactly what was shown before this change.
