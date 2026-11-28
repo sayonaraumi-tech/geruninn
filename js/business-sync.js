@@ -28,15 +28,21 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
  for(const name of collections){const raw=snapshotStorage.getItem(prefix+name);rows[name]=raw?JSON.parse(raw):[];}
  function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
+ // Listener snapshots arrive per collection and again for metadata-only changes (cache → server).
+ // Unchanged rows are not re-delivered, and changes arriving together are delivered once (one UI render).
+ let dataTimer=null;
+ const sameRows=(a,b)=>Array.isArray(a)&&a.length===b.length&&a.every((r,i)=>r.id===b[i].id&&r.revision===b[i].revision&&JSON.stringify(r.payload)===JSON.stringify(b[i].payload));
+ function deliver(){if(dataTimer){clearTimeout(dataTimer);dataTimer=null;}onData(rows);}
+ function deliverSoon(){if(!dataTimer)dataTimer=setTimeout(()=>{dataTimer=null;if(!stopped)onData(rows);},16);}
  function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
    if(stopped||reloading)return;
-   if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{snapshotStorage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
+   if(!meta?.fromCache){serverSeen.add(name);const changed=!sameRows(rows[name],value);rows[name]=value;if(changed){try{snapshotStorage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}deliverSoon();}}
    // The app cache contains the last server-confirmed lifecycle state for these rows.
-   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||snapshotStorage.getItem(prefix+name)!==null))){rows[name]=value;onData(rows);}
+   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||snapshotStorage.getItem(prefix+name)!==null))&&!sameRows(rows[name],value)){rows[name]=value;deliverSoon();}
    status();
  },e=>{if(!stopped){if(name==='receivables'&&String(e.code||'').includes('permission-denied')){rows[name]=[];serverSeen.add(name);onData(rows);status();return;}error=e.message;status();}}));status();flush();}
  async function reload(){
-  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;snapshotStorage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
+  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;snapshotStorage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}deliver();}finally{reloading=false;}
  }
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
@@ -125,7 +131,7 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
   return flush();
  }
  function archiveBlocked(){const first=queue.findIndex(x=>x.blocked);if(first<0)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[first]));const next=queue.filter((_,i)=>i!==first);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=next.find(x=>x.blocked)?.error||null;status();return key;}
- return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,heldBy,holderFor,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
+ return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,heldBy,holderFor,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;clearTimeout(dataTimer);for(const stop of stops)stop();},service};
 }
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');
