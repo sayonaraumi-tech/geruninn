@@ -143,11 +143,23 @@ function createService(client,{now=()=>new Date()}={}){
     for(const alias of ids){const link=await read('calendarLinks',alias);if(link)await write('calendarLinks',alias,{...link.payload,saleId:id,...(cash?{cashSaleId:id}:{}),manualSaleConfirmed:true});}
     return {saleId:id,registered:true};
   }
+  if(cmd.type==='calendarLocal'){
+    // System (本地) schedule: stored in calendarLinks like synced events, never creates sales or payments.
+    const e=clone(cmd.event||{}),id=e.id||await stable('cal','local:'+(e.localId||cmd.operationId)),row=await read('calendarLinks',id),old=row?.payload||null;
+    if(old&&old.source!=='local')throw Error('Google・取込の日程はシステム内で編集できません。');
+    if(old?.deletedAt)throw Error('削除済みの日程です。');
+    if(cmd.action==='delete'){if(!old)throw Error('日程が見つかりません。');const revision=await write('calendarLinks',id,{...old,deletedAt:now().toISOString(),deleteReason:'本地日程を削除'});return {id,revision};}
+    A.date(e.date);const title=String(e.title||'').trim();if(!title)throw Error('タイトルを入力してください。');
+    const next={...(old||{}),id,source:'local',date:e.date,start:String(e.start||e.date),end:String(e.end||''),title,originalTitle:title,description:String(e.description||''),location:String(e.location||''),pushToGoogle:!!e.pushToGoogle,googleEventId:old?.googleEventId||'',calendarId:old?.calendarId||'',googleCalendarId:old?.googleCalendarId||'',...(!old&&e.copyOf?{copyOf:String(e.copyOf)}:{})};
+    if(next.pushToGoogle&&!next.googleEventId&&/^[a-v0-9]{5,1024}$/.test(cmd.googleEventId||'')){next.googleEventId=cmd.googleEventId;next.googleCreatePending=true;}
+    else if(old?.googleEventId&&!old.googleCreatePending)next.googlePatchPending=true;
+    const revision=await write('calendarLinks',id,next);return {id,revision,event:next};
+  }
   if(cmd.type==='calendar'){
     const e=clone(cmd.event),existing=e.googleEventId?calendarSeed.find(r=>r.payload.googleEventId===e.googleEventId):null,id=existing?.id||await eventId(e),row=await read('calendarLinks',id),old=row?.payload||{};
     if(old.calendarId&&e.googleCalendarId&&old.calendarId!==e.googleCalendarId)throw Error('同じGoogle event IDに異なるカレンダーが指定されています。');
     const formal=!!(old.documentId||old.linkedInvoiceId||old.linkedEstimateId||old.projectId);
-    const incoming={id,googleEventId:e.googleEventId||'',calendarId:e.googleCalendarId||old.calendarId||'',googleCalendarId:e.googleCalendarId||old.calendarId||'',source:e.source||(e.googleEventId?'google':'ics')};
+    const incoming={id,googleEventId:e.googleEventId||'',calendarId:e.googleCalendarId||old.calendarId||'',googleCalendarId:e.googleCalendarId||old.calendarId||'',source:old.source==='local'?'local':e.source||(e.googleEventId?'google':'ics')};
     for(const k of ['date','start','end','updated','htmlLink','uid'])incoming[k]=e[k]||'';
     incoming.googleLatestTitle=e.title||'';incoming.googleOriginalDescription=e.description||'';incoming.googleStatus=e.googleStatus||'confirmed';
     const parsed=parseCalendar(e.title);

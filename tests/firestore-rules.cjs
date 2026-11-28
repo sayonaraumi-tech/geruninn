@@ -105,6 +105,14 @@ test('two devices: estimate/acceptance, invoice/download idempotency, partial pa
   for(const d of audits.docs.slice(0,1)){await assertFails(deleteDoc(d.ref));await assertFails(updateDoc(d.ref,{action:'forged'}));}
  }finally{phone.stop();desktop.stop();admin.dispose();staff.dispose();}
 });
+test('本地日程 save/edit/delete passes the deployed rules for staff and admin without accounting writes',async()=>{
+ for(const role of ['staff','admin']){const client=await clientFor(role),service=createService(client);try{
+  const id='cal_local_rules_'+role,event={id,date:'2026-12-03',start:'2026-12-03',end:'2026-12-04',title:'本地 '+role};
+  await exec(service,{type:'calendarLocal',action:'save',event});await exec(service,{type:'calendarLocal',action:'save',event:{...event,title:'本地 変更'}});await exec(service,{type:'calendarLocal',action:'delete',event:{id}});
+  const row=(await getDoc(ref(db('admin'),'calendarLinks',id))).data().payload;assert.equal(row.source,'local');assert.equal(row.title,'本地 変更');assert.ok(row.deletedAt);
+  assert.equal((await getDocs(collection(db('admin'),`companies/${company}/sales`))).size,0);assert.equal((await getDocs(collection(db('admin'),`companies/${company}/payments`))).size,0);
+ }finally{client.dispose();}}
+});
 test('migration twice preserves local originals and existing cloud records, marker prevents duplicates',async()=>{
  const client=await clientFor('admin'),local=storage(),legacy={audit:[{id:'old-audit',action:'旧操作',user:'local',at:'2026-08-10'}],sales:[{id:'old-sale',sourceId:'old-doc',customer:'旧顧客',amount:100000,saleDate:'2026-08-01',invoiceDate:'2026-08-10'}],payments:[{id:'old-pay',saleId:'old-sale',amount:50000,date:'2026-08-15',method:'現金'}]};
  local.setItem(LOCAL_KEYS.business,JSON.stringify(legacy));local.setItem(LOCAL_KEYS.documents,JSON.stringify([{...snapshot('unused'),documentId:undefined,historyId:'old-doc'}]));const raw=local.getItem(LOCAL_KEYS.business);
