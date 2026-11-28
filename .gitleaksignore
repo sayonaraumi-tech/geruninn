@@ -1,0 +1,9 @@
+# Reviewed false positives (2026-11-28). Re-check if any of these files change.
+# - firebase-config.json: Firebase Web API key, public by design (it identifies the project; access is enforced by
+#   firestore.rules and Firebase Auth). Restrict it by HTTP referrer in Google Cloud Console.
+# - tests/standalone-receipt.cjs: Firestore document path strings in a test, not credentials.
+ffc63d27d6f9ba79b459496a7191a3f0c7215a47:tests/standalone-receipt.cjs:generic-api-key:166
+ffc63d27d6f9ba79b459496a7191a3f0c7215a47:tests/standalone-receipt.cjs:generic-api-key:181
+d3cd8dc1fd860f59be7520c3b9c388fbf76863bf:tests/standalone-receipt.cjs:generic-api-key:166
+d3cd8dc1fd860f59be7520c3b9c388fbf76863bf:tests/standalone-receipt.cjs:generic-api-key:181
+9c88bd8173fbe947d2b9c7043aca18302bedf11c:firebase-config.json:gcp-api-key:5
