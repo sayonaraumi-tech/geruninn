@@ -58,6 +58,10 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     await page.locator('#ddPreviewPlaceholder button').click();assert(await page.locator('#previewArea').isVisible());assert.equal(await page.locator('#ddPreviewPlaceholder').isVisible(),false);
     const form=await page.locator('#pageChohyo .editor-card').first().boundingBox(),preview=await page.locator('#previewArea').boundingBox();assert(preview.x>form.x+form.width,'preview is to the right of the form');
     assert.equal(await page.locator('#previewArea .invoice').evaluate(e=>e.offsetWidth),Math.round(210*96/25.4),'invoice layout width stays 210mm');
+    // The PDF export clones .invoice into an off-screen 210mm stage (doPrint); the design CSS must not reach that clone.
+    const exportStyle=()=>page.evaluate(()=>{const c=document.querySelector('#previewArea .invoice').cloneNode(true),st=document.createElement('div');st.style.cssText='position:absolute;left:-10000px;top:0;width:210mm;pointer-events:none';c.style.cssText+=';width:210mm;margin:0;box-shadow:none;transform:none';st.append(c);document.body.append(st);fitInvoiceToOnePage(c,docType);const cs=getComputedStyle(c),r={zoom:cs.zoom,width:c.offsetWidth,height:c.scrollHeight,font:cs.fontFamily,color:cs.color,background:cs.backgroundColor,dens:c.style.getPropertyValue('--dens'),cls:c.className};st.remove();return JSON.stringify(r);});
+    const withDesign=await exportStyle();await page.evaluate(()=>document.body.classList.remove('dd'));const withoutDesign=await exportStyle();await page.evaluate(()=>document.body.classList.add('dd'));
+    assert.equal(withDesign,withoutDesign,'PDF export clone is identical with and without the desktop design');
     await page.locator('#ddChohyoHead button',{hasText:'保存帳票へ'}).click();assert.equal(await page.locator('#bizNav button.active').getAttribute('data-page'),'savedDocs');
     await page.evaluate(()=>bizSwitchPage('chohyo'));assert.equal(await page.locator('#previewArea').isVisible(),false,'preview resets after navigation');
    }
