@@ -1,10 +1,11 @@
 // 入金基準日 / 対象月 follow the current date on every render unless the user chose a value,
 // so a payment registered after the date changes appears without reloading the page.
+// The device clock is Japan time (the app uses the device's local date), also on UTC CI runners.
 const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('node:path'),http=require('node:http'),{chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 const business={estimates:[],projects:[],calendar:[],audit:[],expenses:[],bank:[],payments:[],sales:[{id:'fresh_sale',customer:'鮮度テスト',content:'施工',amount:11000,saleDate:'2026-11-20',invoiceDate:'2026-11-20',paymentMethod:'銀行振込'}]};
 (async()=>{await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,...(process.env.PLAYWRIGHT_CHANNEL?{channel:process.env.PLAYWRIGHT_CHANNEL}:{})});try{for(const width of [390,1280]){
- const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:'block'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
+ const page=await browser.newPage({viewport:{width,height:900},serviceWorkers:'block',timezoneId:'Asia/Tokyo'}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.route('https://**/*',r=>r.fulfill({body:''}));await page.route('**/firebase-config.json',r=>r.fulfill({json:{enabled:false}}));
  await page.clock.install({time:new Date('2026-11-30T14:58:00Z')});// 2026-11-30 23:58 JST
  await page.addInitScript(b=>{if(!localStorage.getItem('tsukinowa_business_v1'))localStorage.setItem('tsukinowa_business_v1',b);},JSON.stringify(business));
