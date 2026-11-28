@@ -917,15 +917,19 @@ body{padding-top:72px}
 /* Use the same navigation, type, containers and controls as 見積履歴.
    Only dashboard composition and bank interaction layouts belong here. */
 
-#pageDashboard .biz-card{min-width:0;position:relative;padding-right:62px}
+#pageDashboard .biz-card{min-width:0;position:relative}
+/* KPI icons are a mobile element; the desktop design metric card has none. */
+@media(max-width:800px){
+#pageDashboard .biz-card{padding-right:62px}
 #pageDashboard .biz-card:after{content:'▥';position:absolute;right:18px;top:50%;transform:translateY(-50%);display:grid;place-items:center;width:38px;height:38px;border-radius:12px;background:#edf8f3;color:#579980;font:24px Arial,sans-serif}
 #pageDashboard .biz-card:nth-child(2):after{content:'▤'}
 #pageDashboard .biz-card:nth-child(3):after{content:'▧'}
 #pageDashboard .biz-card:nth-child(4):after{content:'▣'}
 #pageDashboard .home-secondary .biz-card:after{content:'⚖'}
 #pageDashboard .home-secondary .biz-card:nth-child(2):after{content:'▱'}
-
-#pageDashboard .biz-kpi{line-height:1.3;overflow-wrap:anywhere;letter-spacing:-.4px}
+#pageDashboard .biz-kpi{line-height:1.3}
+}
+#pageDashboard .biz-kpi{overflow-wrap:anywhere;letter-spacing:-.4px}
 
 #homeLedger>.biz-table-wrap>.biz-table{min-width:760px;table-layout:fixed}
 #homeLedger th:first-child{width:100px}#homeLedger th:nth-child(2){width:100px}#homeLedger th:nth-child(5){width:125px}#homeLedger th:nth-child(6){width:115px}#homeLedger th:last-child{width:150px}
@@ -1006,15 +1010,18 @@ body{padding-top:72px}
 .biz-table{line-height:var(--biz-line)}
 .biz-table th{font-weight:700}
 .biz-btn{line-height:var(--biz-line);font-weight:400}
-:is(.app-page,dialog,#bizEventModal) :is(input,select,textarea):not([type=checkbox]):not([type=radio]){font-family:inherit;font-size:var(--biz-font);line-height:var(--biz-line);font-weight:400;padding:var(--biz-control-pad);border:1px solid #dfe3e8;border-radius:8px;max-width:100%;min-width:0;background:#fff;color:inherit}
+:is(.app-page:not(.editor),dialog,#bizEventModal) :is(input,select,textarea):not([type=checkbox]):not([type=radio]){font-family:inherit;font-size:var(--biz-font);line-height:var(--biz-line);font-weight:400;padding:var(--biz-control-pad);border:1px solid #dfe3e8;border-radius:8px;max-width:100%;min-width:0;background:#fff;color:inherit}
 :is(.app-page,dialog,#bizEventModal) button{font-family:inherit}
 .sales-filters :is(input,select){width:100%}
 .sales-register .register-status{display:inline-block;padding:4px 7px;font-size:var(--biz-small);line-height:var(--biz-line);border-radius:999px;white-space:nowrap}
 .sales-register .register-note{display:block;margin-top:4px;min-width:180px;font-size:var(--biz-small);line-height:var(--biz-line);color:#9a5b00;white-space:normal}
 .register-unlinked{margin-top:14px}.register-unlinked p{margin:0 0 6px;font-size:var(--biz-small);color:#9a5b00}
 #salesViewStatus{font-size:12px;color:#777;margin:10px 0}
+@media(max-width:800px){
+#pageChohyo :is(input,select,textarea):not([type=checkbox]):not([type=radio]){font-family:inherit;font-size:var(--biz-font);line-height:var(--biz-line);font-weight:400;padding:var(--biz-control-pad);border:1px solid #dfe3e8;border-radius:8px;max-width:100%;min-width:0;background:#fff;color:inherit}
 .editor :is(.tab,.btn-add,.btn-print,.btn-download,.btn-preview){font-size:var(--biz-font);line-height:var(--biz-line);padding:9px 12px;border-radius:9px;letter-spacing:normal}
 .editor .form-group label{font-size:var(--biz-small)}
+}
 dialog h2{font-size:15px}
 .biz-title>*,.biz-section-head>*{min-width:0}
 .biz-title,.biz-section-head{flex-wrap:wrap}
@@ -1026,7 +1033,7 @@ dialog h2{font-size:15px}
    (block at the end, screen <=800px) style the 日程 month grid and 本地予定 dialog; print/PDF output is untouched. */
 .dd-only{display:none!important}
 @media screen and (min-width:801px){
-body.dd{--dd-side-w:205px;--dd-top-h:57px;--biz-control-pad:8px;font-feature-settings:"tnum" 1;padding-top:calc(var(--dd-top-h) + 20px);padding-left:var(--dd-side-w);background:var(--dd-bg);color:var(--dd-fg)}
+body.dd{--dd-side-w:205px;--dd-top-h:57px;--biz-control-pad:8px;--dd-control-font:13.3333px;font-feature-settings:"tnum" 1;padding-top:calc(var(--dd-top-h) + 20px);padding-left:var(--dd-side-w);background:var(--dd-bg);color:var(--dd-fg)}
 body.dd .dd-only{display:revert!important}
 body.dd span.dd-only,body.dd button.dd-only{display:inline-flex!important;align-items:center}
 body.dd section.dd-only,body.dd div.dd-only{display:block!important}
@@ -1048,35 +1055,49 @@ body.dd .biz-sync,body.dd .biz-user{color:var(--dd-mut)}
 body.dd #bizCloudAccountButton{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:5px}
 /* page frame and header */
 body.dd .biz-page,body.dd #pageEstimates{max-width:1650px;margin:0 auto;padding:0 20px 40px}
-body.dd .biz-title{align-items:center;margin-bottom:14px;flex-wrap:wrap}
+body.dd .biz-title{align-items:center;margin-bottom:14px;flex-wrap:nowrap}
+body.dd .biz-title>.biz-actions{flex:none}
 body.dd .biz-title h1{font-size:20px;font-weight:750;color:var(--dd-fg)}
 body.dd .biz-title .biz-muted,body.dd .biz-title #dashPeriod{font-size:11px;color:var(--dd-mut);margin-top:6px;line-height:normal}
 body.dd .biz-muted{color:var(--dd-mut)}
-/* panels */
-body.dd .biz-section{background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;padding:15px;margin-top:13px;color:var(--dd-fg)}
-body.dd .biz-section>.biz-section-head:first-child{margin:-15px -15px 15px;padding:12px 15px;border-bottom:1px solid var(--dd-line);min-height:45px}
-body.dd .biz-section-head h2,body.dd .biz-section h2{font-size:13px;font-weight:700;color:var(--dd-fg)}
+/* panels: design .panel = white card (radius 9, shadow) + h3 title bar (13px padding, border-bottom) + body with 15px padding.
+   .biz-section keeps its source markup: the head is the title bar, the section padding is the body padding, tables are flush. */
+body.dd :is(.biz-section,.dd-panel){background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;color:var(--dd-fg);min-width:0}
+body.dd .biz-section{padding:15px;margin-top:13px}
+body.dd .dd-panel{overflow:hidden}
+body.dd :is(.biz-section>.biz-section-head:first-child,.dd-panel>h3){display:flex;align-items:center;gap:8px;min-height:46px;box-sizing:border-box;padding:13px;border-bottom:1px solid var(--dd-line);background:var(--dd-panel);font-size:13px;font-weight:700;color:var(--dd-fg)}
+body.dd .biz-section>.biz-section-head:first-child{margin:-15px -15px 15px}
+body.dd :is(.biz-section>.biz-section-head:first-child,.dd-panel>h3):has(button,input,select){padding-block:8px}
+body.dd .biz-section-head h2,body.dd .biz-section h2{font-size:13px;font-weight:700;color:var(--dd-fg);margin:0}
+body.dd .biz-section-head>div:has(>h2){display:flex;align-items:baseline;gap:10px;min-width:0}
+body.dd .biz-section-head>div>h2~.biz-muted{font-size:11px;font-weight:400;margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+body.dd :is(.biz-section-head,.dd-panel>h3){--dd-control-font:11px;--biz-control-pad:5px 8px}
+body.dd :is(.biz-section-head,.dd-panel>h3) .biz-btn{padding:5px 8px}
 body.dd details.biz-section{padding:0}
 body.dd .biz-section>.biz-table-wrap,body.dd .biz-section>div>.biz-table-wrap{margin-left:-15px;margin-right:-15px}
+body.dd .biz-section>.biz-table-wrap:last-child,body.dd .biz-section>div:last-child>.biz-table-wrap:last-child{margin-bottom:-15px}
+body.dd .dd-panel>.biz-table-wrap{margin:0}
 /* metrics */
 body.dd .biz-grid{gap:12px;margin-top:0}
 body.dd .biz-grid+.biz-grid{margin-top:12px}
 body.dd .biz-card{background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;padding:15px;color:var(--dd-fg)}
-body.dd .biz-card h3{font-size:11px;color:var(--dd-mut);font-weight:400;margin-bottom:9px}
-body.dd .biz-kpi,body.dd #pageDashboard .biz-kpi{font-size:21px;font-weight:700;line-height:normal;letter-spacing:-.025em;color:var(--dd-fg)}
+body.dd .biz-card h3{display:inline;font-size:11px;color:var(--dd-mut);font-weight:400;margin:0}
+body.dd .biz-kpi,body.dd #pageDashboard .biz-kpi{display:block;margin-top:9px;font-size:21px;font-weight:700;line-height:normal;letter-spacing:-.025em;color:var(--dd-fg)}
 /* tables */
 body.dd .biz-table th{background:var(--dd-bg);color:var(--dd-mut);font-weight:640;font-size:12px;padding:11px;border-bottom:1px solid var(--dd-line)}
 body.dd .biz-table td{font-size:12px;padding:11px;border-bottom:1px solid var(--dd-line);color:var(--dd-fg)}
 /* small buttons: table rows, saved-document rows, filter bars (design .small) */
 body.dd .biz-table td .biz-btn,body.dd #allSavedDocsList .biz-btn,body.dd .dd-toolbar .biz-btn{font-size:11px;padding:5px 8px}
+/* row actions share one top edge (the design primary has no border, so it is 2px shorter than secondary buttons) */
+body.dd .biz-table td .biz-actions{align-items:flex-start}
 /* controls */
-body.dd .biz-btn{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:5px}
-body.dd .biz-btn.primary{background:var(--dd-acc);border-color:var(--dd-acc);color:#fff;font-weight:400}
+body.dd .biz-btn{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:5px;font-size:var(--dd-control-font)}
+body.dd .biz-btn.primary{background:var(--dd-acc);border:0;color:#fff;font-weight:400}
 body.dd .biz-btn.ok{color:var(--dd-acc);border-color:color-mix(in srgb,var(--dd-acc) 35%,var(--dd-line));background:var(--dd-selected)}
 body.dd .biz-btn.danger{color:#bb3f3f}
 body.dd .biz-field label,body.dd .sales-filters label{color:var(--dd-mut)}
 body.dd .biz-field input,body.dd .biz-field select,body.dd .biz-field textarea,body.dd .biz-section input:not([type=checkbox]):not([type=radio]):not([type=file]),body.dd .biz-section select{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:6px}
-body.dd :is(.app-page,dialog,#bizEventModal) :is(input,select,textarea):not([type=checkbox]):not([type=radio]){background:var(--dd-panel);color:var(--dd-fg);border-color:var(--dd-line);border-radius:6px}
+body.dd :is(.app-page:not(.editor),dialog,#bizEventModal) :is(input,select,textarea):not([type=checkbox]):not([type=radio]){background:var(--dd-panel);color:var(--dd-fg);border-color:var(--dd-line);border-radius:6px;font-size:var(--dd-control-font)}
 body.dd[data-dd-theme="dark"] :is(.app-page,dialog,#bizEventModal) :is(input,select){color-scheme:dark}
 body.dd .sales-filters{background:var(--dd-bg)}
 body.dd .biz-inline-banner{background:var(--dd-panel);border-color:var(--dd-line);color:var(--dd-fg)}
@@ -1086,12 +1107,10 @@ body.dd .biz-alert{border-radius:6px;background:var(--dd-selected);border-color:
 body.dd dialog{background:var(--dd-panel);color:var(--dd-fg)}
 /* home: design analytics */
 body.dd #ddHomeAnalytics{display:grid!important;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:13px;margin-top:13px}
-body.dd .dd-panel{background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;overflow:hidden;min-width:0}
-body.dd .dd-panel>h3{font-size:13px;padding:13px;margin:0;border-bottom:1px solid var(--dd-line);color:var(--dd-fg)}
 body.dd .dd-pad{padding:15px}
 body.dd .dd-toolbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
 body.dd .dd-toolbar label{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dd-mut)}
-body.dd .dd-toolbar select{border:1px solid var(--dd-line);border-radius:6px;padding:8px;background:var(--dd-panel);color:var(--dd-fg);font:inherit;font-size:13px}
+body.dd .dd-toolbar select{border:1px solid var(--dd-line);border-radius:6px;padding:8px;background:var(--dd-panel);color:var(--dd-fg);font:inherit;font-size:var(--dd-control-font)}
 body.dd .compare-bars{display:flex;align-items:stretch;gap:6px;height:220px;padding-top:20px}
 body.dd .compare-slot{flex:1;min-width:0;display:flex;align-items:center;flex-direction:column;gap:5px;font-size:10px;color:var(--dd-mut)}
 body.dd .compare-rail{flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center;border-bottom:1px solid var(--dd-line)}
@@ -1142,13 +1161,17 @@ body.dd #previewArea .invoice{zoom:.76;box-shadow:0 2px 12px #0002;color:#1a1a1a
 body.dd #pageChohyo .editor-card{background:var(--dd-panel);border:1px solid var(--dd-line);box-shadow:none;border-radius:7px;padding:15px;margin-bottom:12px;color:var(--dd-fg)}
 body.dd #pageChohyo .editor-card>h2,body.dd #pageChohyo .editor-card>.subtitle{display:none}
 body.dd #pageChohyo .tabs{background:var(--dd-bg)}
-body.dd #pageChohyo .tab{color:var(--dd-mut)}
 body.dd #pageChohyo .tab.active{background:var(--dd-acc)!important;color:#fff;box-shadow:none}
-body.dd #pageChohyo .btn-print{background:var(--dd-acc)!important;color:#fff;box-shadow:none;border-radius:6px}
+body.dd #pageChohyo .btn-print{background:var(--dd-acc)!important;color:#fff;box-shadow:none;border-radius:6px;padding:12px}
 body.dd #pageChohyo .btn-download{border-color:var(--dd-acc);color:var(--dd-fg);background:var(--dd-panel)}
-body.dd #pageChohyo .btn-add{color:var(--dd-acc);background:var(--dd-bg)}
+body.dd #pageChohyo .btn-add{color:var(--dd-acc)}
+body.dd #pageChohyo :is(input,select,textarea){font-family:inherit}
+body.dd #pageChohyo .form-group :is(input,textarea){padding:9px;font-size:13px}
+body.dd #pageChohyo .editor-card h3{font-size:13px}
+body.dd #pageChohyo .item-row input{padding:8px}
+body.dd #pageChohyo .tip{font-size:11px}
 body.dd #pageChohyo .form-group input,body.dd #pageChohyo .form-group select,body.dd #pageChohyo .form-group textarea,body.dd #pageChohyo .item-row input,body.dd #pageChohyo .item-row select{background:var(--dd-panel);color:var(--dd-fg);border-color:var(--dd-line)}
-body.dd #pageChohyo .form-group label,body.dd #pageChohyo h3{color:var(--dd-mut)}
+body.dd #pageChohyo .form-group label{color:var(--dd-mut)}
 body.dd #pageChohyo #confirmedHistoryCard{display:none}
 /* The existing preview toggle is kept (tests/onoda-browser.cjs requires the preview to reset on navigation). */
 body.dd #pageChohyo.editor>#ddPreviewPlaceholder{grid-column:2;grid-row:2/span 40;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:420px;border:1px dashed var(--dd-line);border-radius:7px;background:var(--dd-bg);color:var(--dd-mut);font-size:12px;position:sticky;top:calc(var(--dd-top-h) + 12px)}
@@ -1171,9 +1194,7 @@ body.dd .balance-primary small b{color:var(--dd-fg);margin-left:4px}
 body.dd .legend-sw.income{background:var(--dd-side-active)}
 body.dd .balance-row.income i{background:color-mix(in srgb,var(--dd-acc) 55%,var(--dd-panel))}
 body.dd #ddRecentSales{margin-top:13px}
-body.dd .dd-panel>h3{display:flex;justify-content:space-between;align-items:center;gap:8px}
-body.dd .dd-panel>h3 .biz-btn{font-size:11px;padding:5px 9px;font-weight:600}
-body.dd .dd-panel>.biz-table-wrap{margin:0}
+body.dd .dd-panel>h3{justify-content:space-between}
 /* metric cards on 売上・支出・銀行 */
 body.dd #ddSalesMetrics,body.dd #ddExpenseMetrics,body.dd #ddBankMetrics{display:grid!important;margin:0 0 13px}
 body.dd .dd-metrics3{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -1183,9 +1204,10 @@ body.dd .dd-filters .dd-toolbar{margin-bottom:8px}
 body.dd .dd-count{font-size:11px}
 /* 銀行: 月別未照合明細 */
 body.dd #ddBankMonthly{margin-bottom:13px}
-body.dd .dd-bank-month{margin-bottom:14px;font-size:12px}
+body.dd .dd-bank-month{margin-bottom:14px;font-size:13px}
 body.dd .dd-bank-month>.biz-muted{margin:5px 0;font-size:11px}
 body.dd .dd-bank-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--dd-line)}
+body.dd .dd-bank-item .biz-btn{font-size:11px;padding:5px 8px}
 /* 設定: 会社情報 + 取込機能 */
 body.dd #ddCompanyInfo{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;margin-bottom:13px}
 body.dd .dd-info{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px 12px;font-size:12px}
