@@ -1026,7 +1026,7 @@ dialog h2{font-size:15px}
    (block at the end, screen <=800px) style the 日程 month grid and 本地予定 dialog; print/PDF output is untouched. */
 .dd-only{display:none!important}
 @media screen and (min-width:801px){
-body.dd{--dd-side-w:205px;--dd-top-h:57px;font-feature-settings:"tnum" 1;padding-top:calc(var(--dd-top-h) + 20px);padding-left:var(--dd-side-w);background:var(--dd-bg);color:var(--dd-fg)}
+body.dd{--dd-side-w:205px;--dd-top-h:57px;--biz-control-pad:8px;font-feature-settings:"tnum" 1;padding-top:calc(var(--dd-top-h) + 20px);padding-left:var(--dd-side-w);background:var(--dd-bg);color:var(--dd-fg)}
 body.dd .dd-only{display:revert!important}
 body.dd span.dd-only,body.dd button.dd-only{display:inline-flex!important;align-items:center}
 body.dd section.dd-only,body.dd div.dd-only{display:block!important}
@@ -1050,7 +1050,7 @@ body.dd #bizCloudAccountButton{background:var(--dd-panel);color:var(--dd-fg);bor
 body.dd .biz-page,body.dd #pageEstimates{max-width:1650px;margin:0 auto;padding:0 20px 40px}
 body.dd .biz-title{align-items:center;margin-bottom:14px;flex-wrap:wrap}
 body.dd .biz-title h1{font-size:20px;font-weight:750;color:var(--dd-fg)}
-body.dd .biz-title .biz-muted,body.dd .biz-title #dashPeriod{font-size:11px;color:var(--dd-mut);margin-top:6px;line-height:1.5}
+body.dd .biz-title .biz-muted,body.dd .biz-title #dashPeriod{font-size:11px;color:var(--dd-mut);margin-top:6px;line-height:normal}
 body.dd .biz-muted{color:var(--dd-mut)}
 /* panels */
 body.dd .biz-section{background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;padding:15px;margin-top:13px;color:var(--dd-fg)}
@@ -1063,13 +1063,15 @@ body.dd .biz-grid{gap:12px;margin-top:0}
 body.dd .biz-grid+.biz-grid{margin-top:12px}
 body.dd .biz-card{background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;padding:15px;color:var(--dd-fg)}
 body.dd .biz-card h3{font-size:11px;color:var(--dd-mut);font-weight:400;margin-bottom:9px}
-body.dd .biz-kpi{font-size:21px;font-weight:750;letter-spacing:-.025em;color:var(--dd-fg)}
+body.dd .biz-kpi,body.dd #pageDashboard .biz-kpi{font-size:21px;font-weight:700;line-height:normal;letter-spacing:-.025em;color:var(--dd-fg)}
 /* tables */
-body.dd .biz-table th{background:var(--dd-bg);color:var(--dd-mut);font-weight:640;border-bottom:1px solid var(--dd-line)}
-body.dd .biz-table td{border-bottom:1px solid var(--dd-line);color:var(--dd-fg)}
+body.dd .biz-table th{background:var(--dd-bg);color:var(--dd-mut);font-weight:640;font-size:12px;padding:11px;border-bottom:1px solid var(--dd-line)}
+body.dd .biz-table td{font-size:12px;padding:11px;border-bottom:1px solid var(--dd-line);color:var(--dd-fg)}
+/* small buttons: table rows, saved-document rows, filter bars (design .small) */
+body.dd .biz-table td .biz-btn,body.dd #allSavedDocsList .biz-btn,body.dd .dd-toolbar .biz-btn{font-size:11px;padding:5px 8px}
 /* controls */
 body.dd .biz-btn{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:5px}
-body.dd .biz-btn.primary{background:var(--dd-acc);border-color:var(--dd-acc);color:#fff;font-weight:600}
+body.dd .biz-btn.primary{background:var(--dd-acc);border-color:var(--dd-acc);color:#fff;font-weight:400}
 body.dd .biz-btn.ok{color:var(--dd-acc);border-color:color-mix(in srgb,var(--dd-acc) 35%,var(--dd-line));background:var(--dd-selected)}
 body.dd .biz-btn.danger{color:#bb3f3f}
 body.dd .biz-field label,body.dd .sales-filters label{color:var(--dd-mut)}
@@ -1078,7 +1080,8 @@ body.dd :is(.app-page,dialog,#bizEventModal) :is(input,select,textarea):not([typ
 body.dd[data-dd-theme="dark"] :is(.app-page,dialog,#bizEventModal) :is(input,select){color-scheme:dark}
 body.dd .sales-filters{background:var(--dd-bg)}
 body.dd .biz-inline-banner{background:var(--dd-panel);border-color:var(--dd-line);color:var(--dd-fg)}
-body.dd .biz-badge{border-radius:4px;font-weight:700;font-size:10px}
+body.dd :is(.biz-badge,.register-status){border-radius:4px;font-weight:700;font-size:10px;padding:4px 7px;line-height:normal;display:inline-block;white-space:nowrap}
+body.dd .register-status{background:#fff2df;color:#945b12}body.dd .register-status.paid{background:#e6f4ec;color:#16764b}
 body.dd .biz-alert{border-radius:6px;background:var(--dd-selected);border-color:var(--dd-line);color:var(--dd-fg)}
 body.dd dialog{background:var(--dd-panel);color:var(--dd-fg)}
 /* home: design analytics */

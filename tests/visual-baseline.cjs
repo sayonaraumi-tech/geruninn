@@ -27,7 +27,8 @@ module.exports=async(page,width)=>{
  await page.evaluate(()=>document.getElementById('cloudDialog').close());
  await page.evaluate(()=>bizSwitchPage('sales'));
  const cells=await page.locator('#salesRegisterTable tbody tr').first().locator('td').first().evaluate(e=>({fontSize:getComputedStyle(e).fontSize,padding:getComputedStyle(e).padding,rowHeight:e.parentElement.getBoundingClientRect().height}));
- assert.equal(cells.fontSize,'13px');assert.equal(cells.padding,'10px 9px');
+ // desktop (≥801px) follows the 霧藍 design table (12px, 11px padding); mobile keeps 13px / 10px 9px
+ const cell=width>800?{fontSize:'12px',padding:'11px'}:{fontSize:'13px',padding:'10px 9px'};assert.equal(cells.fontSize,cell.fontSize);assert.equal(cells.padding,cell.padding);
  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),before,'visual navigation must not modify records');
  if(process.env.PREVIEW_DIR)fs.writeFileSync(path.join(process.env.PREVIEW_DIR,'visual-metrics-'+width+'.json'),JSON.stringify({reference,pages:report,salesCell:cells},null,2));
  console.log('PASS all nine pages / shared type and controls / header density / dialog / no overflow / unchanged records / '+width);
