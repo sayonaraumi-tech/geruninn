@@ -1068,7 +1068,6 @@ body.dd .biz-kpi{font-size:21px;font-weight:750;letter-spacing:-.025em;color:var
 /* tables */
 body.dd .biz-table th{background:var(--dd-bg);color:var(--dd-mut);font-weight:640;border-bottom:1px solid var(--dd-line)}
 body.dd .biz-table td{border-bottom:1px solid var(--dd-line);color:var(--dd-fg)}
-body.dd .biz-table th:first-child,body.dd .biz-table td:first-child{padding-left:15px}
 /* controls */
 body.dd .biz-btn{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:5px}
 body.dd .biz-btn.primary{background:var(--dd-acc);border-color:var(--dd-acc);color:#fff;font-weight:600}
@@ -1131,9 +1130,9 @@ body.dd #pageChohyo.editor{max-width:1650px;margin:0 auto;padding:0 20px 40px}
 body.dd #pageChohyo.editor.active{display:grid;grid-template-columns:minmax(360px,.85fr) minmax(420px,1.15fr);column-gap:12px;align-items:start}
 body.dd #pageChohyo.editor>*{grid-column:1;min-width:0}
 body.dd #pageChohyo.editor>#ddChohyoHead{grid-column:1/-1;grid-row:1}
-body.dd #pageChohyo.editor>button.biz-btn{grid-row:2;justify-self:start;margin:0 0 12px}
-body.dd #pageChohyo.editor>button.biz-btn+button.biz-btn{justify-self:end}
-body.dd #pageChohyo.editor>#previewArea{grid-column:2;grid-row:2/span 40;display:flex!important;position:sticky;top:calc(var(--dd-top-h) + 12px);max-height:calc(100vh - var(--dd-top-h) - 24px);overflow:auto;border:1px solid var(--dd-line);border-radius:7px;padding:12px;background:var(--dd-bg);justify-content:center}
+body.dd #pageChohyo.editor>button.biz-btn:not(.dd-only){grid-row:2;justify-self:start;margin:0 0 12px}
+body.dd #pageChohyo.editor>button.biz-btn:not(.dd-only)+button.biz-btn{justify-self:end}
+body.dd #pageChohyo.editor>#previewArea{grid-column:2;grid-row:2/span 40;position:sticky;top:calc(var(--dd-top-h) + 12px);max-height:calc(100vh - var(--dd-top-h) - 24px);overflow:auto;border:1px solid var(--dd-line);border-radius:7px;padding:12px;background:var(--dd-bg);justify-content:center}
 body.dd #previewArea .invoice{zoom:.76;box-shadow:0 2px 12px #0002;color:#1a1a1a;background:#fff}
 body.dd #pageChohyo .editor-card{background:var(--dd-panel);border:1px solid var(--dd-line);box-shadow:none;border-radius:7px;padding:15px;margin-bottom:12px;color:var(--dd-fg)}
 body.dd #pageChohyo .editor-card>h2,body.dd #pageChohyo .editor-card>.subtitle{display:none}
@@ -1145,12 +1144,15 @@ body.dd #pageChohyo .btn-download{border-color:var(--dd-acc);color:var(--dd-fg);
 body.dd #pageChohyo .btn-add{color:var(--dd-acc);background:var(--dd-bg)}
 body.dd #pageChohyo .form-group input,body.dd #pageChohyo .form-group select,body.dd #pageChohyo .form-group textarea,body.dd #pageChohyo .item-row input,body.dd #pageChohyo .item-row select{background:var(--dd-panel);color:var(--dd-fg);border-color:var(--dd-line)}
 body.dd #pageChohyo .form-group label,body.dd #pageChohyo h3{color:var(--dd-mut)}
-body.dd #pageChohyo .btn-preview,body.dd #pageChohyo #confirmedHistoryCard{display:none}
+body.dd #pageChohyo #confirmedHistoryCard{display:none}
+/* The existing preview toggle is kept (tests/onoda-browser.cjs requires the preview to reset on navigation). */
+body.dd #pageChohyo.editor>#ddPreviewPlaceholder{grid-column:2;grid-row:2/span 40;display:flex!important;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:420px;border:1px dashed var(--dd-line);border-radius:7px;background:var(--dd-bg);color:var(--dd-mut);font-size:12px;position:sticky;top:calc(var(--dd-top-h) + 12px)}
+body.dd #pageChohyo.editor>#ddPreviewPlaceholder:has(+#previewArea.show){display:none!important}
 body.dd #ddChohyoHead{display:flex!important;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
 body.dd #ddChohyoHead h1{font-size:20px;font-weight:750;color:var(--dd-fg)}
 @media (max-width:1150px){
  body.dd #pageChohyo.editor{grid-template-columns:minmax(0,1fr)}
- body.dd #pageChohyo.editor>#previewArea{grid-column:1;grid-row:auto;position:static;max-height:950px}
+ body.dd #pageChohyo.editor>#previewArea,body.dd #pageChohyo.editor>#ddPreviewPlaceholder{grid-column:1;grid-row:auto;position:static;max-height:950px}
  body.dd #previewArea .invoice{zoom:.86}
  body.dd #ddHomeAnalytics,body.dd #ddCalendar{grid-template-columns:1fr}
 }
@@ -3772,7 +3774,8 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
    c.addEventListener('click',e=>{const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);});}
   // 帳票
   const chohyo=$('pageChohyo');
-  if(chohyo){const h=document.createElement('div');h.id='ddChohyoHead';h.className='dd-only';h.innerHTML='<h1>帳票</h1>';h.append(button('保存帳票へ','',go('savedDocs')));chohyo.prepend(h);}
+  if(chohyo){const h=document.createElement('div');h.id='ddChohyoHead';h.className='dd-only';h.innerHTML='<h1>帳票</h1>';h.append(button('保存帳票へ','',go('savedDocs')));chohyo.prepend(h);
+   const ph=document.createElement('div');ph.id='ddPreviewPlaceholder';ph.className='dd-only';ph.innerHTML='<div>帳票プレビュー</div>';const pb=button('👁 プレビューを表示','primary',()=>togglePreview());pb.classList.remove('dd-only');ph.append(pb);$('previewArea')?.before(ph);}
   addHeaderActions('pageEstimates',[button('＋ 見積書作成','primary',()=>{bizSwitchPage('chohyo');if(typeof setDocType==='function')setDocType('estimate');})]);
   addHeaderActions('pageSavedDocs',[button('＋ 帳票作成','primary',go('chohyo'))]);
   addHeaderActions('pageSales',[button('＋ 売上登録','primary',()=>{if(typeof openManualSale==='function')openManualSale();}),button('入金登録','',scrollToEl('paymentRegistrationForm'))]);

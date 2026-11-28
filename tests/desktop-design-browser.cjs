@@ -54,10 +54,12 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     await page.locator('#pageCalendar .biz-title button',{hasText:'翌月'}).click();assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-12');assert.equal(await page.locator('#ddCalendar [data-dd-day]').count(),31);
     // 帳票: live preview beside the form, the document itself keeps its A4 width.
     await page.evaluate(()=>bizSwitchPage('chohyo'));
-    assert(await page.locator('#previewArea').isVisible(),'desktop preview is always visible');
+    assert.equal(await page.locator('#previewArea').isVisible(),false,'preview keeps the existing toggle');assert(await page.locator('#ddPreviewPlaceholder').isVisible());
+    await page.locator('#ddPreviewPlaceholder button').click();assert(await page.locator('#previewArea').isVisible());assert.equal(await page.locator('#ddPreviewPlaceholder').isVisible(),false);
     const form=await page.locator('#pageChohyo .editor-card').first().boundingBox(),preview=await page.locator('#previewArea').boundingBox();assert(preview.x>form.x+form.width,'preview is to the right of the form');
     assert.equal(await page.locator('#previewArea .invoice').evaluate(e=>e.offsetWidth),Math.round(210*96/25.4),'invoice layout width stays 210mm');
     await page.locator('#ddChohyoHead button',{hasText:'保存帳票へ'}).click();assert.equal(await page.locator('#bizNav button.active').getAttribute('data-page'),'savedDocs');
+    await page.evaluate(()=>bizSwitchPage('chohyo'));assert.equal(await page.locator('#previewArea').isVisible(),false,'preview resets after navigation');
    }
    assert.equal(await businessStorage(page),before,width+'px leaves business data untouched');
    assert.deepEqual(errors,[]);
