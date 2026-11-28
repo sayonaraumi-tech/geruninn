@@ -13,8 +13,8 @@ importers:
   .:
     devDependencies:
       '@firebase/rules-unit-testing':
-        specifier: 5.0.1
-        version: 5.0.1(firebase@12.19.0)
+        specifier: 5.0.2
+        version: 5.0.2(firebase@12.19.0)
       firebase:
         specifier: 12.19.0
         version: 12.19.0
@@ -280,8 +280,8 @@ packages:
     peerDependencies:
       '@firebase/app': 0.x
 
-  '@firebase/rules-unit-testing@5.0.1':
-    resolution: {integrity: sha512-EvbxUvgoY2cG7vgtdhKc7gjalKzeO3AWr2NiUuyEEmcXaSaOJanV3hXLj3Viigs+Y/jFYQmtVPpSoiwUs/ZlPg==}
+  '@firebase/rules-unit-testing@5.0.2':
+    resolution: {integrity: sha512-g053AaFcuf4gpAQbwRK/GIIGfPHhpomW3qkIYLi4xnaTUrf65yGP+0TPdojoXfB/ejrfevkXmMs5qXOTSwdN6A==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       firebase: ^12.0.0
@@ -3030,7 +3030,7 @@ snapshots:
       '@firebase/util': 1.15.3
       tslib: 2.9.1
 
-  '@firebase/rules-unit-testing@5.0.1(firebase@12.19.0)':
+  '@firebase/rules-unit-testing@5.0.2(firebase@12.19.0)':
     dependencies:
       firebase: 12.19.0
 
