@@ -9,7 +9,7 @@ for(const name of ['collectFormState','applyFormState','setDocType','saveConfirm
 function ready(){if(!sync||client?.getState().phase!=='ready'){alert('クラウドアカウントにログインしてください。端末内の原本は保持されています。');return false;}return true;}
 function command(value){if(!ready())return;try{return sync.enqueue({...value,operationId:value.operationId||uuid()});}catch(e){showError(e.message);return null;}}
 function showError(message){el('cloudError').textContent=message;el('coreSyncStatus').textContent='Firestore同期失敗：'+message;}
-function status(value){lastStatus=value;el('coreSyncStatus').textContent=({synced:'クラウド同期済',syncing:'同期中',offline:'オフライン',error:'Firestore同期失敗'})[value.state]||'';if(value.error){el('coreSyncStatus').textContent+='：'+value.error;el('cloudError').textContent=value.error;}else el('cloudError').textContent='';el('cloudRealtime').textContent=(value.pending?`未同期 ${value.pending}件。`:'')+(value.error||'');el('cloudRetryQueue').hidden=!value.error;el('cloudArchiveQueue').hidden=!sync?.getQueue()[0]?.blocked;showGooglePending();}
+function status(value){lastStatus=value;el('coreSyncStatus').textContent=({synced:'クラウド同期済',syncing:'同期中',offline:'オフライン',error:'Firestore同期失敗'})[value.state]||'';if(value.error){el('coreSyncStatus').textContent+='：'+value.error;el('cloudError').textContent=value.error;}else el('cloudError').textContent='';el('cloudRealtime').textContent=(value.pending?`未同期 ${value.pending}件。`:'')+(value.error||'');el('cloudRetryQueue').hidden=!value.error;el('cloudArchiveQueue').hidden=!sync?.getQueue().some(x=>x.blocked);showGooglePending();}
 function showGooglePending(){
  if(lastStatus.state!=='synced')return;
  const pending=(rows.calendarLinks||[]).filter(r=>r.payload.googlePatchPending||r.payload.googleCreatePending);
@@ -198,7 +198,7 @@ function clearView(){googleErrors.clear();readOnly(false);viewBaseline=null;form
 const documentLabels={active:'有効',void:'無効',cancelled:'取消',duplicate:'重複',revised:'訂正済'};
 function manageDocument(index,action){
  if(!enabled||!ready()||client.getState().role!=='admin')return alert('帳票管理は管理者のみ実行できます。');
- if(sync.getQueue()[0]?.blocked)return alert('先行する同期に失敗しています：'+sync.getQueue()[0].error+'。クラウド画面で競合を保管してから再実行してください。');
+ {const head=sync.holderFor({type:'documentStatus'});if(head)return alert(heldMessage(head));}
  const h=history[index];if(!h||h.documentStatus!=='active')return alert('有効な帳票を選択してください。');
  if(action!=='revision'){const p=rows.documents.find(r=>r.id===h.documentId)?.payload;const saleId=p?.saleId||p?.receivableId||(['invoice','onoda'].includes(h.docType)?'sale_'+h.documentId:h.saleId);const linked=(rows.payments||[]).filter(r=>!r.payload.deletedAt&&r.payload.confirmation!=='bank-marker'&&(r.payload.saleId===saleId||r.id===(p?.paymentId||'pay_'+h.documentId)));if(linked.length)return alert('関連入金があります。先に付款関係・返金・取消を処理するか、訂正版を作成してください。');}
  const reason=prompt(action==='revision'?'訂正理由（新帳票を正式保存するまで原帳票は有効です）':'無効化の理由');if(!reason?.trim())return;
@@ -246,6 +246,7 @@ async function deleteMisregistration(h){
 function archiveDocument(h){
  if(!ready()||client.getState().role!=='admin')return;
  if(!confirm('この無効な帳票を履歴から削除しますか？関連する売上・入金と監査記録は保持されます。'))return;
+ const head=sync.holderFor({type:'archiveDocument'});if(head)return alert(heldMessage(head));
  command({type:'archiveDocument',documentId:h.documentId,expectedRevision:h.cloudRevision});
 }
 function renderDocuments(boxId,kind){
@@ -289,10 +290,18 @@ function calendarSaleState(eventId){
  return {event:e||null,sale,paid:sale?bizPaid(sale):0,outstanding:sale?bizOutstanding(sale):0,admin,cloud:enabled,
   cancelled:!sale&&!!e?.cancelledSaleId,canRegister:(eventId?!!e:true)&&!sale&&!e?.cancelledSaleId&&admin&&!(enabled&&client?.getState().phase!=='ready'),canChange:own&&admin&&!attached,attached};
 }
+// Why an operation is still in the outbox: its own error, an earlier refused operation that holds it (sync.heldBy), or offline.
+const COMMAND_LABELS={calendarLocal:'本地予定',registerCalendarSale:'日程の売上登録',calendarSaleChange:'日程売上の修正・取消',calendar:'Google日程の同期',saveDocument:'帳票の保存',payment:'入金登録',archiveDocument:'履歴から削除',documentStatus:'帳票の状態変更'};
+function heldMessage(head){return '先に送信した別の操作（'+(COMMAND_LABELS[head.command.type]||head.command.type)+'）が同期に失敗しているため、この操作は送信待ちです：'+head.error+'　クラウド画面の「同期を再試行」、または「競合を保管して次の同期へ」で解消してから、もう一度操作してください。';}
+function pendingMessage(op,fallback='未同期です。オンラインで同期完了を確認してください。'){
+ const own=sync?.getQueue().find(x=>x.command.operationId===op);if(!own)return '';if(own.error)return own.error;
+ const head=sync.heldBy(op);if(head)return heldMessage(head);
+ return navigator.onLine===false?'オフラインのため未同期です。オンラインで同期完了を確認してください。':fallback;
+}
 async function cloudCalendarCommand(cmd){
  if(!sync||client?.getState().phase!=='ready')throw Error('クラウドにログインしてから登録してください。');
- const op=command(cmd);if(!op)throw Error('保存できません。');await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);
- if(pending)throw Error(pending.error||'未同期です。オンラインで同期完了を確認してください。');await sync.reload();
+ const op=command(cmd);if(!op)throw Error('保存できません。');await sync.flush();const pending=pendingMessage(op);
+ if(pending)throw Error(pending);await sync.reload();
 }
 async function registerCalendarSaleFor(eventId,value){
  // Cloud: the command re-checks the event, admin role and existing sales inside the transaction (the listener may lag the save).
@@ -326,7 +335,7 @@ async function changeCalendarSaleFor(eventId,action,value,reasonText){
  }
  bizPersist();bizRefreshAll();return {saleId:sale.id,[action==='edit'?'edited':'cancelled']:true};
 }
-root.TsukinowaBusinessUI={registerPayment,calendarSale:{state:calendarSaleState,register:registerCalendarSaleFor,change:changeCalendarSaleFor},invoiceBalance,patchPending,googleError(message,id){googleErrors.set(id,message);if(lastStatus.state==='error')return;el('coreSyncStatus').textContent=(bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+message;el('cloudRealtime').textContent=message;},
+root.TsukinowaBusinessUI={pendingMessage,registerPayment,calendarSale:{state:calendarSaleState,register:registerCalendarSaleFor,change:changeCalendarSaleFor},invoiceBalance,patchPending,googleError(message,id){googleErrors.set(id,message);if(lastStatus.state==='error')return;el('coreSyncStatus').textContent=(bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+message;el('cloudRealtime').textContent=message;},
  configure(value){const changed=enabled!==value;enabled=value;if(enabled){if(changed)clearView();el('coreSyncStatus').textContent='ログイン待ち';}else el('coreSyncStatus').textContent='端末内保存';},
  auth(state,instance){client=instance;const next=state.phase==='ready'?`${state.projectId}/${state.companyId}/${state.user.uid}/${state.role}`:'';
   // The core removes listeners on every token refresh, so rebuild once per auth-ready transition.

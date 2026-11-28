@@ -20,7 +20,10 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
   const key=prefix+'bank_conflict_backup_'+item.command.operationId;
   if(!storage.getItem(key))storage.setItem(key,JSON.stringify(queue));
  }
- const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
+ const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}
+  // A repeated 日程売上 cancel was refused before cancel became idempotent; retry it once (the server now answers "already cancelled").
+  if(item.blocked&&item.command?.type==='calendarSaleChange'&&item.command.action==='cancel'&&/日程から登録した売上が見つかりません/.test(item.error||''))return {...item,blocked:false,error:null};
+  return item;});
  if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
  for(const name of collections){const raw=snapshotStorage.getItem(prefix+name);rows[name]=raw?JSON.parse(raw):[];}
  function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
@@ -46,17 +49,37 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
    const entry={command:JSON.parse(serialized),createdAt:new Date().toISOString()};
    const next=[...queue,entry];storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();flush();return command.operationId;
  }
+ // Outbox order. A refused (blocked) command holds the commands that depend on it, not the whole outbox:
+ // - expenseFromBank conflicts hold only commands for the same bank transaction (until resolved by a bank match);
+ // - 日程 commands (本地予定, 日程売上) are keyed by event and hold only later commands for the same event;
+ // - any other refused command holds every later command except 本地予定 saves/deletes of other events,
+ //   which never create sales or payments.
+ const isolated=x=>x.blocked&&x.command.type==='expenseFromBank'&&/既存の支出候補/.test(x.error||'');
+ const resolved=x=>isolated(x)&&!/参照を確認/.test(x.error||'')&&(rows.bankTransactions||[]).some(b=>b.id===x.command.bankTxnId&&b.payload.status==='照合済'&&b.payload.matchType==='expense');
+ const EVENT_COMMANDS=['calendarLocal','registerCalendarSale','calendarSaleChange'];
+ const eventKey=c=>EVENT_COMMANDS.includes(c?.type)?String((c.type==='calendarLocal'?c.event?.id:c.id)||''):'';
+ function holderOf(x,i){
+  if(x.blocked&&!resolved(x))return x;
+  const bank=queue.find(h=>h!==x&&isolated(h)&&!resolved(h)&&h.command.bankTxnId===x.command.bankTxnId&&x.command.type!=='bankMatch');if(bank)return bank;
+  const key=eventKey(x.command);
+  for(const h of queue.slice(0,i)){
+   if(!h.blocked||isolated(h))continue;
+   const held=eventKey(h.command);
+   if(held){if(held===key)return h;continue;}
+   if(!(x.command.type==='calendarLocal'&&key))return h;
+  }
+  return null;
+ }
+ // The refused command that would hold a new command of this shape (before it is queued).
+ function holderFor(command){const h=holderOf({command},queue.length);return h?JSON.parse(JSON.stringify(h)):null;}
+ function heldBy(operationId){const i=queue.findIndex(x=>x.command.operationId===operationId);if(i<0)return null;const h=holderOf(queue[i],i);return h&&h!==queue[i]?JSON.parse(JSON.stringify(h)):null;}
  function flush(){
   if(running)return running;if(stopped||!online()||!queue.length){status();return Promise.resolve();}
   running=(async()=>{
    while(queue.length&&!stopped&&online()){
-    // Keep financial conflicts in the outbox. Only independent commands may pass them.
-    const isolated=x=>x.blocked&&x.command.type==='expenseFromBank'&&/既存の支出候補/.test(x.error||'');
-    const resolved=x=>isolated(x)&&!/参照を確認/.test(x.error||'')&&(rows.bankTransactions||[]).some(b=>b.id===x.command.bankTxnId&&b.payload.status==='照合済'&&b.payload.matchType==='expense');
-    const held=queue.filter(x=>isolated(x)&&!resolved(x));
-    const index=queue.findIndex(x=>(!isolated(x)||resolved(x))&&!held.some(h=>h.command.bankTxnId===x.command.bankTxnId&&x.command.type!=='bankMatch'));
-    if(index<0){error=held[0]?.error;break;}
-    const item=queue[index];if(item.blocked&&!resolved(item)){error=item.error;break;}
+    const index=queue.findIndex((x,i)=>!holderOf(x,i));
+    if(index<0){error=(queue.find(x=>x.blocked&&!resolved(x)))?.error||null;break;}
+    const item=queue[index];
     // Durable, untouched outbox backup before attempting bank expense recovery.
     if(item.command.type==='expenseFromBank'){
      const backupKey=prefix+'bank_conflict_backup_'+item.command.operationId;
@@ -69,7 +92,8 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
       const transient=['unavailable','deadline-exceeded','cancelled','network-request-failed'].some(x=>String(e.code||'').includes(x))||!online();
       error=(e.code?'['+e.code+'] ':'')+(e.message||'Firestore同期失敗');
       if(!transient){item.blocked=true;item.error=error;try{saveQueue();}catch(_){} onFailure(item.command,error); }
-      if(!transient&&item.command.type==='expenseFromBank'&&/既存の支出候補/.test(error)&&!resolved(item))continue;
+      // A refused command now holds only what depends on it (holderOf); keep sending the rest.
+      if(!transient)continue;
       break;
     }
     if(stopped)return;
@@ -93,14 +117,15 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
   if(stopped)return;
   if(running)await running;
   if(stopped)return;
-  if(queue[0]?.blocked){
-   const next=queue.map((item,i)=>i?item:{...item,blocked:false,error:null});
+  const first=queue.findIndex(x=>x.blocked);
+  if(first>=0){
+   const next=queue.map((item,i)=>i!==first?item:{...item,blocked:false,error:null});
    storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();
   }
   return flush();
  }
- function archiveBlocked(){if(!queue[0]?.blocked)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[0]));const next=queue.slice(1);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();return key;}
- return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
+ function archiveBlocked(){const first=queue.findIndex(x=>x.blocked);if(first<0)return;const key=prefix+'conflicts_'+Date.now();storage.setItem(key,JSON.stringify(queue[first]));const next=queue.filter((_,i)=>i!==first);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=next.find(x=>x.blocked)?.error||null;status();return key;}
+ return {start,enqueue,flush,reload,retryBlocked,archiveBlocked,heldBy,holderFor,isReady:()=>serverSeen.size===collections.length&&!error&&!queue.length,getRows:()=>rows,getQueue:()=>queue.map(x=>JSON.parse(JSON.stringify(x))),getRevision:(name,id)=>rows[name]?.find(r=>r.id===id)?.revision||0,stop:()=>{stopped=true;for(const stop of stops)stop();},service};
 }
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');

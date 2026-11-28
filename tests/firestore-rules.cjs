@@ -85,6 +85,17 @@ test('日程売上 from a 本地 event: admin edit/cancel under real rules, staf
  await exec(a,{type:'calendarSaleChange',id,action:'cancel',reason:'取消試験'});
  assert.equal((await live('sales')).length,0);assert.equal((await admin.listRecords('sales')).length,1);
 });
+test('日程売上 cancelled (cash), cancelled again (no-op), then the 本地 event is deleted under real rules; sale stays cancelled',async()=>{
+ const admin=await clientFor('admin'),a=createService(admin);
+ const {id}=await exec(a,{type:'calendarLocal',action:'save',event:{date:'2026-11-28',start:'2026-11-28T12:30:00+09:00',title:'試験 削除'}});
+ await exec(a,{type:'registerCalendarSale',id,sale:{salesDate:'2026-11-28',customer:'試験客',content:'試験作業',amount:5000,paymentMethod:'現金'}});
+ await exec(a,{type:'calendarSaleChange',id,action:'cancel',reason:'取消試験'});
+ assert.equal((await exec(a,{type:'calendarSaleChange',id,action:'cancel',reason:'二重'})).unchanged,true);
+ await exec(a,{type:'calendarLocal',action:'delete',event:{id}});
+ const link=(await admin.listRecords('calendarLinks')).find(r=>r.id===id);assert.ok(link.payload.deletedAt);
+ const sale=(await admin.listRecords('sales')).find(r=>r.id==='calendar_cash_'+id);assert.ok(sale.payload.deletedAt);assert.equal(sale.payload.documentStatus,'cancelled');
+ assert.equal((await admin.listRecords('cashLedger')).filter(r=>!r.payload.deletedAt).length,0);
+});
 test('platform channel and optional detail persist under unchanged admin/staff payment rules',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
  await exec(s,{type:'saveDocument',snapshot:snapshot('platform-rules'),expectedRevision:0});

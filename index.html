@@ -3717,7 +3717,7 @@ async function bizSaveLocalEvent(input){
   let saved;
   if(ui?.isEnabled()){
     const op=ui.enqueue({type:'calendarLocal',action:'save',event:{...fields,id},googleEventId});if(!op)throw Error('保存できません。');
-    const sync=ui.getSync();await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);if(pending)throw Error(pending.error||'未同期です。オンラインで同期完了を確認してください。');
+    await ui.getSync().flush();const pending=ui.pendingMessage(op);if(pending)throw Error(pending);
     saved=bizState.calendar.find(e=>e.id===id)||{...old,...fields,id,source:'local'};
   }else{
     saved={...(old||{}),...fields,id,source:'local',googleEventId:old?.googleEventId||googleEventId,googleCalendarId:old?.googleCalendarId||'',calendarId:old?.calendarId||'',...(googleEventId?{googleCreatePending:true}:{}),...(old?.googleEventId&&!old.googleCreatePending?{googlePatchPending:true}:{})};
@@ -3730,7 +3730,7 @@ async function bizSaveLocalEvent(input){
 async function bizDeleteLocalEvent(id){
   const e=bizState.calendar.find(x=>x.id===id);if(!e||bizCalendarSource(e)!=='local')throw Error('本地日程だけ削除できます。');
   const ui=window.TsukinowaBusinessUI;
-  if(ui?.isEnabled()){const op=ui.enqueue({type:'calendarLocal',action:'delete',event:{id}});if(!op)throw Error('削除できません。');const sync=ui.getSync();await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);if(pending)throw Error(pending.error||'未同期です。');}
+  if(ui?.isEnabled()){const op=ui.enqueue({type:'calendarLocal',action:'delete',event:{id}});if(!op)throw Error('削除できません。');await ui.getSync().flush();const pending=ui.pendingMessage(op,'未同期です。');if(pending)throw Error(pending);}
   else{Object.assign(e,{deletedAt:new Date().toISOString(),deleteReason:'本地日程を削除'});bizAudit('本地日程を削除',e.date+' '+e.title);bizPersist();}
   renderCalendarEvents();
 }
@@ -3887,6 +3887,7 @@ function renderCalendarGrid(){
    ?'<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad">'+dayList+'</div></section>'+googlePanel(rows)
    :'<div class="biz-section dd-m-cal"><div class="biz-section-head"><h2>月間カレンダー</h2><div class="biz-actions"><button type="button" class="biz-btn primary" data-dd-new>＋ 本地予定</button></div></div><div class="dd-m-legend"><span class="dd-src src-local">本地</span><span class="dd-src src-system">帳票・受注</span><span class="dd-src src-google">Google</span><span class="dd-src src-ics">取込</span></div><div class="dd-cal">'+cells+'</div><h3 class="dd-m-day">'+esc(calDay)+' / 予定</h3>'+dayList+'</div>';
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
+  refreshOpenSale();
  }
  const srcOf=e=>bizCalendarSource(e),srcLabel=e=>bizCalendarSourceLabel(e);
  function googlePanel(rows){const g=rows.filter(e=>['google','ics'].includes(srcOf(e))),l=rows.filter(e=>srcOf(e)==='local'),sys=rows.filter(e=>srcOf(e)==='system');
@@ -3907,7 +3908,7 @@ function renderCalendarGrid(){
   $('ddLsMethod').addEventListener('change',saleHint);$('ddLsDate').addEventListener('input',()=>{$('ddLsDate').dataset.touched='1';});
   $('ddLeDate').addEventListener('change',()=>{if(!$('ddLsDate').dataset.touched)$('ddLsDate').value=$('ddLeDate').value;});
   $('ddLsEdit').addEventListener('click',()=>{const st=saleApi()?.state(d.dataset.id);if(!st?.sale)return;const x=st.sale;d.dataset.saleMode='edit';fillSale({salesDate:x.salesDate||x.saleDate,customer:x.customer,content:x.content,amount:x.amount,paymentMethod:x.paymentMethod});$('ddLeSaleFields').hidden=false;$('ddLeSaleAdmin').hidden=true;$('ddLeSaleStatus').textContent='修正内容を入力して「保存」を押してください（保存時に理由を確認します）。';});
-  $('ddLsVoid').addEventListener('click',async()=>{const id=d.dataset.id;if(!id)return;const reason=prompt('売上を取消する理由（必須）\n取消後も記録は「取消済み」として残ります。','');if(reason===null)return;try{$('ddLeError').textContent='';await saleApi().change(id,'cancel',null,reason);renderCalendarGrid();renderSale(id);}catch(e){$('ddLeError').textContent=e.message;}});
+  $('ddLsVoid').addEventListener('click',async()=>{const id=d.dataset.id,b=$('ddLsVoid');if(!id||b.disabled)return;const reason=prompt('売上を取消する理由（必須）\n取消後も記録は「取消済み」として残ります。','');if(reason===null)return;b.disabled=true;try{$('ddLeError').textContent='';await saleApi().change(id,'cancel',null,reason);renderCalendarGrid();renderSale(id);}catch(e){$('ddLeError').textContent=e.message;}finally{b.disabled=false;}});
   $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(id&&saleApi()?.state(id).sale){$('ddLeError').textContent='この予定には売上が登録されています。先に売上を取消してください。';return;}if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   return d;}
  function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=bizJstTime;d.dataset.id=e?.id||'';
@@ -3918,7 +3919,11 @@ function renderCalendarGrid(){
  function saleValues(){return {salesDate:$('ddLsDate').value,customer:$('ddLsCustomer').value,content:$('ddLsContent').value,amount:$('ddLsAmount').value,paymentMethod:$('ddLsMethod').value};}
  function fillSale(v){$('ddLsDate').value=v.salesDate||'';$('ddLsDate').dataset.touched=v.touched?'1':'';$('ddLsCustomer').value=v.customer||'';$('ddLsContent').value=v.content||'';$('ddLsAmount').value=v.amount||'';$('ddLsMethod').value=v.paymentMethod||'現金';saleHint();}
  function saleHint(){$('ddLsHint').textContent=$('ddLsMethod').value==='現金'?'現金：売上と入金（現金出納）を同時に登録します。':'銀行振込など：売上のみ登録します（未収）。入金は銀行明細の照合または入金登録で記録します。';}
- function renderSale(id){const d=localDialog(),api=saleApi(),st=api?api.state(id):null,box=$('ddLeSale');d.dataset.saleMode='';
+ // The sale section follows the synced data: re-render it when the state changes while the dialog is open
+ // (e.g. the cancel answer arrives after a slow round trip), unless the user is entering sale values.
+ function saleSig(st){return st?JSON.stringify([st.sale?.id,st.sale?.amount,st.outstanding,st.cancelled,st.canRegister,st.canChange]):'';}
+ function refreshOpenSale(){const d=$('ddLocalEvent'),id=d?.dataset.id;if(!d?.open||!id||d.dataset.saleMode==='edit'||$('ddLeSaleOn').checked)return;const st=window.TsukinowaBusinessUI?.calendarSale?.state(id);if(saleSig(st)!==d.dataset.saleSig)renderSale(id);}
+ function renderSale(id){const d=localDialog(),api=saleApi(),st=api?api.state(id):null,box=$('ddLeSale');d.dataset.saleMode='';d.dataset.saleSig=saleSig(st);
   $('ddLeSaleOn').checked=false;$('ddLeSaleFields').hidden=true;$('ddLeSaleAdmin').hidden=true;$('ddLeSaleToggle').hidden=true;
   fillSale({salesDate:$('ddLeDate').value,paymentMethod:'現金'});box.hidden=!st;if(!st)return;
   if(st.sale){const x=st.sale;$('ddLeSaleStatus').textContent='登録済：'+bizMoney(x.amount)+'円（税込）／'+(x.customer||'')+'／'+(x.paymentMethod||'')+'／'+(st.outstanding===0?'入金済':'未収 '+bizMoney(st.outstanding)+'円')+(st.canChange?'':st.attached?'（入金登録・銀行照合済みのため、ここでは修正できません）':!st.admin?'（修正・取消は管理者のみ）':'（帳票の売上は保存帳票から訂正）');$('ddLeSaleAdmin').hidden=!st.canChange;return;}
