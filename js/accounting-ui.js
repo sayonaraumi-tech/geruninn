@@ -10,6 +10,9 @@ function rev(n,id){return B().getSync()?.getRevision(n,id)||0;}
 function send(c){if(!isAdmin())return;return B().enqueue(c);}
 const value=id=>el(id)?.value||'',table=(headers,body)=>`<div class="biz-table-wrap"><table class="biz-table"><thead><tr>${headers.map(h=>'<th>'+esc(h)+'</th>').join('')}</tr></thead><tbody>${body||'<tr><td colspan="20">記録はありません。</td></tr>'}</tbody></table></div>`,cell=x=>'<td>'+esc(x)+'</td>',money=x=>bizMoney(Number(x)||0);
 function notice(message){el('accountingMessage').textContent=message;}
+// View defaults follow today/this month on every render until the user picks a value themselves.
+function autoValue(id,v){const e=el(id);if(!e)return;if(!e.value||e.dataset.autoValue===e.value){e.value=v;e.dataset.autoValue=v;}}
+root.bizAutoValue=autoValue;
 function guard(fn){return async(...args)=>{try{return await fn(...args);}catch(e){notice(e.message);alert(e.message);}};}
 function flatten(rows){return rows.map(r=>({...r.payload,id:r.id,createdAt:r.createdAt,updatedAt:r.updatedAt,createdBy:r.createdBy,updatedBy:r.updatedBy,revision:r.revision}));}
 function hydrate(rows){data={};for(const n of ['documents','sales','payments',...A.COLLECTIONS])data[n]=flatten(rows[n]||[]);data.sales.push(...flatten(rows.receivables||[]));bizState.expenses=data.expenses.filter(A.live).map(e=>({...e,date:e.expenseDate,method:e.paymentMethod,memo:e.description}));bizState.bank=data.bankTransactions.map(b=>({...b,date:b.bankTransactionDate,desc:b.description,matched:b.status==='照合済'}));renderCash();root.renderSales();renderCategoryRules();renderBankRules();renderDuplicateReview();renderSupplierLedger();}
@@ -218,7 +221,7 @@ function homeRows(d,p){
  return rows.sort((a,b)=>a.date.localeCompare(b.date)||a.id.localeCompare(b.id));
 }
 function homePeriod(){const mode=value('homePeriodMode');return A.periodFilter(mode==='year'?{year:value('homeYear')}:mode==='custom'?{start:value('homeStart'),end:value('homeEnd')}:{month:value('homeMonth')||bizNowMonth()});}
-root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth();if(!value('homeMonth'))el('homeMonth').value=now;if(!value('homeYear'))el('homeYear').value=+now.slice(0,4)-(+now.slice(5)<10?1:0);if(!value('homeStart'))el('homeStart').value=now+'-01';if(!value('homeEnd'))el('homeEnd').value=A.periodFilter({month:now}).end;
+root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth();autoValue('homeMonth',now);autoValue('homeYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0)));autoValue('homeStart',now+'-01');autoValue('homeEnd',A.periodFilter({month:now}).end);
  const mode=value('homePeriodMode');for(const [id,shown] of [['homeMonthField',mode==='month'],['homeYearField',mode==='year'],['homeStartField',mode==='custom'],['homeEndField',mode==='custom']])el(id).hidden=!shown;
  let p;try{p=homePeriod();}catch(e){el('dashPeriod').textContent=e.message;return;}const d=homeData(),m=A.aggregate(d,p);el('dashPeriod').textContent=p.start+' ～ '+p.end;for(const [id,k] of [['kpiSales','sales'],['kpiPayments','income'],['kpiExpenses','expenseTotal'],['kpiReceivable','receivables'],['kpiDifference','cashFlowDifference']])el(id).textContent=money(m[k]);el('kpiAttention').textContent=m.attention;for(const [id,label] of [['kpiSales','売上'],['kpiPayments','入金'],['kpiExpenses','支出']])el(id).previousElementSibling.textContent=label;
  el('attentionList').replaceChildren(...m.reminders.map(message=>{const p=document.createElement('p');p.textContent=message;return p;}));if(!m.reminders.length)el('attentionList').textContent='確認事項はありません。';
@@ -227,21 +230,36 @@ root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth
 root.TsukinowaAccountingUI.homePeriod=homePeriod;root.TsukinowaAccountingUI.homeData=homeData;
 // Read-only accessors for the desktop design views: same register calculation and the last rendered register.
 root.TsukinowaAccountingUI.salesRegister=(period,asOf,descending=false)=>A.salesRegister(registerData(),period,asOf,descending);root.TsukinowaAccountingUI.salesRegisterView=()=>registerView;
+// Read-only visibility for old records that the CSV exports list but the totals do not count:
+// unconfirmed payments (e.g. migrated 銀行振込 without a bank match), a 入金日 written only on the
+// saved document, and confirmed invoices that have no sale. Nothing here changes any amount.
+function legacyVisibility(d,sales,period){
+ const live=r=>A.live(r),docs=(d.documents||[]).filter(x=>live(x)&&x.confirmed===true),payments=(d.payments||[]).filter(live),allSales=(d.sales||[]).filter(live),activeDoc=x=>(x.status||'active')==='active'&&x.documentStatus!=='void'&&!x.revisedToDocumentId&&!x.duplicateOfDocumentId;
+ const linked=s=>docs.filter(x=>x.saleId===s.id||x.snapshot?.saleId===s.id||x.receivableId===s.id||!!s.documentId&&(x.id===s.documentId||x.documentId===s.documentId)||!!s.sourceId&&(x.historyId===s.sourceId||x.documentId===s.sourceId));
+ const notes=new Map();for(const s of sales){const own=payments.filter(p=>p.saleId===s.id),pending=own.filter(p=>!A.confirmed(p)&&Number(p.amount)>0),out=[];
+  if(pending.length)out.push('入金確認待ち '+money(pending.reduce((n,p)=>n+Number(p.amount),0))+'（'+[...new Set(pending.map(p=>p.paymentDate||p.date))].sort().join('、')+'・銀行照合前のため未計上）');
+  if(!own.length){const dates=[...new Set(linked(s).map(x=>x.paymentDate||x.snapshot?.paymentDate||'').filter(v=>/^\d{4}-\d{2}-\d{2}$/.test(v)))].sort();if(dates.length)out.push('帳票の入金日 '+dates.join('、')+'（入金記録なし・未計上）');}
+  if(out.length)notes.set(s.id,out);}
+ const anchored=x=>allSales.some(s=>s.id===x.saleId||s.id===x.snapshot?.saleId||s.id===x.receivableId||!!s.documentId&&(s.documentId===x.id||s.documentId===x.documentId)||!!s.sourceId&&(s.sourceId===x.historyId||s.sourceId===x.documentId));
+ const unlinked=docs.filter(x=>['invoice','onoda'].includes(x.docType)&&activeDoc(x)&&!anchored(x)&&period.includes(x.salesDate||x.snapshot?.salesDate||x.invoiceDate||x.snapshot?.invoiceDate||''));
+ return {notes,unlinked};
+}
 root.renderSales=function(){
  if(!el('salesRegisterTable'))return;
  const now=bizNowMonth(),mode=value('salesPeriodMode')||'month';
- for(const [id,v] of [['salesMonth',now],['salesYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0))],['salesStart',now+'-01'],['salesEnd',A.periodFilter({month:now}).end],['receivableAsOf',todayISO()]])if(!value(id))el(id).value=v;
+ for(const [id,v] of [['salesMonth',now],['salesYear',String(+now.slice(0,4)-(+now.slice(5)<10?1:0))],['salesStart',now+'-01'],['salesEnd',A.periodFilter({month:now}).end],['receivableAsOf',todayISO()]])autoValue(id,v);
  for(const [id,show] of [['salesMonthField',mode==='month'],['salesYearField',mode==='year'],['salesStartField',mode==='custom'],['salesEndField',mode==='custom']])el(id).hidden=!show;
  try{
  const period=A.periodFilter(mode==='year'?{year:value('salesYear')}:mode==='custom'?{start:value('salesStart'),end:value('salesEnd')}:{month:value('salesMonth')}),asOf=A.date(value('receivableAsOf'));
- const sales=A.salesRegister(registerData(),period,asOf,value('salesSort')==='desc'),rows=sales.map(s=>[s.salesDate,s.customer,s.content,s.invoiceIssueDate,s.receiptIssueDate,money(s.amount),money(s.paid),money(s.outstanding),s.lastPaymentDate,s.ageDays,s.status].map(v=>String(v??'')));
- el('salesRegisterTable').innerHTML=table([...registerHeaders,'必要操作'],rows.map((r,i)=>'<tr data-sale-id="'+esc(sales[i].id)+'">'+r.map((v,j)=>j===10?'<td><span class="register-status '+(v==='入金済'?'paid':'')+'">'+esc(v)+'</span></td>':cell(v)).join('')+'<td>'+(sales[i].outstanding>0&&bizOutstanding(sales[i])>0?'<button class="biz-btn" data-sale-payment="'+i+'">入金登録</button> ':'')+'<button class="biz-btn" data-sale-detail="'+i+'">詳細</button></td></tr>').join(''));
+ const sales=A.salesRegister(registerData(),period,asOf,value('salesSort')==='desc'),legacy=legacyVisibility(registerData(),sales,period),rows=sales.map(s=>[s.salesDate,s.customer,s.content,s.invoiceIssueDate,s.receiptIssueDate,money(s.amount),money(s.paid),money(s.outstanding),s.lastPaymentDate,s.ageDays,s.status].map(v=>String(v??'')));
+ el('salesRegisterTable').innerHTML=table([...registerHeaders,'必要操作'],rows.map((r,i)=>'<tr data-sale-id="'+esc(sales[i].id)+'">'+r.map((v,j)=>j===10?'<td><span class="register-status '+(v==='入金済'?'paid':'')+'">'+esc(v)+'</span></td>':cell(v)).join('')+'<td>'+(sales[i].outstanding>0&&bizOutstanding(sales[i])>0?'<button class="biz-btn" data-sale-payment="'+i+'">入金登録</button> ':'')+'<button class="biz-btn" data-sale-detail="'+i+'">詳細</button>'+(legacy.notes.get(sales[i].id)||[]).map(n=>'<small class="register-note dd-only" data-legacy-note>'+esc(n)+'</small>').join('')+'</td></tr>').join(''))+(legacy.unlinked.length?'<div class="register-unlinked dd-only" id="salesUnlinkedDocs"><p><strong>売上台帳に未登録の確定帳票 '+legacy.unlinked.length+'件</strong>（帳票一覧CSVには出力されます。売上・入金の合計には含めていません。）</p>'+table(['売上日','請求日','種類','顧客','金額','入金日'],legacy.unlinked.map(x=>'<tr data-doc-id="'+esc(x.id)+'">'+[x.salesDate||x.snapshot?.salesDate||'',x.invoiceDate||x.snapshot?.invoiceDate||'',x.docType==='onoda'?'小野田請求書':'請求書',x.customerName||x.snapshot?.customerName||'',money(x.amount),x.paymentDate||x.snapshot?.paymentDate||''].map(cell).join('')+'</tr>').join(''))+'</div>':'');
  el('salesRegisterTable').querySelector('tbody').id='salesRows';registerView={asOf,rows,sales};el('salesDetails').hidden=true;
  el('salesViewStatus').textContent=period.start+' ～ '+period.end+' ｜ 入金基準日 '+asOf+' ｜ '+sales.length+'件';
  }catch(e){el('salesViewStatus').textContent=e.message+' 表示・CSVは直前の有効な条件です。';}
  renderPaymentSaleOptions();
 };
 root.TsukinowaAccountingUI.renderSales=root.renderSales;
+root.TsukinowaAccountingUI.legacyVisibility=legacyVisibility;
 function exportRows(kind){switch(kind){case'monthly':return A.settlementExport(homeData(),homePeriod());
 case'expenses':return A.expenseExport(homeData().expenses||[],value('expenseMonth')||bizNowMonth());
 case'payments':return [['入金ID','売上ID','入金日','金額','入金経路','プラットフォーム名','確認状態'],...(data.payments||[]).filter(p=>homePeriod().includes(p.paymentDate||p.date)).map(p=>[p.id,p.saleId,p.paymentDate||p.date,p.amount,A.paymentChannel(p).channel,A.paymentChannel(p).platformName,p.confirmation])];

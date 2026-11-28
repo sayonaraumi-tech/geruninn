@@ -1012,6 +1012,8 @@ body{padding-top:72px}
 :is(.app-page,dialog,#bizEventModal) button{font-family:inherit}
 .sales-filters :is(input,select){width:100%}
 .sales-register .register-status{display:inline-block;padding:4px 7px;font-size:var(--biz-small);line-height:var(--biz-line);border-radius:999px;white-space:nowrap}
+.sales-register .register-note{display:block;margin-top:4px;min-width:180px;font-size:var(--biz-small);line-height:var(--biz-line);color:#9a5b00;white-space:normal}
+.register-unlinked{margin-top:14px}.register-unlinked p{margin:0 0 6px;font-size:var(--biz-small);color:#9a5b00}
 #salesViewStatus{font-size:12px;color:#777;margin:10px 0}
 .editor :is(.tab,.btn-add,.btn-print,.btn-download,.btn-preview){font-size:var(--biz-font);line-height:var(--biz-line);padding:9px 12px;border-radius:9px;letter-spacing:normal}
 .editor .form-group label{font-size:var(--biz-small)}
@@ -1195,6 +1197,30 @@ body.dd #pageChohyo .btn-preview{display:none}
 /* dark theme: keep the existing hard-coded light surfaces readable */
 body.dd[data-dd-theme="dark"] :is(.biz-alert,.sales-filters,.biz-table th){background:var(--dd-bg)}
 body.dd[data-dd-theme="dark"] .biz-table tr:hover td{background:transparent}
+
+/* 本地 / Google calendar sources */
+body.dd .dd-src{display:inline-block;font-size:10px;font-weight:700;line-height:1;padding:3px 6px;border-radius:999px;margin-right:6px;vertical-align:1px}
+body.dd .dd-src.src-local{background:#e8f4ec;color:#1f7a3d}
+body.dd .dd-src.src-google{background:#e8effc;color:#2456b8}
+body.dd .dd-src.src-ics{background:#f2eee6;color:#7a5a1f}
+body.dd .dd-cal .calEvent.src-local{color:#1f7a3d;background:#e8f4ec;border-left:3px solid #2e9b55}
+body.dd .dd-cal .calEvent.src-google{border-left:3px solid #4a7fe0}
+body.dd .dd-day-actions{display:flex;gap:6px;flex:none}
+body.dd .dd-src-summary{font-size:12px;margin:0 0 8px}
+body.dd .dd-dialog{border:1px solid var(--dd-line);border-radius:10px;padding:0;width:min(520px,92vw);background:var(--dd-panel);color:var(--dd-fg);box-shadow:0 20px 60px rgba(0,0,0,.25)}
+body.dd .dd-dialog::backdrop{background:rgba(20,24,30,.35)}
+body.dd .dd-dialog form{padding:18px}
+body.dd .dd-dialog h3{margin:0 0 12px;font-size:15px}
+body.dd .dd-form{display:grid;grid-template-columns:1.4fr 1fr 1fr;gap:10px}
+body.dd .dd-form label{display:flex;flex-direction:column;gap:4px;font-size:11px;color:var(--dd-mut)}
+body.dd .dd-form label.wide{grid-column:1/-1}
+body.dd .dd-form label.check{flex-direction:row;align-items:center;gap:6px;color:var(--dd-fg)}
+body.dd .dd-form input:not([type=checkbox]),body.dd .dd-form textarea{font:inherit;font-size:13px;padding:7px 8px;border:1px solid var(--dd-line);border-radius:6px;background:var(--dd-bg,#fff);color:var(--dd-fg)}
+body.dd .dd-error{color:#bb3f3f;font-size:12px;min-height:16px;margin:8px 0 0}
+body.dd .dd-dialog-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
+body.dd .dd-dialog-actions span{flex:1}
+/* 旧データ notes in 売上 (desktop only; mobile unchanged) */
+body.dd small.register-note.dd-only{display:block!important}
 }
 </style>
 </head>
@@ -3028,6 +3054,10 @@ document.addEventListener('DOMContentLoaded',()=>{
 });
 window.addEventListener('focus',bizCalendarCheckMonth);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)bizCalendarCheckMonth();});
+// When the date changes while the app stays open, re-render so auto-set 入金基準日 / 対象月 follow today.
+let bizObservedDay=todayISO();
+function bizCheckDay(){const d=todayISO();if(bizObservedDay&&bizObservedDay!==d){bizObservedDay=d;bizRefreshAll();}else bizObservedDay=d;}
+setInterval(bizCheckDay,30000);window.addEventListener('focus',bizCheckDay);document.addEventListener('visibilitychange',()=>{if(!document.hidden)bizCheckDay();});
 function bizNowMonth(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')}
 function bizEsc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function bizLoad(){if(window.TsukinowaCloudCore){const old=TsukinowaCloudCore.readLegacy(localStorage);bizState=Object.assign(bizState,old.business);bizSettings=Object.assign(bizSettings,old.settings);if(old.errors.length)console.warn('一部の端末内データを読み込めませんでした。元データは保持されています。');return;}try{const x=JSON.parse(localStorage.getItem(BIZ_KEY)||'null');if(x)bizState=Object.assign(bizState,x)}catch(_){} try{const x=JSON.parse(localStorage.getItem(BIZ_SETTINGS_KEY)||'null');if(x)bizSettings=Object.assign(bizSettings,x)}catch(_){}}
@@ -3052,7 +3082,7 @@ function bizOnDocumentConfirmed(state){
 }
 function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
 function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
-function bizRefreshAll(){const m=bizNowMonth();['calendarMonth','salesMonth','expenseMonth'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=m});['paymentDate','expDate'].forEach(id=>{const el=document.getElementById(id);if(el&&!el.value)el.value=todayISO()});const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
+function bizRefreshAll(){const m=bizNowMonth(),auto=window.bizAutoValue||((id,v)=>{const el=document.getElementById(id);if(el&&!el.value)el.value=v});['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
 function renderSales(){window.TsukinowaAccountingUI?.renderSales?.()}
 function bizOnodaPaymentHint(){const id=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===id);document.getElementById('onodaPaymentHint').hidden=sale?.docType!=='onoda';}
 function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const previous=sel.value,source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const unpaid=source.filter(s=>TsukinowaAccounting.live(s)&&bizOutstanding(s)>0).slice().sort((a,b)=>String(a.salesDate||a.saleDate).localeCompare(String(b.salesDate||b.saleDate))||String(a.id).localeCompare(String(b.id)));sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${s.id}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('');sel.value=previous;bizOnodaPaymentHint()}
@@ -3363,7 +3393,7 @@ function bizGoogleMergeEvent(x){
   if(i<0){bizState.calendar.push(x);return 'added';}
   const old=bizState.calendar[i];
   // Keep the local ID so existing invoice/project references continue to resolve.
-  const merged={...old,...x,id:old.id};
+  const merged={...old,...x,id:old.id,...(old.source==='local'?{source:'local'}:{})};
   if(bizHasFormalData(old)){
     for(const key of ['title','originalTitle','description','customerName','officialAmount','paymentMethod','projectCategory','area'])merged[key]=old[key]??x[key];
     merged.googleLatestTitle=x.title;
@@ -3433,7 +3463,7 @@ async function bizGoogleCreatePending(e){
   }else{e.googleCalendarId=e.googleCalendarId||bizGoogleCalendarId;e.calendarId=e.googleCalendarId;bizPersist();}
   if(!e.googleCalendarId)throw Error('同期カレンダーを選択してください。');
   const url='https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(e.googleCalendarId)+'/events';
-  let remote;try{remote=await bizGoogleFetch(url,{method:'POST',body:JSON.stringify({id:e.googleEventId,summary:e.title,description:bizGoogleSystemDescription(e),start:{date:e.date},end:{date:e.end},extendedProperties:{private:{estimateId:e.linkedEstimateId,projectId:e.projectId,calendarLinkId:e.id}}})});}
+  let remote;try{remote=await bizGoogleFetch(url,{method:'POST',body:JSON.stringify({id:e.googleEventId,summary:e.title,description:bizGoogleSystemDescription(e),...(String(e.start||'').length>10?{start:{dateTime:e.start},end:{dateTime:e.end}}:{start:{date:e.date},end:{date:e.end}}),extendedProperties:{private:{estimateId:e.linkedEstimateId,projectId:e.projectId,calendarLinkId:e.id}}})});}
   catch(err){if(err.status!==409)throw err;remote=await bizGoogleFetch(url+'/'+encodeURIComponent(e.googleEventId));}
   if(ui?.isEnabled())await ui.getSync().service.execute({type:'calendarCreated',id:e.id,googleEventId:e.googleEventId,calendarId:e.googleCalendarId,htmlLink:remote.htmlLink||'',operationId:crypto.randomUUID()});
   const current=bizState.calendar.find(x=>x.id===e.id);if(current)Object.assign(current,{googleCalendarId:e.googleCalendarId,calendarId:e.googleCalendarId,googleCreatePending:false});
@@ -3452,7 +3482,7 @@ async function bizGooglePatchNow(id){
       const remote=await bizGoogleFetch(url);
       if(remote.status==='cancelled')throw new Error('元の予定は削除されています。帳票はローカルに保存されています。');
       try{
-        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,remote.description||''),...(snapshot.workDate?{start:snapshot.start?.length>10?{dateTime:snapshot.start}:{date:snapshot.workDate},end:snapshot.end?.length>10?{dateTime:snapshot.end}:{date:snapshot.end},location:snapshot.location||''}:{})})});
+        await bizGoogleFetch(url,{method:'PATCH',headers:remote.etag?{'If-Match':remote.etag}:{},body:JSON.stringify({summary:snapshot.title,description:bizGoogleSystemDescription(snapshot,snapshot.source==='local'?snapshot.description||'':remote.description||''),...(snapshot.workDate||snapshot.source==='local'?{start:snapshot.start?.length>10?{dateTime:snapshot.start}:{date:snapshot.workDate||snapshot.date},end:snapshot.end?.length>10?{dateTime:snapshot.end}:{date:snapshot.end},location:snapshot.location||''}:{})})});
         break;
       }catch(err){if(err.status!==412||attempt===1)throw err;}
     }
@@ -3688,7 +3718,50 @@ function bizCalendarReviewReason(e, documents){
 // Rows shown for the selected month, keyword and review filter (shared by the list and the desktop month grid).
 function bizCalendarVisibleRows(documents=bizCalendarDocumentStates()){
   bizEnsureV5State();const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=Boolean(document.getElementById('calendarReview')?.checked);
-  return bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
+  const copied=new Set(bizState.calendar.filter(e=>!e.deletedAt&&e.source==='local'&&e.copyOf).map(e=>e.copyOf));
+  return bizState.calendar.filter(e=>!e.deletedAt&&!copied.has(e.id)&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
+}
+// ---- 本地日程: the system calendar works on its own; Google is an optional mirror ----
+// Source labels: 本地 = created in this system, Google = synced from Google, 取込 = ICS import.
+function bizCalendarSource(e){return e?.source==='local'?'local':e?.googleEventId?'google':'ics';}
+function bizCalendarSourceLabel(e){return {local:'本地',google:'Google',ics:'取込'}[bizCalendarSource(e)];}
+function bizNewGoogleEventId(){return 'tl'+Array.from(crypto.getRandomValues(new Uint8Array(15)),b=>(b%32).toString(32)).join('');}
+function bizNextDate(d){const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+1);return x.toISOString().slice(0,10);}
+function bizLocalEventFields(input){
+  const date=TsukinowaAccounting.date(input.date),title=String(input.title||'').trim();if(!title)throw Error('タイトルを入力してください。');
+  const time=v=>/^\d{2}:\d{2}$/.test(v||'')?v:'';const st=time(input.startTime),et=time(input.endTime);if(et&&!st)throw Error('開始時刻を入力してください。');if(st&&et&&et<=st)throw Error('終了時刻は開始時刻より後にしてください。');
+  return {date,title,start:st?date+'T'+st+':00+09:00':date,end:st?date+'T'+(et||st)+':00+09:00':bizNextDate(date),description:String(input.description||''),location:String(input.location||''),pushToGoogle:!!input.pushToGoogle,...(input.copyOf?{copyOf:String(input.copyOf)}:{})};
+}
+async function bizSaveLocalEvent(input){
+  const fields=bizLocalEventFields(input),ui=window.TsukinowaBusinessUI,old=input.id?bizState.calendar.find(e=>e.id===input.id):null;
+  if(old&&bizCalendarSource(old)!=='local')throw Error('Google・取込の日程はシステム内で編集できません。');
+  const id=old?.id||'cal_local_'+crypto.randomUUID().replace(/-/g,''),googleEventId=fields.pushToGoogle&&!old?.googleEventId?bizNewGoogleEventId():'';
+  let saved;
+  if(ui?.isEnabled()){
+    const op=ui.enqueue({type:'calendarLocal',action:'save',event:{...fields,id},googleEventId});if(!op)throw Error('保存できません。');
+    const sync=ui.getSync();await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);if(pending)throw Error(pending.error||'未同期です。オンラインで同期完了を確認してください。');
+    saved=bizState.calendar.find(e=>e.id===id)||{...old,...fields,id,source:'local'};
+  }else{
+    saved={...(old||{}),...fields,id,source:'local',googleEventId:old?.googleEventId||googleEventId,googleCalendarId:old?.googleCalendarId||'',calendarId:old?.calendarId||'',...(googleEventId?{googleCreatePending:true}:{}),...(old?.googleEventId&&!old.googleCreatePending?{googlePatchPending:true}:{})};
+    if(old)Object.assign(old,saved);else bizState.calendar.push(saved);bizAudit(old?'本地日程を編集':'本地日程を登録',saved.date+' '+saved.title);bizPersist();
+  }
+  renderCalendarEvents();
+  if(saved.pushToGoogle&&(saved.googleCreatePending||saved.googlePatchPending)&&!bizGoogleNeedToken()){try{await bizGooglePatchNow(saved.id);}catch(_){}}
+  return saved;
+}
+async function bizDeleteLocalEvent(id){
+  const e=bizState.calendar.find(x=>x.id===id);if(!e||bizCalendarSource(e)!=='local')throw Error('本地日程だけ削除できます。');
+  const ui=window.TsukinowaBusinessUI;
+  if(ui?.isEnabled()){const op=ui.enqueue({type:'calendarLocal',action:'delete',event:{id}});if(!op)throw Error('削除できません。');const sync=ui.getSync();await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);if(pending)throw Error(pending.error||'未同期です。');}
+  else{Object.assign(e,{deletedAt:new Date().toISOString(),deleteReason:'本地日程を削除'});bizAudit('本地日程を削除',e.date+' '+e.title);bizPersist();}
+  renderCalendarEvents();
+}
+// Google events stay as read-only records. A 本地 copy is a NEW record (copyOf); the original is never changed.
+function bizLocalCopyOf(id){return bizState.calendar.find(x=>!x.deletedAt&&x.source==='local'&&x.copyOf===id);}
+async function bizCopyGoogleEventsToLocal(ids){
+  let n=0;for(const id of ids){const g=bizState.calendar.find(x=>x.id===id);if(!g||g.deletedAt||bizCalendarSource(g)==='local'||bizLocalCopyOf(id))continue;
+    const time=v=>String(v||'').length>10?String(v).slice(11,16):'';await bizSaveLocalEvent({date:g.date,title:g.title,startTime:time(g.start),endTime:time(g.end),description:g.description||'',location:g.location||'',copyOf:g.id});n++;}
+  return n;
 }
 function renderCalendarEvents(){
   bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const documents=bizCalendarDocumentStates(),rows=bizCalendarVisibleRows(documents);
@@ -3829,11 +3902,26 @@ function renderHomeAnalytics(){
   if(!calDay||calDay.slice(0,7)!==month)calDay=todayKey.slice(0,7)===month?todayKey:month+'-01';
   const byDay=new Map();for(const e of rows){const k=String(e.date||'').slice(0,10);if(!byDay.has(k))byDay.set(k,[]);byDay.get(k).push(e);}
   let cells=['日','月','火','水','木','金','土'].map((d,i)=>'<div class="dow'+(i===0?' sun':i===6?' sat':'')+'">'+d+'</div>').join('')+'<span></span>'.repeat(first);
-  for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+list.slice(0,2).map(e=>'<span class="calEvent">'+esc(e.title)+'</span>').join('')+(list.length>2?'<span class="calMore">他 '+(list.length-2)+' 件</span>':'')+'</button>';}
+  for(let d=1;d<=end;d++){const k=month+'-'+String(d).padStart(2,'0'),list=byDay.get(k)||[];cells+='<button type="button" data-dd-day="'+k+'" class="'+(k===calDay?'active ':'')+(k===todayKey?'today':'')+'"><b>'+d+'</b>'+list.slice(0,2).map(e=>'<span class="calEvent src-'+srcOf(e)+'" data-dd-src="'+srcOf(e)+'">'+esc(e.title)+'</span>').join('')+(list.length>2?'<span class="calMore">他 '+(list.length-2)+' 件</span>':'')+'</button>';}
   const dayRows=byDay.get(calDay)||[];
-  box.innerHTML='<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad"><div class="dd-day-list">'+(dayRows.map(e=>'<div class="dd-day-item"><div><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'')+'</small></div><button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button></div>').join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。Google日程を同期すると表示されます。</p>')+'</div></div></section>';
+  box.innerHTML='<section class="dd-panel"><h3>月間カレンダー</h3><div class="dd-pad"><div class="dd-cal">'+cells+'</div></div></section><section class="dd-panel"><h3>'+esc(calDay)+' / 予定</h3><div class="dd-pad"><div class="dd-day-list">'+(dayRows.map(e=>{const src=srcOf(e),local=src==='local';return '<div class="dd-day-item" data-dd-event="'+esc(e.id)+'"><div><span class="dd-src src-'+src+'">'+esc(srcLabel(e))+'</span><b>'+esc(e.title)+'</b><small>'+esc(TsukinowaBusiness.calendarTime?.(e.start)||'終日')+(local&&e.pushToGoogle?' ・Googleにも登録'+(e.googleCreatePending||e.googlePatchPending?'（反映待ち）':''):'')+(!local?' ・読み取り専用（変更はGoogle側）':'')+'</small></div><div class="dd-day-actions">'+(local?'<button type="button" class="biz-btn primary" data-dd-edit="'+esc(e.id)+'">編集</button>':'<button type="button" class="biz-btn" data-dd-copy="'+esc(e.id)+'">本地にコピー</button><button type="button" class="biz-btn primary" data-dd-open="'+esc(e.id)+'">開く</button>')+'</div></div>';}).join('')||'<p class="biz-muted" style="font-size:11px">予定はありません。「＋ 本地予定」で登録するか、Google日程を同期すると表示されます。</p>')+'</div></div></section>'+googlePanel(rows);
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
  }
+ function srcOf(e){return typeof bizCalendarSource==='function'?bizCalendarSource(e):(e.source==='local'?'local':'google');}
+ function srcLabel(e){return typeof bizCalendarSourceLabel==='function'?bizCalendarSourceLabel(e):'Google';}
+ function googlePanel(rows){const g=rows.filter(e=>srcOf(e)!=='local'),l=rows.filter(e=>srcOf(e)==='local');
+  return '<section class="dd-panel" id="ddCalendarSources"><h3>日程の保存先</h3><div class="dd-pad"><p class="dd-src-summary"><span class="dd-src src-local">本地</span> '+l.length+'件 <span class="dd-src src-google">Google</span> '+g.length+'件（表示中の月）</p><p class="biz-muted" style="font-size:11px">本地日程はこのシステムに保存され、Google連携がなくても登録・編集・削除できます。Google日程は同期した記録として残り、ここでは読み取り専用です。将来Google連携を外しても日程は消えません。必要なものは「本地にコピー」で編集できる本地日程になります（元の記録は変更しません）。</p>'+(g.length?'<button type="button" class="biz-btn" data-dd-copy-month>この月のGoogle日程を本地にコピー（'+g.length+'件）</button>':'')+'</div></section>';}
+ function localDialog(){let d=$('ddLocalEvent');if(d)return d;d=document.createElement('dialog');d.id='ddLocalEvent';d.className='dd-dialog';
+  d.innerHTML='<form method="dialog"><h3 id="ddLocalTitle">本地予定</h3><div class="dd-form"><label>日付<input type="date" id="ddLeDate" required></label><label>開始<input type="time" id="ddLeStart"></label><label>終了<input type="time" id="ddLeEnd"></label><label class="wide">タイトル<input id="ddLeTitle" required placeholder="例：佐藤様 現地調査"></label><label class="wide">場所<input id="ddLeLocation"></label><label class="wide">メモ<textarea id="ddLeMemo" rows="3"></textarea></label><label class="wide check"><input type="checkbox" id="ddLePush"> Googleカレンダーにも登録する（接続中のみ送信、未接続なら次回接続後）</label></div><p class="dd-error" id="ddLeError" role="alert"></p><div class="dd-dialog-actions"><button type="button" class="biz-btn danger" id="ddLeDelete">削除</button><span></span><button type="button" class="biz-btn" id="ddLeCancel">キャンセル</button><button type="button" class="biz-btn primary" id="ddLeSave">保存</button></div></form>';
+  document.body.append(d);
+  $('ddLeCancel').addEventListener('click',()=>d.close());
+  $('ddLeSave').addEventListener('click',async()=>{try{$('ddLeError').textContent='';const saved=await bizSaveLocalEvent({id:d.dataset.id||'',date:$('ddLeDate').value,startTime:$('ddLeStart').value,endTime:$('ddLeEnd').value,title:$('ddLeTitle').value,location:$('ddLeLocation').value,description:$('ddLeMemo').value,pushToGoogle:$('ddLePush').checked});calDay=saved.date;d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
+  $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
+  return d;}
+ function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=v=>String(v||'').length>10?String(v).slice(11,16):'';d.dataset.id=e?.id||'';
+  $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';
+  d.showModal();}
+ async function copyToLocal(ids){if(!ids.length)return;if(!confirm(ids.length+'件のGoogle日程を本地日程としてコピーします。\n元のGoogle日程の記録は変更しません。コピー後はコピーした本地日程を表示します。'))return;try{const n=await bizCopyGoogleEventsToLocal(ids);renderCalendarGrid();alert(n+'件を本地日程にコピーしました。');}catch(e){alert(e.message);}}
  function shiftMonth(delta){const input=$('calendarMonth');if(!input)return;const [y,m]=(input.value||bizNowMonth()).split('-').map(Number),d=new Date(y,m-1+delta,1);input.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');input.dispatchEvent(new Event('change',{bubbles:true}));}
  // ---------- shared helpers for the design views (read-only) ----------
 const desktop=()=>window.matchMedia('(min-width: 801px)').matches&&document.body.classList.contains('dd');
@@ -3937,17 +4025,17 @@ function showDesktopPreview(){
   for(const [k,label] of THEME_NAMES){const b=document.createElement('button');b.type='button';b.dataset.theme=k;b.textContent=label;b.addEventListener('click',()=>{try{localStorage.setItem(THEME_KEY,k)}catch{}applyTheme(k)});themes.append(b);}
   const sync=$('bizSyncState');if(sync)sync.before(crumb,themes);else top.append(crumb,themes);
   // Home
-  addHeaderActions('pageDashboard',[button('＋ 予定登録','',go('calendar')),button('売上登録','',()=>{bizSwitchPage('sales');if(typeof openManualSale==='function')openManualSale();}),button('支出登録','',()=>{bizSwitchPage('expenses');scrollToEl('expDate')();}),button('＋ 帳票作成','primary',go('chohyo'))]);
+  addHeaderActions('pageDashboard',[button('＋ 予定登録','',()=>{bizSwitchPage('calendar');openLocalEvent('');}),button('売上登録','',()=>{bizSwitchPage('sales');if(typeof openManualSale==='function')openManualSale();}),button('支出登録','',()=>{bizSwitchPage('expenses');scrollToEl('expDate')();}),button('＋ 帳票作成','primary',go('chohyo'))]);
   const note=document.querySelector('#pageDashboard>p.biz-muted');
   if(note){const a=document.createElement('div');a.id='ddHomeAnalytics';a.className='dd-only';note.after(a);
    a.addEventListener('change',e=>{const k=e.target.dataset?.dd;if(!k)return;ui[k]=/^(compareMetric|compareMode)$/.test(k)?e.target.value:+e.target.value;renderHomeAnalytics();});
    const r=document.createElement('div');r.id='ddRecentSales';r.className='dd-only';a.after(r);
    r.addEventListener('click',e=>{const g=e.target.closest('[data-dd-go]');if(g)bizSwitchPage(g.dataset.ddGo);});}
   // Calendar
-  addHeaderActions('pageCalendar',[button('‹ 前月','',()=>shiftMonth(-1)),Object.assign(document.createElement('b'),{id:'ddCalMonthLabel',className:'dd-month-label dd-only'}),button('翌月 ›','',()=>shiftMonth(1)),button('小野田明細読込 → 請求書','',()=>importOnodaFromCalendar())]);
+  addHeaderActions('pageCalendar',[button('＋ 本地予定','primary',()=>openLocalEvent('')),button('‹ 前月','',()=>shiftMonth(-1)),Object.assign(document.createElement('b'),{id:'ddCalMonthLabel',className:'dd-month-label dd-only'}),button('翌月 ›','',()=>shiftMonth(1)),button('小野田明細読込 → 請求書','',()=>importOnodaFromCalendar())]);
   const calSection=document.querySelector('#pageCalendar>.biz-section');
   if(calSection){const c=document.createElement('div');c.id='ddCalendar';c.className='dd-only';calSection.after(c);
-   c.addEventListener('click',e=>{const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);});}
+   c.addEventListener('click',e=>{const day=e.target.closest('[data-dd-day]');if(day){calDay=day.dataset.ddDay;renderCalendarGrid();return;}const open=e.target.closest('[data-dd-open]');if(open)openEventModal(open.dataset.ddOpen);const edit=e.target.closest('[data-dd-edit]');if(edit)openLocalEvent(edit.dataset.ddEdit);const copy=e.target.closest('[data-dd-copy]');if(copy)copyToLocal([copy.dataset.ddCopy]);if(e.target.closest('[data-dd-copy-month]'))copyToLocal(bizCalendarVisibleRows().filter(x=>srcOf(x)!=='local').map(x=>x.id));});}
   // 帳票
   const chohyo=$('pageChohyo');
   if(chohyo){const h=document.createElement('div');h.id='ddChohyoHead';h.className='dd-only';h.innerHTML='<h1>帳票</h1>';h.append(button('保存帳票へ','',go('savedDocs')));chohyo.prepend(h);
