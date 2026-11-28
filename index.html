@@ -1156,8 +1156,42 @@ body.dd #ddChohyoHead h1{font-size:20px;font-weight:750;color:var(--dd-fg)}
  body.dd #pageChohyo.editor{grid-template-columns:minmax(0,1fr)}
  body.dd #pageChohyo.editor>#previewArea,body.dd #pageChohyo.editor>#ddPreviewPlaceholder{grid-column:1;grid-row:auto;position:static;max-height:950px}
  body.dd #previewArea .invoice{zoom:.86}
- body.dd #ddHomeAnalytics,body.dd #ddCalendar{grid-template-columns:1fr}
+ body.dd #ddHomeAnalytics,body.dd #ddCalendar,body.dd #ddCompanyInfo{grid-template-columns:1fr}
 }
+/* home: monthly balance (primary = existing 収支差額) and recent sales */
+body.dd .balance-primary{margin-top:15px;border:1px solid var(--dd-acc);background:var(--dd-selected);border-radius:7px;padding:12px}
+body.dd .balance-primary>span{display:block;font-size:11px;color:var(--dd-mut)}
+body.dd .balance-primary>b{display:block;font-size:22px;font-weight:750;margin-top:6px;color:var(--dd-fg)}
+body.dd .balance-primary>b.negative,body.dd .balance-primary small b.negative{color:#bf4b4b}
+body.dd .balance-primary small{display:block;margin-top:8px;font-size:11px;color:var(--dd-mut)}
+body.dd .balance-primary small b{color:var(--dd-fg);margin-left:4px}
+body.dd .legend-sw.income{background:var(--dd-side-active)}
+body.dd .balance-row.income i{background:color-mix(in srgb,var(--dd-acc) 55%,var(--dd-panel))}
+body.dd #ddRecentSales{margin-top:13px}
+body.dd .dd-panel>h3{display:flex;justify-content:space-between;align-items:center;gap:8px}
+body.dd .dd-panel>h3 .biz-btn{font-size:11px;padding:5px 9px;font-weight:600}
+body.dd .dd-panel>.biz-table-wrap{margin:0}
+/* metric cards on 売上・支出・銀行 */
+body.dd #ddSalesMetrics,body.dd #ddExpenseMetrics,body.dd #ddBankMetrics{display:grid!important;margin:0 0 13px}
+body.dd .dd-metrics3{grid-template-columns:repeat(3,minmax(0,1fr))}
+/* filters on 見積履歴・保存帳票 */
+body.dd .dd-filters{margin-bottom:13px}
+body.dd .dd-filters .dd-toolbar{margin-bottom:8px}
+body.dd .dd-count{font-size:11px}
+/* 銀行: 月別未照合明細 */
+body.dd #ddBankMonthly{margin-bottom:13px}
+body.dd .dd-bank-month{margin-bottom:14px;font-size:12px}
+body.dd .dd-bank-month>.biz-muted{margin:5px 0;font-size:11px}
+body.dd .dd-bank-item{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:7px 0;border-bottom:1px solid var(--dd-line)}
+/* 設定: 会社情報 + 取込機能 */
+body.dd #ddCompanyInfo{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:13px;margin-bottom:13px}
+body.dd .dd-info{display:grid;grid-template-columns:90px minmax(0,1fr);gap:8px 12px;font-size:12px}
+body.dd .dd-info dt{color:var(--dd-mut)}
+body.dd .dd-info dd{margin:0;color:var(--dd-fg);overflow-wrap:anywhere}
+body.dd .dd-import{line-height:1.9;font-size:12px}
+body.dd .dd-import p{margin:0 0 6px}
+/* 帳票: the design has no preview toggle; the preview stays open while the page is shown */
+body.dd #pageChohyo .btn-preview{display:none}
 /* dark theme: keep the existing hard-coded light surfaces readable */
 body.dd[data-dd-theme="dark"] :is(.biz-alert,.sales-filters,.biz-table th){background:var(--dd-bg)}
 body.dd[data-dd-theme="dark"] .biz-table tr:hover td{background:transparent}
@@ -3715,8 +3749,8 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
  const cache=new Map();
  function monthTotals(fy,m){
   const key=monthKey(fy,m);if(cache.has(key))return cache.get(key);
-  const A=window.TsukinowaAccounting,U=window.TsukinowaAccountingUI;let v={sales:0,expenses:0};
-  try{if(A&&U?.homeData){const r=A.aggregate(U.homeData(),A.periodFilter({month:key}));v={sales:Number(r.sales)||0,expenses:Number(r.expenseTotal)||0};}}catch{}
+  const A=window.TsukinowaAccounting,U=window.TsukinowaAccountingUI;let v={sales:0,expenses:0,income:0,difference:0};
+  try{if(A&&U?.homeData){const r=A.aggregate(U.homeData(),A.periodFilter({month:key}));v={sales:Number(r.sales)||0,expenses:Number(r.expenseTotal)||0,income:Number(r.income)||0,difference:Number(r.cashFlowDifference)||0};}}catch{}
   cache.set(key,v);return v;
  }
  const series=(fy,kind)=>FISCAL_MONTHS.map(m=>monthTotals(fy,m)[kind]);
@@ -3729,15 +3763,24 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
   return '<div class="dd-pad"><div class="dd-toolbar"><label>項目 <select data-dd="compareMetric">'+opt('sales','売上',kind)+opt('expenses','支出',kind)+'</select></label><label>比較 <select data-dd="compareMode">'+opt('monthly','月次推移',ui.compareMode)+opt('years','年度比較',ui.compareMode)+opt('sameMonth','同月比較',ui.compareMode)+'</select></label>'+(ui.compareMode==='monthly'?'<label>年度 <select data-dd="compareFY">'+years.map(y=>opt(y,y+'年度',ui.compareFY)).join('')+'</select></label>':'')+(ui.compareMode==='sameMonth'?'<label>比較月 <select data-dd="compareMonth">'+FISCAL_MONTHS.map(m=>opt(m,m+'月',ui.compareMonth)).join('')+'</select></label>':'')+'</div>'+bars(cur.values,cur.labels)+'<div class="compare-foot">'+(ui.compareMode==='monthly'?ui.compareFY+'年度 '+title+'合計　'+yen(total(vals)):ui.compareMode==='years'?'年度別'+title+'合計（10月〜翌年9月）':ui.compareMonth+'月の'+title+'を年度別に比較')+'</div><div class="compare-note">登録済みの業務データからホームと同じ集計で表示します（売上＝売上日基準、支出＝支出台帳）。</div></div>';
  }
  function balance(){
-  const t=monthTotals(ui.balanceFY,ui.balanceMonth),s=t.sales,x=t.expenses,d=s-x,m=Math.max(1,s,x);
-  return '<div class="dd-pad"><div class="dd-toolbar"><label>年度 <select data-dd="balanceFY">'+fiscalYears().map(y=>opt(y,y+'年度',ui.balanceFY)).join('')+'</select></label><label>対象月 <select data-dd="balanceMonth">'+FISCAL_MONTHS.map(n=>opt(n,n+'月',ui.balanceMonth)).join('')+'</select></label></div><div class="balance-stats"><div><span>売上</span><b>'+yen(s)+'</b></div><div><span>支出</span><b>'+yen(x)+'</b></div><div><span>収支差額</span><b class="'+(d<0?'negative':'')+'">'+yen(d)+'</b></div></div><div class="balance-legend"><span><i class="legend-sw revenue"></i>売上</span><span><i class="legend-sw expenditure"></i>支出</span></div><div class="balance-plot"><div class="balance-row revenue"><span>売上</span><div class="balance-track"><i style="width:'+s/m*100+'%"></i></div></div><div class="balance-row expenditure"><span>支出</span><div class="balance-track"><i style="width:'+x/m*100+'%"></i></div></div></div><div class="balance-foot">'+ui.balanceFY+'年度 '+ui.balanceMonth+'月 / 売上 − 支出 = '+yen(d)+'</div><div class="compare-note">収支差額は参考値であり、税引前利益や現金残高ではありません。未登録の取引は含まれません。</div></div>';
- }
- function renderHomeAnalytics(){
+ // Both figures come from the existing aggregate(): 収支差額 = cashFlowDifference (確認済み入金 − 支出), the same value as the home KPI.
+ // 売上 − 支出 is only a reference that includes uncollected sales; nothing is recalculated here.
+ const t=monthTotals(ui.balanceFY,ui.balanceMonth),s=t.sales,inc=t.income,x=t.expenses,d=t.difference,ref=s-x,m=Math.max(1,s,inc,x);
+ const neg=v=>v<0?' negative':'';
+ return '<div class="dd-pad"><div class="dd-toolbar"><label>年度 <select data-dd="balanceFY">'+fiscalYears().map(y=>opt(y,y+'年度',ui.balanceFY)).join('')+'</select></label><label>対象月 <select data-dd="balanceMonth">'+FISCAL_MONTHS.map(n=>opt(n,n+'月',ui.balanceMonth)).join('')+'</select></label></div>'
+ +'<div class="balance-primary"><span>収支差額（確認済み入金 − 支出）</span><b class="'+neg(d)+'" data-dd-balance="difference">'+yen(d)+'</b><small>参考：売上 − 支出（未回収を含む） <b class="'+neg(ref)+'" data-dd-balance="reference">'+yen(ref)+'</b></small></div>'
+ +'<div class="balance-stats"><div><span>売上</span><b>'+yen(s)+'</b></div><div><span>確認済み入金</span><b data-dd-balance="income">'+yen(inc)+'</b></div><div><span>支出</span><b>'+yen(x)+'</b></div></div>'
+ +'<div class="balance-legend"><span><i class="legend-sw revenue"></i>売上</span><span><i class="legend-sw income"></i>確認済み入金</span><span><i class="legend-sw expenditure"></i>支出</span></div>'
+ +'<div class="balance-plot"><div class="balance-row revenue"><span>売上</span><div class="balance-track"><i style="width:'+s/m*100+'%"></i></div></div><div class="balance-row income"><span>入金</span><div class="balance-track"><i style="width:'+inc/m*100+'%"></i></div></div><div class="balance-row expenditure"><span>支出</span><div class="balance-track"><i style="width:'+x/m*100+'%"></i></div></div></div>'
+ +'<div class="balance-foot">'+ui.balanceFY+'年度 '+ui.balanceMonth+'月 / 確認済み入金 − 支出 = '+yen(d)+'</div><div class="compare-note">収支差額はホームの「収支差額」と同じ定義です（会計上の利益ではありません）。売上 − 支出は未回収の売上を含む参考値です。</div></div>';
+}
+function renderHomeAnalytics(){
   const box=$('ddHomeAnalytics');if(!box||!document.body.classList.contains('dd'))return;
   if(!window.matchMedia('(min-width: 801px)').matches)return;
   cache.clear();const fy=currentFY(),m=+bizNowMonth().slice(5);
   ui.compareFY??=fy;ui.balanceFY??=fy;ui.compareMonth??=m;ui.balanceMonth??=m;
   box.innerHTML='<section class="dd-panel"><h3>売上・支出推移比較</h3>'+comparison()+'</section><section class="dd-panel"><h3>月次収支比較</h3>'+balance()+'</section>';
+  renderRecentSales();
  }
  // ---------- Calendar month grid (same rows as the existing list) ----------
  let calDay=null;
@@ -3756,7 +3799,100 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
   const label=$('ddCalMonthLabel');if(label)label.textContent=y+'年'+mo+'月';
  }
  function shiftMonth(delta){const input=$('calendarMonth');if(!input)return;const [y,m]=(input.value||bizNowMonth()).split('-').map(Number),d=new Date(y,m-1+delta,1);input.value=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');input.dispatchEvent(new Event('change',{bubbles:true}));}
- // ---------- build ----------
+ // ---------- shared helpers for the design views (read-only) ----------
+const desktop=()=>window.matchMedia('(min-width: 801px)').matches&&document.body.classList.contains('dd');
+const A_=()=>window.TsukinowaAccounting,U_=()=>window.TsukinowaAccountingUI;
+const live=r=>A_()?.live?A_().live(r):!r.deletedAt;
+function metricCards(items){return items.map(([label,value,attr])=>'<div class="biz-card"><h3>'+esc(label)+'</h3><div class="biz-kpi"'+(attr?' data-dd-metric="'+attr+'"':'')+'>'+esc(value)+'</div></div>').join('');}
+function ensure(id,cls,place){let n=$(id);if(!n){n=document.createElement('div');n.id=id;n.className=cls+' dd-only';place(n);}return n;}
+// ---------- Home: 最近の売上 (existing sales register, newest first) ----------
+function renderRecentSales(){
+ const box=$('ddRecentSales');if(!box||!desktop())return;
+ let rows=[];try{const U=U_(),A=A_();if(U?.salesRegister)rows=U.salesRegister(A.periodFilter({year:currentFY()}),todayISO(),true).slice(0,5);}catch{}
+ box.innerHTML='<section class="dd-panel"><h3>最近の売上<button type="button" class="biz-btn" data-dd-go="sales">売上・入金へ</button></h3><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>売上日</th><th>取引先</th><th>工事内容</th><th class="biz-money">金額</th><th class="biz-money">入金済</th><th>状態</th></tr></thead><tbody>'
+ +(rows.map(r=>'<tr><td>'+esc(r.salesDate)+'</td><td>'+esc(r.customer)+'</td><td>'+esc(r.content)+'</td><td class="biz-money">'+esc(bizMoney(r.amount))+'</td><td class="biz-money">'+esc(bizMoney(r.paid))+'</td><td><span class="register-status'+(r.status==='入金済'?' paid':'')+'">'+esc(r.status)+'</span></td></tr>').join('')||'<tr><td colspan="6" class="biz-muted">今年度の売上はまだありません。</td></tr>')+'</tbody></table></div></section>';
+}
+// ---------- 売上・入金: metric cards from the rendered register ----------
+function renderSalesMetrics(){
+ const box=$('ddSalesMetrics');if(!box||!desktop())return;
+ const v=U_()?.salesRegisterView?.()||{sales:[]},sum=k=>(v.sales||[]).reduce((n,s)=>n+(Number(s[k])||0),0);
+ box.innerHTML=metricCards([['売上',bizMoney(sum('amount')),'sales'],['入金済',bizMoney(sum('paid')),'paid'],['未入金',bizMoney(sum('outstanding')),'outstanding']]);
+}
+// ---------- 支出・現金: metric cards for the selected month (same register as the ledger/home) ----------
+function renderExpenseMetrics(){
+ const box=$('ddExpenseMetrics');if(!box||!desktop())return;
+ const month=$('expenseMonth')?.value||bizNowMonth();let rows=[];
+ try{rows=A_().expenseRegister(U_().homeData().expenses||[],month);}catch{}
+ const by=re=>rows.filter(e=>re.test(String(e.paymentMethod||e.method||''))).reduce((n,e)=>n+(Number(e.amount)||0),0),all=rows.reduce((n,e)=>n+(Number(e.amount)||0),0);
+ box.innerHTML=metricCards([['支出合計（'+month+'）',bizMoney(all),'total'],['現金支出',bizMoney(by(/^現金$/)),'cash'],['法人カード',bizMoney(by(/法人カード/)),'card'],['代表者立替',bizMoney(by(/代表者立替/)),'advance']]);
+}
+// ---------- 銀行照合: metric cards + 月別未照合明細 ----------
+const bankDone=b=>['照合済','除外'].includes(b.status)||!b.status&&!!b.matched;
+function renderBankViews(){
+ const m=$('ddBankMetrics'),g=$('ddBankMonthly');if(!m||!g||!desktop())return;
+ const rows=(bizState.bank||[]).filter(live),open=rows.filter(b=>!bankDone(b));
+ m.innerHTML=metricCards([['銀行明細',rows.length+' 件','all'],['照合済・除外',(rows.length-open.length)+' 件','done'],['未照合',open.length+' 件','open']]);
+ const groups=new Map();for(const b of open){const k=String(b.date||b.bankTransactionDate||'').slice(0,7)||'日付未設定';if(!groups.has(k))groups.set(k,[]);groups.get(k).push(b);}
+ const amt=(b,k)=>Number(b[k])||0;
+ g.innerHTML='<section class="dd-panel"><h3>月別未照合明細</h3><div class="dd-pad">'+([...groups.entries()].sort((a,b)=>b[0].localeCompare(a[0])).map(([k,list])=>'<div class="dd-bank-month"><b>'+esc(k)+'　'+list.length+' 件</b><div class="biz-muted">入金 '+esc(bizMoney(list.reduce((n,b)=>n+amt(b,'incoming'),0)))+' / 出金 '+esc(bizMoney(list.reduce((n,b)=>n+amt(b,'outgoing'),0)))+'</div>'+list.slice().sort((a,b)=>String(b.date||'').localeCompare(String(a.date||''))).map(b=>'<div class="dd-bank-item"><span>'+esc(b.date||'')+'　'+esc(b.desc||b.description||'')+'　'+(amt(b,'incoming')?'＋'+esc(bizMoney(amt(b,'incoming'))):'−'+esc(bizMoney(amt(b,'outgoing'))))+'</span><button type="button" class="biz-btn" data-dd-bank="'+esc(b.id)+'">確認</button></div>').join('')+'</div>').join('')||'<span class="biz-muted">未照合明細はありません。</span>')+'</div></section>';
+}
+function focusBank(id){
+ if(typeof accountingBankView==='function')accountingBankView('todo');
+ const d=[...document.querySelectorAll('#bankRows [data-bank-detail]')].find(x=>x.dataset.bankDetail===id);
+ if(d){d.open=true;d.closest('tr')?.scrollIntoView({behavior:'smooth',block:'center'});}else $('bankRows')?.scrollIntoView({behavior:'smooth',block:'start'});
+}
+// ---------- 見積履歴 / 保存帳票: client-side filters over the rows the existing renderers produced ----------
+const filters={estimates:{fy:'all',month:'all',state:'all'},saved:{fy:'all',month:'all',kind:'all',state:'all'}};
+const fyOf=d=>{const m=/^(\d{4})-(\d{2})/.exec(String(d||'').replaceAll('/','-'));return m?+m[1]-(+m[2]<10?1:0):null};
+const monthOf=d=>(/^\d{4}-(\d{2})/.exec(String(d||'').replaceAll('/','-'))||[])[1]||'';
+const yearOptions=dates=>[...new Set(dates.map(fyOf).filter(Boolean).concat(fiscalYears()))].sort((a,b)=>b-a);
+const monthOptions=sel=>FISCAL_MONTHS.map(m=>{const v=String(m).padStart(2,'0');return opt(v,m+'月',sel)}).join('');
+function filterBar(kind,dates,extra,shown,all,unit){
+ const f=filters[kind];
+ return '<div class="dd-pad"><div class="dd-toolbar"><label>会計年度 <select data-ddf="fy">'+opt('all','すべて',f.fy)+yearOptions(dates).map(y=>opt(y,y+'年度',f.fy)).join('')+'</select></label><label>発行月 <select data-ddf="month">'+opt('all','すべての月',f.month)+monthOptions(f.month)+'</select></label>'+extra+'<button type="button" class="biz-btn" data-ddf-reset>クリア</button></div><div class="biz-muted dd-count">表示 '+shown+' 件 ／ '+unit+' '+all+' 件</div></div>';
+}
+function applyEstimateFilters(){
+ const bar=$('ddEstimateFilters'),body=$('estimateRows');if(!bar||!body)return;
+ const f=filters.estimates,rows=[...body.querySelectorAll(':scope>tr')].filter(r=>r.cells.length>1);let shown=0;
+ for(const r of rows){const date=r.cells[0].textContent.trim(),state=r.cells[4].textContent.trim();
+  const ok=!desktop()||((f.fy==='all'||String(fyOf(date))===f.fy)&&(f.month==='all'||monthOf(date)===f.month)&&(f.state==='all'||state===f.state));
+  r.hidden=!ok;if(ok)shown++;}
+ const states=['見積済','受注','請求書発行済'];
+ bar.innerHTML=filterBar('estimates',rows.map(r=>r.cells[0].textContent.trim()),'<label>状態 <select data-ddf="state">'+opt('all','すべて',f.state)+states.map(x=>opt(x,x,f.state)).join('')+'</select></label>',shown,rows.length,'見積書');
+}
+function savedRecord(row,history){
+ if(row.dataset.documentId)return history.find(h=>h.documentId===row.dataset.documentId);
+ const id=(/ID: ([^\s｜]+)/.exec(row.textContent)||[])[1];return id?history.find(h=>h.historyId===id||h.documentId===id):null;
+}
+function applySavedFilters(){
+ const bar=$('ddSavedFilters'),box=$('allSavedDocsList');if(!bar||!box)return;
+ const f=filters.saved,history=typeof loadConfirmedHistory==='function'?loadConfirmedHistory():[],rows=[...box.children].filter(x=>x.nodeType===1&&x.textContent.includes('ID:'));let shown=0;
+ for(const r of rows){const h=savedRecord(r,history)||{};const date=h.invoiceDate||'',status=h.documentStatus||'active';
+  const ok=!desktop()||((f.fy==='all'||String(fyOf(date))===f.fy)&&(f.month==='all'||monthOf(date)===f.month)&&(f.kind==='all'||h.docType===f.kind)&&(f.state==='all'||(f.state==='active'?status==='active':status!=='active')));
+  r.hidden=!ok;if(ok)shown++;}
+ bar.innerHTML=filterBar('saved',history.map(h=>h.invoiceDate),'<label>書類 <select data-ddf="kind">'+opt('all','すべて',f.kind)+[['estimate','見積書'],['invoice','請求書'],['receipt','領収書'],['onoda','小野田請求']].map(([v,t])=>opt(v,t,f.kind)).join('')+'</select></label><label>状態 <select data-ddf="state">'+opt('all','すべて',f.state)+opt('active','有効',f.state)+opt('inactive','無効・訂正済など',f.state)+'</select></label>',shown,rows.length,'全');
+}
+function wireFilters(bar,kind,apply,search){
+ bar.addEventListener('change',e=>{const k=e.target.dataset?.ddf;if(!k)return;filters[kind][k]=e.target.value;apply();});
+ bar.addEventListener('click',e=>{if(!e.target.closest('[data-ddf-reset]'))return;for(const k of Object.keys(filters[kind]))filters[kind][k]='all';const q=$(search);if(q&&q.value){q.value='';q.dispatchEvent(new Event('input',{bubbles:true}));}apply();});
+}
+// ---------- 設定: 会社情報 (read-only, from the existing 帳票 template) ----------
+function renderCompanyInfo(){
+ const box=$('ddCompanyInfo');if(!box)return;
+ const t=document.querySelector('#previewArea .invoice'),text=sel=>t?.querySelector(sel)?.textContent.trim()||'';
+ const contact=[...(t?.querySelectorAll('.contact-info-right .contact-line')||[])].map(x=>x.textContent.trim());
+ const bank=(typeof DOC_CONFIGS!=='undefined'&&DOC_CONFIGS.invoice?.leftCard?.rows)||[];
+ const rows=[['会社名',text('.brand-jp-big')],['英文名',text('.brand-en-classic')],['登録番号',typeof COMPANY_INVOICE_REG_NO!=='undefined'?COMPANY_INVOICE_REG_NO:''],['所在地',contact.filter(x=>!/^(TEL|MAIL)/.test(x)).join(' ')],['連絡先',contact.filter(x=>/^(TEL|MAIL)/.test(x)).join(' / ')],['お振込先',bank.map(([k,v])=>k+' '+v).join(' / ')],['会計年度','10月1日〜翌年9月30日']];
+ box.innerHTML='<section class="dd-panel"><h3>会社情報</h3><div class="dd-pad"><dl class="dd-info">'+rows.map(([k,v])=>'<dt>'+esc(k)+'</dt><dd>'+esc(v||'—')+'</dd>').join('')+'</dl><p class="compare-note">帳票に印字している発行元情報です（読み取り専用）。変更には帳票テンプレートの修正が必要なため、この画面では編集できません。</p></div></section><section class="dd-panel"><h3>取込機能</h3><div class="dd-pad dd-import"><b>銀行CSV</b><p class="biz-muted">銀行照合の「CSV取込」で読み込みます。照合は確認後に確定します。</p><b>支出CSV</b><p class="biz-muted">支出・現金の「支出CSV取込」で取込前確認をしてから登録します。</p><div class="dd-toolbar"><button type="button" class="biz-btn" data-dd-import="bank">銀行CSVを選択</button><button type="button" class="biz-btn" data-dd-import="expense">支出CSVを選択</button></div></div></section>';
+}
+function openFile(page,id){bizSwitchPage(page);const f=$(id);if(!f)return;f.scrollIntoView({behavior:'smooth',block:'center'});f.click();}
+// ---------- 帳票: the preview is always visible on desktop while the page is open ----------
+function showDesktopPreview(){
+ if(!desktop()||!$('pageChohyo')?.classList.contains('active'))return;
+ const area=$('previewArea');if(!area||area.classList.contains('show'))return;
+ area.classList.add('show');if(typeof fitInvoiceToOnePage==='function')fitInvoiceToOnePage();
+}
+// ---------- build ----------
  function build(){
   if(!$('bizNav')||document.body.classList.contains('dd'))return;
   const top=document.querySelector('.biz-topbar');
@@ -3768,7 +3904,9 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
   addHeaderActions('pageDashboard',[button('＋ 予定登録','',go('calendar')),button('売上登録','',()=>{bizSwitchPage('sales');if(typeof openManualSale==='function')openManualSale();}),button('支出登録','',()=>{bizSwitchPage('expenses');scrollToEl('expDate')();}),button('＋ 帳票作成','primary',go('chohyo'))]);
   const note=document.querySelector('#pageDashboard>p.biz-muted');
   if(note){const a=document.createElement('div');a.id='ddHomeAnalytics';a.className='dd-only';note.after(a);
-   a.addEventListener('change',e=>{const k=e.target.dataset?.dd;if(!k)return;ui[k]=/^(compareMetric|compareMode)$/.test(k)?e.target.value:+e.target.value;renderHomeAnalytics();});}
+   a.addEventListener('change',e=>{const k=e.target.dataset?.dd;if(!k)return;ui[k]=/^(compareMetric|compareMode)$/.test(k)?e.target.value:+e.target.value;renderHomeAnalytics();});
+   const r=document.createElement('div');r.id='ddRecentSales';r.className='dd-only';a.after(r);
+   r.addEventListener('click',e=>{const g=e.target.closest('[data-dd-go]');if(g)bizSwitchPage(g.dataset.ddGo);});}
   // Calendar
   addHeaderActions('pageCalendar',[button('‹ 前月','',()=>shiftMonth(-1)),Object.assign(document.createElement('b'),{id:'ddCalMonthLabel',className:'dd-month-label dd-only'}),button('翌月 ›','',()=>shiftMonth(1)),button('小野田明細読込 → 請求書','',()=>importOnodaFromCalendar())]);
   const calSection=document.querySelector('#pageCalendar>.biz-section');
@@ -3777,19 +3915,36 @@ function bizClearDocLink(){bizCurrentCalendarId='';bizCurrentEstimateId='';bizCu
   // 帳票
   const chohyo=$('pageChohyo');
   if(chohyo){const h=document.createElement('div');h.id='ddChohyoHead';h.className='dd-only';h.innerHTML='<h1>帳票</h1>';h.append(button('保存帳票へ','',go('savedDocs')));chohyo.prepend(h);
-   const ph=document.createElement('div');ph.id='ddPreviewPlaceholder';ph.className='dd-only';ph.innerHTML='<div>帳票プレビュー</div>';const pb=button('👁 プレビューを表示','primary',()=>togglePreview());pb.classList.remove('dd-only');ph.append(pb);$('previewArea')?.before(ph);}
+   const ph=document.createElement('div');ph.id='ddPreviewPlaceholder';ph.className='dd-only';ph.innerHTML='<div>帳票プレビュー</div>';const pb=button('👁 プレビューを表示','primary',()=>{if(!$('previewArea')?.classList.contains('show'))togglePreview();});pb.classList.remove('dd-only');ph.append(pb);$('previewArea')?.before(ph);}
   addHeaderActions('pageEstimates',[button('＋ 見積書作成','primary',()=>{bizSwitchPage('chohyo');if(typeof setDocType==='function')setDocType('estimate');})]);
   addHeaderActions('pageSavedDocs',[button('＋ 帳票作成','primary',go('chohyo'))]);
+  const estSection=document.querySelector('#pageEstimates>.biz-section');
+  if(estSection){const b=document.createElement('section');b.id='ddEstimateFilters';b.className='dd-panel dd-filters dd-only';estSection.before(b);wireFilters(b,'estimates',applyEstimateFilters,'estimateSearch');}
+  const savedSection=document.querySelector('#pageSavedDocs>.biz-section');
+  if(savedSection){const b=document.createElement('section');b.id='ddSavedFilters';b.className='dd-panel dd-filters dd-only';savedSection.before(b);wireFilters(b,'saved',applySavedFilters,'savedDocSearch');}
+  // ＋売上登録 is the desktop entry point for the existing manual sale; the old 手動売上 button stays for mobile only.
+  document.querySelector('#pageSales>.biz-title>.biz-actions>button[onclick="openManualSale()"]')?.classList.add('dd-hide');
   addHeaderActions('pageSales',[button('＋ 売上登録','primary',()=>{if(typeof openManualSale==='function')openManualSale();}),button('入金登録','',scrollToEl('paymentRegistrationForm'))]);
-  addHeaderActions('pageExpenses',[button('＋ 支出登録','primary',scrollToEl('expDate'))]);
-  addHeaderActions('pageBank',[button('銀行CSVインポート','primary',()=>{$('bankFile')?.scrollIntoView({behavior:'smooth',block:'center'});$('bankFile')?.focus();})]);
+  const salesRegister=document.querySelector('#pageSales>.sales-register');if(salesRegister)ensure('ddSalesMetrics','biz-grid dd-metrics3',n=>salesRegister.before(n));
+  addHeaderActions('pageExpenses',[button('＋ 支出登録','primary',scrollToEl('expDate')),button('CSVインポート','',()=>openFile('expenses','expenseFile'))]);
+  const expFirst=document.querySelector('#pageExpenses>.biz-section');if(expFirst)ensure('ddExpenseMetrics','biz-grid',n=>expFirst.before(n));
+  addHeaderActions('pageBank',[button('銀行CSVインポート','primary',()=>openFile('bank','bankFile'))]);
+  const bankFirst=document.querySelector('#pageBank>.biz-section');
+  if(bankFirst){ensure('ddBankMetrics','biz-grid dd-metrics3',n=>bankFirst.before(n));const g=ensure('ddBankMonthly','',n=>bankFirst.before(n));g.addEventListener('click',e=>{const b=e.target.closest('[data-dd-bank]');if(b)focusBank(b.dataset.ddBank);});}
+  // 設定: read-only company info + import shortcuts
+  const settingsTitle=document.querySelector('#pageSettings>.biz-title');
+  if(settingsTitle){const c=ensure('ddCompanyInfo','',n=>settingsTitle.after(n));c.addEventListener('click',e=>{const b=e.target.closest('[data-dd-import]');if(b)b.dataset.ddImport==='bank'?openFile('bank','bankFile'):openFile('expenses','expenseFile');});}
   document.body.classList.add('dd');
   applyTheme(storedTheme());
   // Wiring: refresh the added views whenever the existing views re-render.
-  for(const name of ['renderDashboard','renderCalendarEvents']){const original=window[name];if(typeof original!=='function')continue;window[name]=function(){const r=original.apply(this,arguments);try{name==='renderDashboard'?renderHomeAnalytics():renderCalendarGrid();}catch(e){console.warn('desktop design view',e)}return r;};}
+  const views={renderDashboard:renderHomeAnalytics,renderCalendarEvents:renderCalendarGrid,renderSales:renderSalesMetrics,renderExpenses:renderExpenseMetrics,renderBank:renderBankViews,renderEstimates:applyEstimateFilters,renderAllSavedDocs:applySavedFilters};
+  for(const [name,view] of Object.entries(views)){const original=window[name];if(typeof original!=='function')continue;window[name]=function(){const r=original.apply(this,arguments);try{view();}catch(e){console.warn('desktop design view',e)}return r;};}
+  // 帳票 preview: always visible on desktop while the page is open. Leaving the page still clears it (existing navigation script).
+  const switchPage=window.bizSwitchPage;window.bizSwitchPage=function(){const r=switchPage.apply(this,arguments);try{showDesktopPreview();}catch(e){console.warn('desktop preview',e)}return r;};
   new MutationObserver(syncCrumb).observe($('bizNav'),{subtree:true,attributes:true,attributeFilter:['class']});
-  window.matchMedia('(min-width: 801px)').addEventListener?.('change',()=>{renderHomeAnalytics();renderCalendarGrid();});
-  syncCrumb();renderHomeAnalytics();renderCalendarGrid();
+  const all=()=>{for(const f of Object.values(views))try{f();}catch(e){console.warn('desktop design view',e)}renderCompanyInfo();showDesktopPreview();};
+  window.matchMedia('(min-width: 801px)').addEventListener?.('change',all);
+  syncCrumb();all();
  }
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',build);else build();
 })();
