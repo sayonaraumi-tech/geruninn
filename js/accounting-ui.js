@@ -4,7 +4,7 @@
 const A=root.TsukinowaAccounting,el=id=>document.getElementById(id),B=()=>root.TsukinowaBusinessUI,enabled=()=>B().isEnabled(),uid=()=>crypto.randomUUID(),esc=s=>bizEsc(String(s??''));
 let duplicateBackup=null;
 let data={},expenseEdit=null,importing=false,expensePreview=null,expenseBank=null,categoryChosen=false;
-const old={};for(const n of ['deleteExpense','renderExpenses','matchBankSale','bizPaid','bizOutstanding','exportBackup'])old[n]=root[n];
+const old={};for(const n of ['deleteExpense','renderExpenses','matchBankSale','bizPaid','bizOutstanding'])old[n]=root[n];
 function isAdmin(){if(!enabled()||B().getClient()?.getState().role!=='admin'){root.bizOpenCloudAccount();return false;}return true;}
 function rev(n,id){return B().getSync()?.getRevision(n,id)||0;}
 function send(c){if(!isAdmin())return;return B().enqueue(c);}
@@ -58,7 +58,6 @@ root.accountingExcludeGoogleCash=guard(async cashId=>{
 
 root.accountingCashAdjustment=guard(()=>{const cashTxnId='adjust_'+uid();if(send({type:'cashAdjustment',cashTxnId,date:value('cashAdjustDate'),direction:value('cashAdjustType'),amount:A.money(value('cashAdjustAmount')),description:value('cashAdjustReason')})){el('cashAdjustAmount').value='';el('cashAdjustReason').value='';}});
 root.importBankCsv=guard(async()=>{if(!enabled())return alert('銀行CSV取込はクラウドにログインしてご利用ください。');if(!isAdmin()||importing)return;const file=el('bankFile').files[0];if(!file)throw Error('CSVを選択してください。');importing=true;try{const bytes=await file.arrayBuffer();let text;try{text=new TextDecoder('utf-8',{fatal:true}).decode(bytes);}catch(_){text=new TextDecoder('shift_jis',{fatal:true}).decode(bytes);}const records=await A.parseBank(text,value('bankAccountName'),B().getClient().digest);let count=0;for(const bank of records){if(!send({type:'importBank',bank}))throw Error('端末に同期キューを保存できませんでした。元CSVを保持して再試行してください。');count++;}el('bankImportStatus').textContent=count+'件を確認しました。重複を除いて同期します。';}finally{importing=false;}});
-root.autoSuggestBank=function(){};
 root.accountingBankRule=()=>{if(!isAdmin())return;const ruleType=value('bankRuleType'),key=value('bankRuleKey'),target=value('bankRuleValue');if(!key)return alert('対象を入力してください。');if(confirm('ルールを保存します。口座別名は同じ実口座のみ、顧客名は確認した名称のみ登録してください。今後のCSV取込に適用し、過去の会計記録は変更しません。'))send({type:'saveBankRule',ruleType,key,canonical:target,customer:target,enabled:true});};
 root.accountingToggleBankRule=id=>{if(!isAdmin())return;const r=(data.settings||[]).find(r=>r.id===id);if(r)send({type:'saveBankRule',ruleType:r.type,key:r.key,canonical:r.canonical,customer:r.customerKey,enabled:r.enabled===false,expectedRevision:r.revision});};
 function renderDuplicateReview(){
@@ -277,7 +276,6 @@ case'suppliers':return [['仕入先ID','仕入先','取引ID','日付','区分',
 case'bank':return [['bankTxnId','銀行取引日','銀行口座','摘要','入金','出金','残高','メモ','状態','照合区分','照合先','入金ID','固定口座名','取引番号','hash','出現番号','同一証拠の別ID','監査判定'],...(data.bankTransactions||[]).map(b=>[b.id,b.bankTransactionDate,b.bankAccount,b.description,b.incoming,b.outgoing,b.balance,b.memo,A.bankMatch(b,data).status,b.matchType,b.matchType==='cardSettlement'?(b.expenseIds||[]).join(' / '):b.matchId,b.paymentId,A.bankAccountKey(b.bankAccount,data.settings),b.externalId,b.hash,b.occurrence,A.bankDuplicate(b,data.bankTransactions,data.settings).map(r=>r.id).join(' / '),A.bankDuplicate(b,data.bankTransactions,data.settings).length?'原記録を照合してから個別承認':!A.bankIdentity(b,data.settings)?'取引番号・残高なし：自動統合不可':'証拠キーあり'])];
 case'cash':return [['cashTxnId','日付','区分','分類','摘要','金額','残高','入金ID','支出ID'],...A.cashRows(data.cashLedger||[]).map(c=>[c.cashTxnId,c.date,c.type,c.category,c.description,c.amount,c.runningBalance,c.linkedPaymentId,c.linkedExpenseId])];default:throw Error('出力形式が不正です。');}}
 root.accountingExport=guard(kind=>{if(!isAdmin())return;const text=A.csv(exportRows(kind)),url=URL.createObjectURL(new Blob([text],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download=kind+'_'+(kind==='salesRegister'?registerView.asOf:kind==='expenses'?value('expenseMonth')||bizNowMonth():todayISO())+'.csv';a.hidden=true;document.body.append(a);try{a.click();}finally{a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}});
-root.exportBackup=function(){if(!enabled())return old.exportBackup();if(!isAdmin())return;const sync=B().getSync(),blob=new Blob([JSON.stringify({schemaVersion:3,exportedAt:new Date().toISOString(),records:sync.getRows(),pending:sync.getQueue()},null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='tsukinowa-accounting-backup_'+todayISO()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
 root.exportDecisionCsv=function(){root.accountingExport('monthly');};
 root.TsukinowaAccountingUI.exportRows=exportRows;
 function section(title,html){const d=document.createElement('div');d.className='biz-section';d.innerHTML='<div class="biz-section-head"><h2>'+title+'</h2></div>'+html;return d;}

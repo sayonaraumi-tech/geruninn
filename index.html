@@ -881,9 +881,9 @@ body{padding-top:72px}
 .biz-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.biz-card{background:#fff;border:1px solid var(--biz-border);border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.03)}.biz-card h3{font-size:12px;color:#777;margin-bottom:8px}.biz-kpi{font-size:25px;font-weight:800;font-variant-numeric:tabular-nums}.biz-kpi small{font-size:12px;color:#777;font-weight:500;margin-left:4px}
 .biz-section{background:#fff;border:1px solid var(--biz-border);border-radius:14px;padding:16px;margin-top:14px}.biz-section-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}.biz-section h2{font-size:15px}.biz-actions{display:flex;gap:8px;flex-wrap:wrap}.biz-btn{border:1px solid #d5d9de;background:#fff;padding:9px 12px;border-radius:9px;cursor:pointer;font:inherit;font-size:13px}.biz-btn.primary{background:linear-gradient(135deg,#d4b574,#9c7a2e);border-color:#9c7a2e;color:#fff;font-weight:700}.biz-btn.danger{color:#b42318;border-color:#f0c6c2}.biz-btn.ok{color:#116b58;border-color:#b9dfd6;background:#f5fffc}
 #homeLedger th,#homeLedger td:first-child{white-space:nowrap}
-.biz-table-wrap{overflow:auto}.biz-table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}.biz-table th,.biz-table td{padding:10px 9px;border-bottom:1px solid #edf0f2;text-align:left;vertical-align:middle}.biz-table th{font-size:11px;color:#777;background:#fafbfc;position:sticky;top:0}.biz-money{text-align:right!important;font-variant-numeric:tabular-nums}.biz-badge{display:inline-block;padding:4px 7px;border-radius:999px;font-size:11px;background:#f0f2f5;color:#555}.biz-badge.ok{background:#e8f7f2;color:#116b58}.biz-badge.warn{background:#fff6df;color:#8a5a00}.biz-badge.bad{background:#fff0ee;color:#b42318}
+.biz-table-wrap{overflow:auto}.biz-table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px}.biz-table th,.biz-table td{padding:10px 9px;border-bottom:1px solid #edf0f2;text-align:left;vertical-align:middle}.biz-table th{font-size:11px;color:#777;background:#fafbfc;position:sticky;top:0}.biz-money{text-align:right!important;font-variant-numeric:tabular-nums}.biz-badge{display:inline-block;padding:4px 7px;border-radius:999px;font-size:11px;background:#f0f2f5;color:#555}.biz-badge.ok{background:#e8f7f2;color:#116b58}.biz-badge.warn{background:#fff6df;color:#8a5a00}
 .biz-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.biz-field label{display:block;font-size:11px;color:#666;margin-bottom:4px}.biz-field input,.biz-field select,.biz-field textarea{width:100%;border:1px solid #dfe3e8;border-radius:8px;padding:9px 10px;background:#fff;font:inherit;font-size:13px}.biz-field.full{grid-column:1/-1}.biz-field.span2{grid-column:span 2}
-.biz-alert{padding:10px 12px;border-radius:9px;background:#fff8e6;border:1px solid #f1dfaa;font-size:12px;color:#7b5b13}.biz-log{border-left:2px solid #d9dde2;padding-left:12px}.biz-log-row{padding:7px 0;font-size:12px}.biz-log-row b{display:block;font-size:12px}.biz-log-row span{color:#777}
+.biz-alert{padding:10px 12px;border-radius:9px;background:#fff8e6;border:1px solid #f1dfaa;font-size:12px;color:#7b5b13}
 .biz-hidden{display:none!important}
 #pageChohyo.editor{max-width:760px}
 .biz-inline-banner{background:#fff;border:1px solid #e1e4e8;border-radius:12px;padding:12px;margin:0 0 12px}.biz-inline-banner .biz-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -892,12 +892,10 @@ body{padding-top:72px}
 
 
 /* PWA v3: mobile field workflow / desktop full back office */
-.mobile-only{display:none!important}
 @media(max-width:800px){
   #bizNav button.mobile-hide{display:none!important}
   #bizNav{display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;width:100%;padding:6px 8px;overflow:visible!important}
   #bizNav button{font-size:12px!important;padding:9px 4px!important;min-width:0!important;white-space:nowrap}
-  .mobile-only{display:inline-flex!important}
   .biz-brand small{display:none}
   .biz-sync,.biz-user{display:none!important}
 }
@@ -2752,14 +2750,6 @@ function recallConfirmedHistory(index) {
   saveActiveTab(state.docType || 'invoice');
   window.scrollTo({top:0, behavior:'smooth'});
 }
-function deleteConfirmedHistory(index) {
-  const rows = loadConfirmedHistory();
-  if (!rows[index]) return;
-  if (!confirm('この保存履歴を削除しますか？')) return;
-  rows.splice(index,1);
-  writeConfirmedHistory(rows);
-  renderConfirmedHistory();
-}
 function requestEstimateInvoice(id) {
   if (!confirm('この見積書から請求書を作成しますか？')) return;
   if (id) {
@@ -2938,59 +2928,6 @@ function saveActiveTab(type) {
   try { localStorage.setItem(KEY_LAST_TAB, type); } catch (_) {}
 }
 
-function downloadHtml() {
-  try {
-    // 「保存版HTML」は現在画面の完全スナップショットを埋め込む。
-    // 開き直しても、その時点の月次完成内容をそのまま表示する。
-    const snapshot = collectFormState();
-    snapshot.exportedArchive = true;
-
-    document.querySelectorAll('input').forEach(el => {
-      if (el.type === 'checkbox' || el.type === 'radio') {
-        if (el.checked) el.setAttribute('checked', '');
-        else el.removeAttribute('checked');
-      } else {
-        el.setAttribute('value', el.value);
-      }
-    });
-    document.querySelectorAll('select').forEach(sel => {
-      Array.from(sel.options).forEach(opt => {
-        if (opt.value === sel.value) opt.setAttribute('selected', '');
-        else opt.removeAttribute('selected');
-      });
-    });
-    document.querySelectorAll('textarea').forEach(el => { el.textContent = el.value; });
-
-    const oldMarker = document.getElementById('embeddedArchiveSnapshot');
-    if (oldMarker) oldMarker.remove();
-    const marker = document.createElement('script');
-    marker.id = 'embeddedArchiveSnapshot';
-    const safeJson = JSON.stringify(snapshot).replace(/</g, '\\u003c');
-    marker.textContent = 'window.__CHOHYO_EXPORTED_SNAPSHOT__ = ' + safeJson + ';';
-    document.body.appendChild(marker);
-
-    const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-    marker.remove();
-
-    const blob = new Blob([html], {type: 'text/html;charset=utf-8'});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    if (docType === 'onoda') {
-      const ym = (document.getElementById('invoiceDate').value || todayISO()).slice(0,7).replace('-', '年') + '月';
-      a.download = '小野田請求_' + ym + '_完成保存版.html';
-    } else {
-      a.download = '月輪合同会社_帳票システム_保存版.html';
-    }
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (e) {
-    alert('下载失败：' + e.message);
-  }
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   const obsoleteJuneButton = document.getElementById('onodaJuneLoadBtn');
   if (obsoleteJuneButton) obsoleteJuneButton.remove();
@@ -3127,8 +3064,7 @@ function bizOnDocumentConfirmed(state){
 }
 function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&!p.deletedAt&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
 function bizOutstanding(s){return s.deletedAt?0:Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
-function bizRefreshAll(){const m=bizNowMonth(),auto=bizAutoValue;['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
-function renderSales(){window.TsukinowaAccountingUI?.renderSales?.()}
+function bizRefreshAll(){const m=bizNowMonth(),auto=bizAutoValue;['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions()}
 function bizOnodaPaymentHint(){const id=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===id);document.getElementById('onodaPaymentHint').hidden=sale?.docType!=='onoda';}
 function renderPaymentSaleOptions(){const sel=document.getElementById('paymentSale');if(!sel)return;const previous=sel.value,source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const unpaid=source.filter(s=>TsukinowaAccounting.live(s)&&bizOutstanding(s)>0).slice().sort((a,b)=>String(a.salesDate||a.saleDate).localeCompare(String(b.salesDate||b.saleDate))||String(a.id).localeCompare(String(b.id)));sel.innerHTML='<option value="">選択してください</option>'+unpaid.map(s=>`<option value="${bizEsc(s.id)}">${bizEsc(s.customer)} ｜ ${bizMoney(bizOutstanding(s))} ｜ ${bizEsc(s.invoiceNo||s.invoiceDate)}</option>`).join('');sel.value=previous;bizOnodaPaymentHint()}
 function selectSaleForPayment(id){bizSwitchPage('sales');const source=TsukinowaBusinessUI.isEnabled()?TsukinowaAccountingUI.getData().sales||[]:bizState.sales;const s=source.find(x=>x.id===id);if(!s)return;document.getElementById('paymentSale').value=id;bizOnodaPaymentHint();document.getElementById('paymentAmount').value=bizOutstanding(s);document.getElementById('paymentType').value=TsukinowaAccounting.paymentChannel({method:s.paymentMethod||'銀行振込'}).channel;bizPaymentChannelChanged();document.getElementById('paymentDate').scrollIntoView({behavior:'smooth',block:'center'})}
@@ -3136,16 +3072,9 @@ function bizPaymentChannelChanged(){const platform=document.getElementById('paym
 async function addPayment(){const button=document.getElementById('paymentSubmit');if(button.disabled)return;button.disabled=true;try{const saleId=document.getElementById('paymentSale').value,amount=TsukinowaAccounting.money(document.getElementById('paymentAmount').value),paymentDate=TsukinowaAccounting.date(document.getElementById('paymentDate').value);if(!saleId)throw Error('対象請求書を選択してください。');if(await TsukinowaBusinessUI.registerPayment({...TsukinowaBalanceUI.paymentContext(),saleId,amount,paymentDate,method:document.getElementById('paymentType').value,platformName:document.getElementById('paymentType').value==='プラットフォーム経由'?document.getElementById('paymentPlatformName').value.trim():'',memo:document.getElementById('paymentMemo').value})){document.getElementById('paymentAmount').value='';document.getElementById('paymentMemo').value='';document.getElementById('paymentPlatformName').value='';TsukinowaBalanceUI.paymentSaved();}}catch(e){alert(e.message);}finally{button.disabled=false;}}
 
 function openManualSale(){const c=prompt('取引先名');if(!c)return;const a=Number(prompt('請求額（税込）'))||0;if(a<=0)return;const d=prompt('売上日 YYYY-MM-DD',todayISO())||todayISO();bizState.sales.unshift({id:bizId('sale'),sourceId:'manual_'+Date.now(),docType:'manual',invoiceNo:'',customer:c,saleDate:d,invoiceDate:d,content:'手動登録',amount:a,paymentMethod:'銀行振込',createdAt:new Date().toISOString()});bizAudit('手動売上',`${c} ${a}円`);bizPersist();bizRefreshAll()}
-function addExpense(){alert('支出登録はクラウドにログインしてご利用ください。')}
 function deleteExpense(id){if(!confirm('この支出を削除しますか？'))return;const e=bizState.expenses.find(x=>x.id===id);if(e)e.deletedAt=new Date().toISOString();bizAudit('支出取消',id);bizPersist();bizRefreshAll()}
 function renderExpenses(){const m=document.getElementById('expenseMonth')?.value||bizNowMonth();const rows=bizState.expenses.filter(e=>!e.deletedAt&&(!m||bizMonth(e.date)===m));document.getElementById('expenseRows').innerHTML=rows.map(e=>`<tr><td>${bizEsc(e.date)}</td><td>${bizEsc(e.category)}</td><td>${bizEsc(e.vendor)}</td><td>${bizEsc(e.memo)}</td><td>${bizEsc(e.method)}</td><td class="biz-money">${bizMoney(e.amount)}</td><td><button class="biz-btn danger" onclick="deleteExpense(${bizJsArg(e.id)})">削除</button></td></tr>`).join('')||'<tr><td colspan="7" class="biz-muted">対象月の支出はありません。</td></tr>'}
-function parseCsvLine(line){const out=[];let s='',q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'){if(q&&line[i+1]==='"'){s+='"';i++}else q=!q}else if(c===','&&!q){out.push(s);s=''}else s+=c}out.push(s);return out}
-function importBankCsv(){const f=document.getElementById('bankFile').files[0];if(!f)return alert('CSVを選択してください。');const r=new FileReader();r.onload=()=>{let text=String(r.result||'').replace(/^\uFEFF/,'');const lines=text.split(/\r?\n/).filter(Boolean);if(lines.length<2)return alert('CSV内容を確認してください。');const head=parseCsvLine(lines[0]);const findIdx=(keys)=>head.findIndex(h=>keys.some(k=>String(h).includes(k)));const iDate=findIdx(['日付','取引日','年月日']),iDesc=findIdx(['摘要','内容','取引内容','相手']),iIn=findIdx(['入金','入金額','お預り']),iOut=findIdx(['出金','出金額','お支払']);let added=0;lines.slice(1).forEach(line=>{const c=parseCsvLine(line);let date=(c[iDate]||'').replace(/[./]/g,'-');const n=s=>Number(String(s||'').replace(/[￥¥,\s]/g,''))||0;const incoming=iIn>=0?n(c[iIn]):0,outgoing=iOut>=0?n(c[iOut]):0;const desc=iDesc>=0?c[iDesc]||'':'';const key=[date,desc,incoming,outgoing].join('|');if(!bizState.bank.some(b=>b.key===key)){bizState.bank.push({id:bizId('bank'),key,date,desc,incoming,outgoing,matched:false});added++}});bizAudit('銀行CSV取込',`${added}件`);bizPersist();autoSuggestBank();bizRefreshAll();alert(added+'件を取り込みました。')};r.readAsText(f,'UTF-8')}
-function autoSuggestBank(){bizState.bank.forEach(b=>{if(b.matched)return;if(b.incoming>0){const candidates=bizState.sales.filter(s=>bizOutstanding(s)>0&&Math.abs(bizOutstanding(s)-b.incoming)<1);b.suggestSaleId=candidates[0]?.id||''}});bizPersist()}
 function matchBankSale(bankId,saleId){const b=bizState.bank.find(x=>x.id===bankId),s=bizState.sales.find(x=>x.id===saleId);if(!b||!s)return;bizState.payments.push({id:bizId('pay'),saleId:s.id,date:b.date,amount:b.incoming,method:'GMO銀行',memo:'銀行CSV照合',bankId:b.id,createdAt:new Date().toISOString()});b.matched=true;b.matchType='sale';b.matchId=s.id;bizAudit('銀行入金照合',`${s.customer} ${b.incoming}円`);bizPersist();bizRefreshAll()}
-function renderBank(){autoSuggestBank();document.getElementById('bankRows').innerHTML=bizState.bank.slice().sort((a,b)=>String(b.date).localeCompare(String(a.date))).map(b=>{let sug='';if(b.suggestSaleId){const s=bizState.sales.find(x=>x.id===b.suggestSaleId);if(s)sug=`${bizEsc(s.customer)} ${bizMoney(s.amount)} <button class="biz-btn ok" onclick="matchBankSale('${b.id}','${s.id}')">入金確定</button>`}return `<tr><td>${bizEsc(b.date)}</td><td>${bizEsc(b.desc)}</td><td class="biz-money">${b.incoming?bizMoney(b.incoming):''}</td><td class="biz-money">${b.outgoing?bizMoney(b.outgoing):''}</td><td>${sug||'<span class="biz-muted">候補なし</span>'}</td><td>${b.matched?'<span class="biz-badge ok">照合済</span>':'<span class="biz-badge warn">未照合</span>'}</td></tr>`}).join('')||'<tr><td colspan="6" class="biz-muted">銀行CSVはまだ取り込まれていません。</td></tr>'}
-function downloadText(name,text,type='text/csv;charset=utf-8'){const blob=new Blob(['\uFEFF'+text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-function exportBackup(){downloadText('月輪合同会社_全データ_'+todayISO()+'.json',JSON.stringify({version:2,mode:'production',exportedAt:new Date().toISOString(),state:bizState},null,2),'application/json;charset=utf-8')}
 // Google Calendar 予備機能：ICSファイルをローカル読込
 function icsUnescape(v){return String(v||'').replace(/\\n/gi,'\n').replace(/\\,/g,',').replace(/\\;/g,';').replace(/\\\\/g,'\\')}
 function icsDateToIso(v){
@@ -3315,9 +3244,6 @@ async function importOnodaFromCalendar(options={}){
   }catch(e){alert('小野田月次の再生成に失敗しました：'+e.message);}
   finally{onodaGenerating=false;}
 }
-async function importBackup(){const f=document.getElementById('backupFile')?.files?.[0];if(!f)return alert('バックアップJSONを選択してください。');if(!confirm('現在の業務データをバックアップ内容で置き換えます。よろしいですか？'))return;try{const j=JSON.parse(await f.text());if(!j.state||!Array.isArray(j.state.sales))throw new Error('対応するバックアップ形式ではありません。');bizState=Object.assign({sales:[],payments:[],expenses:[],bank:[],calendar:[],audit:[]},j.state);localStorage.setItem(BIZ_KEY,JSON.stringify(bizState));bizAudit('バックアップ復元',f.name);bizPersist();bizRefreshAll();alert('バックアップを復元しました。')}catch(e){alert('復元に失敗しました: '+e.message)}}
-function fillSettings(){}
-function bizCloudLogout(){}
 function tryAutoCloud(){}
 document.addEventListener('DOMContentLoaded',()=>{bizLoad();document.querySelectorAll('#bizNav button').forEach(b=>b.addEventListener('click',()=>bizSwitchPage(b.dataset.page)));bizRefreshAll();tryAutoCloud();});
 

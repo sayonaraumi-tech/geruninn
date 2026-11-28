@@ -5,7 +5,7 @@ const el=id=>document.getElementById(id),uuid=()=>crypto.randomUUID(),copy=x=>JS
 let enabled=false,sync=null,client=null,identity='',rows={},history=[],docId='',docRevision=0,applying=false,lastStatus={},timer=null,pendingInvoice=null,revisionSource=null,formBase={},viewBaseline=null;
 const googleErrors=new Map();
 const original={};
-for(const name of ['collectFormState','applyFormState','setDocType','saveConfirmedHistory','loadConfirmedHistory','writeConfirmedHistory','deleteConfirmedHistory','bizPersist','bizAudit','bizAcceptEstimate','bizConvertEstimateRecordToInvoice','convertEstimateToInvoice','bizRegisterEstimatePayment','addPayment','selectSaleForPayment','matchBankSale','bizGoogleMergeEvent','bizGooglePatchNow','bizLoadDocFromEvent','bizSwitchPage','openManualSale','doPrint','onodaStorageKey','saveOnodaDraft','restoreOnodaDraft','importBackup','bizEstimateFromHistory','renderAllSavedDocs','renderConfirmedHistory'])original[name]=root[name];
+for(const name of ['collectFormState','applyFormState','setDocType','saveConfirmedHistory','loadConfirmedHistory','writeConfirmedHistory','bizPersist','bizAudit','bizAcceptEstimate','bizConvertEstimateRecordToInvoice','convertEstimateToInvoice','bizRegisterEstimatePayment','addPayment','selectSaleForPayment','matchBankSale','bizGoogleMergeEvent','bizGooglePatchNow','bizLoadDocFromEvent','bizSwitchPage','openManualSale','doPrint','onodaStorageKey','saveOnodaDraft','restoreOnodaDraft','bizEstimateFromHistory','renderAllSavedDocs','renderConfirmedHistory'])original[name]=root[name];
 function ready(){if(!sync||client?.getState().phase!=='ready'){alert('クラウドアカウントにログインしてください。端末内の原本は保持されています。');return false;}return true;}
 function command(value){if(!ready())return;try{return sync.enqueue({...value,operationId:value.operationId||uuid()});}catch(e){showError(e.message);return null;}}
 function showError(message){el('cloudError').textContent=message;el('coreSyncStatus').textContent='Firestore同期失敗：'+message;}
@@ -139,7 +139,6 @@ root.restoreOnodaDraft=function(){
  if(!sync)return;
  return root.importOnodaFromCalendar({month:currentMonthKey(),silent:true});
 };
-root.importBackup=function(){if(!enabled)return original.importBackup();alert('共有モードでは一括置換できません。旧データの移行ボタンを使用してください。元データは削除しません。');};
 root.bizEstimateFromHistory=function(id){return original.bizEstimateFromHistory(id);};
 root.bizPersist=function(){if(!enabled)return original.bizPersist();};
 root.bizAudit=function(a,d){if(!enabled)return original.bizAudit(a,d);};
