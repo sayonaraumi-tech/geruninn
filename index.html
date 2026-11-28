@@ -3473,8 +3473,13 @@ function bizCalendarReviewReason(e, documents){
   }
   return '';
 }
+// Rows shown for the selected month, keyword and review filter (shared by the list and the desktop month grid).
+function bizCalendarVisibleRows(documents=bizCalendarDocumentStates()){
+  bizEnsureV5State();const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=Boolean(document.getElementById('calendarReview')?.checked);
+  return bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
+}
 function renderCalendarEvents(){
-  bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const m=document.getElementById('calendarMonth')?.value||bizNowMonth(),q=(document.getElementById('calendarKeyword')?.value||'').toLowerCase();const review=document.getElementById('calendarReview').checked,documents=bizCalendarDocumentStates();const rows=bizState.calendar.filter(e=>!e.deletedAt&&Boolean(bizCalendarReviewReason(e,documents))===review&&bizMonth(e.date)===m&&(!q||((e.title||'')+' '+(e.description||'')).toLowerCase().includes(q))).sort((a,b)=>String(a.start||a.date).localeCompare(String(b.start||b.date)));
+  bizEnsureV5State();const tbody=document.getElementById('calendarRows');if(!tbody)return;const documents=bizCalendarDocumentStates(),rows=bizCalendarVisibleRows(documents);
   tbody.innerHTML=rows.map(e=>`<tr><td>${bizEsc(bizFmtDate(e.date))}</td><td><b>${bizEsc(e.title)}</b>${e.originalTitle&&e.originalTitle!==e.title?`<div class="biz-muted">原：${bizEsc(e.originalTitle)}</div>`:''}</td><td>${bizEsc(TsukinowaBusiness.calendarTime(e.start))}</td><td><span class="biz-badge ${(bizCalendarReviewReason(e,documents)||bizEventStatus(e))==='予定'?'':'ok'}">${bizEsc((bizCalendarReviewReason(e,documents)||bizEventStatus(e)))}</span></td><td><button class="biz-btn primary" onclick="openEventModal('${e.id}')">開く</button></td></tr>`).join('')||'<tr><td colspan="5" class="biz-muted">対象月の日程はまだ取り込まれていません。</td></tr>';
 }
 // 新規帳票へ移った時は必要に応じてリンクを解除するヘルパー
