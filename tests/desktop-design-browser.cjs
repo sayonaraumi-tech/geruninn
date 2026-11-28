@@ -54,6 +54,9 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     assert.equal(await page.locator('#ddHomeAnalytics [data-dd-balance="difference"]').innerText(),(await page.locator('#kpiDifference').innerText())+' 円','primary = 確認済み入金 − 支出');
     assert.equal(await page.locator('#ddHomeAnalytics [data-dd-balance="reference"]').innerText(),'30,600 円');assert.match(await page.locator('#ddHomeAnalytics .balance-primary').innerText(),/参考：売上 − 支出（未回収を含む）/);
     assert.match(await page.locator('#ddRecentSales').innerText(),/山田様[\s\S]*54,800/,'recent sales from the existing register');
+    assert.deepEqual(await page.locator('#ddRecentSales thead th').allTextContents(),['日付','取引先','工事内容','金額','支払方法','状態','操作'],'design 最近の売上 columns');
+    assert.equal(await page.locator('#ddRecentSales tbody tr').first().locator('td').count(),7);
+    assert.deepEqual(await page.evaluate(()=>['ok','warn'].map(c=>{const b=document.createElement('span');b.className='biz-badge '+c;document.querySelector('#pageDashboard').append(b);const s=getComputedStyle(b);const r=[s.backgroundColor,s.color];b.remove();return r;})),[['rgb(230, 244, 236)','rgb(22, 118, 75)'],['rgb(255, 242, 223)','rgb(148, 91, 18)']],'design 状態 badge colours');
     assert.deepEqual(await page.getByRole('heading',{level:1}).evaluateAll(xs=>xs.filter(x=>x.getClientRects().length).map(x=>x.innerText)),['ホーム'],'design page heading in markup');
     // Calendar grid shows the same rows as the list and opens the existing event dialog.
     await page.evaluate(()=>bizSwitchPage('calendar'));

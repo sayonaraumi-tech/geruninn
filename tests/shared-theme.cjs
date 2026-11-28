@@ -5,7 +5,9 @@ module.exports=async function assertSharedTheme(page,pageId){
  const styles=await page.evaluate(id=>{
   const properties={page:['fontFamily','color','maxWidth','padding'],title:['fontFamily','fontSize','fontWeight','letterSpacing'],section:['backgroundColor','borderColor','borderWidth','borderRadius','padding'],heading:['fontSize','fontWeight'],th:['fontFamily','fontSize','fontWeight','backgroundColor','padding'],table:['fontFamily','fontSize'],button:['fontFamily','fontSize','fontWeight','backgroundColor','borderColor','borderRadius','padding']};
   const read=(root,selectors)=>Object.fromEntries(Object.entries(selectors).map(([key,selector])=>{const el=selector?root.querySelector(selector):root;const css=getComputedStyle(el);return[key,Object.fromEntries(properties[key].map(p=>[p,css[p]]))];}));
-  const selectors={page:null,title:'.biz-title h1',section:'.biz-section',heading:'.biz-section h2',th:'.biz-table th',table:'.biz-table'};
+  // Desktop list pages (見積履歴/保存帳票) are design month panels: the panel surface is the filter head, the outer section is a transparent stack.
+  const desktopLists=matchMedia('(min-width:801px)').matches&&document.body.classList.contains('dd');
+  const selectors={page:null,title:'.biz-title h1',section:desktopLists?':is(.biz-section:not(.dd-list),.dd-list>.biz-section-head)':'.biz-section',heading:'.biz-section h2',th:'.biz-table th',table:'.biz-table'};
   const before=window.testRecords?JSON.stringify([...testRecords]):null;
   const target=document.getElementById(id),reference=document.getElementById('pageEstimates');
   const targetStyles=read(target,selectors);

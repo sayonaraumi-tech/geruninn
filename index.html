@@ -952,7 +952,7 @@ body{padding-top:72px}
 #pageBank td:nth-child(3){color:#187258;text-align:right}#pageBank td:nth-child(4){color:#b83939;text-align:right}
 #pageBank select,#pageBank input{max-width:100%;box-sizing:border-box}
 #pageBank td select{width:100%;min-width:0;margin:8px 0}
-#pageBank .biz-btn{margin:2px;white-space:normal}
+#pageBank .biz-section .biz-btn{margin:2px;white-space:normal}
 #pageBank details>summary{cursor:pointer;color:#65552d;padding:8px;border-radius:8px}
 #pageBank details[open]{background:#fafbfc;border:1px solid var(--biz-border);border-radius:9px;padding:10px}
 #pageBank .bank-candidate{display:block;color:#626865;font-size:12px;padding:3px 0 7px}
@@ -1103,7 +1103,7 @@ body.dd[data-dd-theme="dark"] :is(.app-page,dialog,#bizEventModal) :is(input,sel
 body.dd .sales-filters{background:var(--dd-bg)}
 body.dd .biz-inline-banner{background:var(--dd-panel);border-color:var(--dd-line);color:var(--dd-fg)}
 body.dd :is(.biz-badge,.register-status){border-radius:4px;font-weight:700;font-size:10px;padding:4px 7px;line-height:normal;display:inline-block;white-space:nowrap}
-body.dd .register-status{background:#fff2df;color:#945b12}body.dd .register-status.paid{background:#e6f4ec;color:#16764b}
+body.dd :is(.register-status,.biz-badge.warn){background:#fff2df;color:#945b12}body.dd :is(.register-status.paid,.biz-badge.ok){background:#e6f4ec;color:#16764b}
 body.dd .biz-alert{border-radius:6px;background:var(--dd-selected);border-color:var(--dd-line);color:var(--dd-fg)}
 body.dd dialog{background:var(--dd-panel);color:var(--dd-fg)}
 /* home: design analytics */
@@ -1201,9 +1201,10 @@ body.dd #ddSalesMetrics,body.dd #ddExpenseMetrics,body.dd #ddBankMetrics{display
 body.dd .dd-metrics3{grid-template-columns:repeat(3,minmax(0,1fr))}
 /* 見積履歴・保存帳票 (design estimate-filters / saved-months): the section head is the filter panel, rows are month panels */
 body.dd .biz-section.dd-list{background:none;border:0;box-shadow:none;padding:0;margin-top:0}
-body.dd .biz-section.dd-list>.biz-section-head:first-child{display:block;margin:0 0 13px;padding:15px;min-height:0;border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;--dd-control-font:13.3333px;--biz-control-pad:8px}
+body.dd .biz-section.dd-list>.biz-section-head:first-child{display:block;font-weight:400;margin:0 0 13px;padding:15px;min-height:0;border:1px solid var(--dd-line);border-radius:9px;box-shadow:0 1px 2px #0d172208;--dd-control-font:13.3333px;--biz-control-pad:8px}
 body.dd .dd-list>.biz-section-head>h2{display:none}
 body.dd .dd-list>.biz-section-head>.biz-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-bottom:8px}
+body.dd #ddSavedFilters>.biz-actions{margin-bottom:12px}
 body.dd .dd-list .dd-filter-selects{display:contents!important}
 body.dd .dd-list>.biz-section-head label{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--dd-mut);white-space:nowrap}
 body.dd .dd-list>.biz-section-head select,body.dd .dd-list>.biz-section-head input:not([type=checkbox]){border-radius:5px}
@@ -1226,7 +1227,7 @@ body.dd .action-menu summary{list-style:none;cursor:pointer;display:inline-block
 body.dd .action-menu summary::-webkit-details-marker{display:none}
 body.dd .action-menu[open]{z-index:40}
 body.dd .action-menu[open] .action-options{position:absolute;right:0;top:100%;display:grid;gap:3px;width:170px;padding:5px;background:var(--dd-panel);border:1px solid var(--dd-line);border-radius:6px;box-shadow:0 5px 15px #0001;margin-top:5px;z-index:50}
-body.dd .action-menu .action-options .biz-btn{width:100%;text-align:left;border:0;background:transparent;font-size:11px;padding:8px;color:var(--dd-fg);white-space:nowrap;border-radius:4px}
+body.dd .action-menu .action-options .biz-btn{width:100%;text-align:left;border:0;background:transparent;font-size:11px;padding:8px;color:var(--dd-fg);white-space:nowrap;border-radius:5px}
 body.dd .action-menu .action-options .biz-btn:hover{background:var(--dd-selected)}
 body.dd .action-menu .action-options .biz-btn.danger{color:#bb3f3f;border-top:1px solid var(--dd-line);border-radius:0}
 body.dd .action-menu .action-info{font-size:10px;color:var(--dd-mut);padding:4px 8px 6px;white-space:normal;overflow-wrap:anywhere;border-bottom:1px solid var(--dd-line)}
@@ -4064,8 +4065,8 @@ function ensure(id,cls,place){let n=$(id);if(!n){n=document.createElement('div')
 function renderRecentSales(){
  const box=$('ddRecentSales');if(!box||!desktop())return;
  let rows=[];try{const U=U_(),A=A_();if(U?.salesRegister)rows=U.salesRegister(A.periodFilter({year:currentFY()}),todayISO(),true).slice(0,5);}catch{}
- box.innerHTML='<section class="dd-panel"><h3>最近の売上<button type="button" class="biz-btn" data-dd-go="sales">売上・入金へ</button></h3><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>売上日</th><th>取引先</th><th>工事内容</th><th class="biz-money">金額</th><th class="biz-money">入金済</th><th>状態</th></tr></thead><tbody>'
- +(rows.map(r=>'<tr><td>'+esc(r.salesDate)+'</td><td>'+esc(r.customer)+'</td><td>'+esc(r.content)+'</td><td class="biz-money">'+esc(bizMoney(r.amount))+'</td><td class="biz-money">'+esc(bizMoney(r.paid))+'</td><td><span class="register-status'+(r.status==='入金済'?' paid':'')+'">'+esc(r.status)+'</span></td></tr>').join('')||'<tr><td colspan="6" class="biz-muted">今年度の売上はまだありません。</td></tr>')+'</tbody></table></div></section>';
+ box.innerHTML='<section class="dd-panel"><h3>最近の売上<button type="button" class="biz-btn" data-dd-go="sales">売上・入金へ</button></h3><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>日付</th><th>取引先</th><th>工事内容</th><th class="biz-money">金額</th><th>支払方法</th><th>状態</th><th>操作</th></tr></thead><tbody>'
+ +(rows.map(r=>'<tr><td>'+esc(r.salesDate)+'</td><td>'+esc(r.customer)+'</td><td>'+esc(r.content)+'</td><td class="biz-money">'+esc(bizMoney(r.amount))+'</td><td>'+esc(r.paymentMethod||'—')+'</td><td><span class="register-status'+(r.status==='入金済'?' paid':'')+'">'+esc(r.status)+'</span></td><td><button type="button" class="biz-btn" data-dd-go="sales">確認</button></td></tr>').join('')||'<tr><td colspan="7" class="biz-muted">今年度の売上はまだありません。</td></tr>')+'</tbody></table></div></section>';
 }
 // ---------- 売上・入金: metric cards from the rendered register ----------
 function renderSalesMetrics(){
