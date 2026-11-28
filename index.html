@@ -2247,6 +2247,7 @@ function recalc() {
               '<td class="c3">' + fmtNum(travelFee) + '</td>' +
               '<td class="c4">' + fmtNum(travelFee) + '</td></tr>';
       subtotal += travelFee;
+    }
     const discount = (docType === 'invoice') ? (parseFloat(document.getElementById('discountAmount')?.value) || 0) : 0;
     if (discount > 0) {
       subtotal = Math.max(0, subtotal - discount);
@@ -2265,7 +2266,6 @@ function recalc() {
         dRow.hidden = true;
         dRow.style.display = 'none';
       }
-    }
     }
     const usedRows = items.length + (travelFee > 0 ? 1 : 0);
     const fillCount = Math.max(0, 6 - usedRows);
