@@ -2,7 +2,7 @@
 (function(root){
 'use strict';
 const el=id=>document.getElementById(id),uuid=()=>crypto.randomUUID(),copy=x=>JSON.parse(JSON.stringify(x));
-let enabled=false,sync=null,client=null,identity='',rows={},history=[],docId='',docRevision=0,applying=false,lastStatus={},timer=null,pendingInvoice=null,revisionSource=null,formBase={},viewBaseline=null;
+let enabled=false,sync=null,client=null,identity='',rows={},history=[],docId='',docRevision=0,lastStatus={},timer=null,pendingInvoice=null,revisionSource=null,formBase={},viewBaseline=null;
 const googleErrors=new Map();
 const original={};
 for(const name of ['collectFormState','applyFormState','setDocType','saveConfirmedHistory','loadConfirmedHistory','writeConfirmedHistory','bizPersist','bizAudit','bizAcceptEstimate','bizConvertEstimateRecordToInvoice','convertEstimateToInvoice','bizRegisterEstimatePayment','addPayment','selectSaleForPayment','matchBankSale','bizGoogleMergeEvent','bizGooglePatchNow','bizLoadDocFromEvent','bizSwitchPage','openManualSale','doPrint','onodaStorageKey','saveOnodaDraft','restoreOnodaDraft','bizEstimateFromHistory','renderAllSavedDocs','renderConfirmedHistory'])original[name]=root[name];
@@ -54,14 +54,14 @@ root.bizEstimateDocuments=()=>enabled?(rows.documents||[]).map(r=>({...r.payload
 // Include lifecycle history: a cancelled sale remains reliable identity evidence.
 root.bizEstimateSales=()=>enabled?[...(rows.sales||[]),...(rows.receivables||[])].map(r=>({...r.payload,id:r.id})):bizState.sales;
 function hydrate(value){
- rows=value;root.TsukinowaAccountingUI?.hydrate(value);applying=true;
+ rows=value;root.TsukinowaAccountingUI?.hydrate(value);
  try{
   for(const [key,name] of [['estimates','estimates'],['projects','projects'],['sales','sales'],['payments','payments'],['calendar','calendarLinks']])bizState[key]=(value[name]||[]).map(r=>({...copy(r.payload),id:r.id,...(key==='estimates'?{displayCreatedAt:r.createdAt}:{} )})).filter(r=>!r.deletedAt&&(!['sales','estimates','projects'].includes(key)||root.TsukinowaAccounting.live(r)));
   for(const e of bizState.estimates){if(!e.snapshot)e.snapshot=(value.documents||[]).find(r=>r.id===e.documentId||r.id===e.historyId)?.payload.snapshot;if(!e.workDate)e.workDate=e.snapshot?.workDate||'';}
   bizState.audit=(value.auditLogs||[]).map(r=>({id:r.id,at:root.TsukinowaCloudCore.displayTimestamp(r.timestamp),user:r.userId,action:r.action,detail:r.entityType+' / '+r.entityId,before:r.before,after:r.after}));
   history=(value.documents||[]).filter(r=>!r.payload.deletedAt&&!root.TsukinowaTestCleanup.removed(r.payload)).map(r=>({...copy(r.payload.snapshot),documentId:r.id,historyId:r.id,cloudRevision:r.revision,documentStatus:r.payload.status||'active',statusReason:r.payload.reason||'',revisedFromDocumentId:r.payload.revisedFromDocumentId||'',duplicateOfDocumentId:r.payload.duplicateOfDocumentId||'',revisedToDocumentId:r.payload.revisedToDocumentId||'',savedAt:root.TsukinowaCloudCore.displayTimestamp(r.createdAt)})).sort((a,b)=>b.savedAt.localeCompare(a.savedAt));
   bizRefreshAll();renderConfirmedHistory();receiptOptions();
- }finally{applying=false;}
+ }finally{}
  completePendingInvoice();root.TsukinowaBalanceUI?.refresh();refreshCalendarSale();
  // Hydration is read-only; historical accounting repair never runs on login/reload.
 
@@ -194,7 +194,7 @@ root.bizLoadDocFromEvent=function(e,type){if(!enabled)return original.bizLoadDoc
 root.bizGooglePatchNow=async function(id){if(!enabled)return original.bizGooglePatchNow(id);if(!sync)return;await original.bizGooglePatchNow(id);const records=await client.listRecords('calendarLinks');const revision=records.find(r=>r.id===id)?.revision;const persisted=records.find(r=>r.id===id)?.payload;const e=bizState.calendar.find(x=>x.id===id);if(e&&!e.googlePatchPending)googleErrors.delete(id);if(e&&!e.googlePatchPending&&persisted&&e.title===persisted.title&&e.workDate===persisted.workDate&&!persisted.googleCreatePending)command({type:'calendarPatched',id,expectedRevision:revision,at:e.googlePatchedAt});};
 root.bizSwitchPage=function(page){if(enabled&&client?.getState().role==='staff'&&!['calendar','estimates','chohyo','savedDocs'].includes(page))page='calendar';if(page!==document.querySelector('#bizNav button.active')?.dataset.page)pendingInvoice=null;return original.bizSwitchPage(page);};
 function patchPending(){if(!sync||!navigator.onLine||lastStatus.state==='error')return;const pending=bizState.calendar.filter(e=>e.googlePatchPending);if(pending.length&&bizGoogleNeedToken()){el('coreSyncStatus').textContent='Google未接続・システム保存済（反映待ち '+pending.length+'件）';return;}for(const e of bizState.calendar.filter(x=>x.googlePatchPending&&x.googleEventId))if(!bizGooglePatchJobs.has(e.id))bizGooglePatchEvent(e);}
-function clearView(){googleErrors.clear();readOnly(false);viewBaseline=null;formBase={};root.TsukinowaHistoricalUI?.close();root.TsukinowaBalanceUI?.close();pendingInvoice=null;revisionSource=null;history=[];rows={};root.TsukinowaAccountingUI?.hydrate({});for(const key of ['estimates','projects','sales','payments','calendar','audit','expenses','bank'])bizState[key]=[];applying=true;try{bizRefreshAll();renderConfirmedHistory();if(docType==='onoda')makeBlankOnodaMonth();else resetNormalFormBlank();if(el('bizJobMemo'))el('bizJobMemo').value='';if(el('receiptSale'))el('receiptSale').value='';docId='';docRevision=0;bizClearDocLink();}finally{applying=false;}}
+function clearView(){googleErrors.clear();readOnly(false);viewBaseline=null;formBase={};root.TsukinowaHistoricalUI?.close();root.TsukinowaBalanceUI?.close();pendingInvoice=null;revisionSource=null;history=[];rows={};root.TsukinowaAccountingUI?.hydrate({});for(const key of ['estimates','projects','sales','payments','calendar','audit','expenses','bank'])bizState[key]=[];try{bizRefreshAll();renderConfirmedHistory();if(docType==='onoda')makeBlankOnodaMonth();else resetNormalFormBlank();if(el('bizJobMemo'))el('bizJobMemo').value='';if(el('receiptSale'))el('receiptSale').value='';docId='';docRevision=0;bizClearDocLink();}finally{}}
 const documentLabels={active:'有効',void:'無効',cancelled:'取消',duplicate:'重複',revised:'訂正済'};
 function manageDocument(index,action){
  if(!enabled||!ready()||client.getState().role!=='admin')return alert('帳票管理は管理者のみ実行できます。');

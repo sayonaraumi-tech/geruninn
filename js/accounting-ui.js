@@ -2,7 +2,6 @@
 (function(root){
 'use strict';
 const A=root.TsukinowaAccounting,el=id=>document.getElementById(id),B=()=>root.TsukinowaBusinessUI,enabled=()=>B().isEnabled(),uid=()=>crypto.randomUUID(),esc=s=>bizEsc(String(s??''));
-let duplicateBackup=null;
 let data={},expenseEdit=null,importing=false,expensePreview=null,expenseBank=null,categoryChosen=false;
 const old={};for(const n of ['deleteExpense','renderExpenses','matchBankSale','bizPaid','bizOutstanding'])old[n]=root[n];
 function isAdmin(){if(!enabled()||B().getClient()?.getState().role!=='admin'){root.bizOpenCloudAccount();return false;}return true;}
@@ -16,7 +15,7 @@ root.bizAutoValue=autoValue;
 function guard(fn){return async(...args)=>{try{return await fn(...args);}catch(e){notice(e.message);alert(e.message);}};}
 function flatten(rows){return rows.map(r=>({...r.payload,id:r.id,createdAt:r.createdAt,updatedAt:r.updatedAt,createdBy:r.createdBy,updatedBy:r.updatedBy,revision:r.revision}));}
 function hydrate(rows){data={};for(const n of ['documents','sales','payments',...A.COLLECTIONS])data[n]=flatten(rows[n]||[]);data.sales.push(...flatten(rows.receivables||[]));bizState.expenses=data.expenses.filter(A.live).map(e=>({...e,date:e.expenseDate,method:e.paymentMethod,memo:e.description}));bizState.bank=data.bankTransactions.map(b=>({...b,date:b.bankTransactionDate,desc:b.description,matched:b.status==='照合済'}));renderCash();root.renderSales();renderCategoryRules();renderBankRules();renderDuplicateReview();renderSupplierLedger();}
-root.TsukinowaAccountingUI={hydrate,role:()=>{supplierCorrection=null;if(el('supplierMonth'))el('supplierMonth').disabled=false;if(el('supplierChoice'))el('supplierChoice').disabled=false;duplicateBackup=null;expenseBank=null;expenseEdit=null;expensePreview=null;if(el('expenseImportCommit'))el('expenseImportCommit').disabled=true;},getData:()=>data};
+root.TsukinowaAccountingUI={hydrate,role:()=>{supplierCorrection=null;if(el('supplierMonth'))el('supplierMonth').disabled=false;if(el('supplierChoice'))el('supplierChoice').disabled=false;expenseBank=null;expenseEdit=null;expensePreview=null;if(el('expenseImportCommit'))el('expenseImportCommit').disabled=true;},getData:()=>data};
 root.bizPaid=function(s){if(!enabled())return old.bizPaid(s);return A.ledger([s],data.payments||[]).sales[0]?.paid||0;};
 root.bizOutstanding=function(s){if(!enabled())return old.bizOutstanding(s);return Number(s.amount)-bizPaid(s);};
 root.addExpense=guard(async()=>{if(!enabled())return alert('支出登録はクラウドにログインしてご利用ください。');const expense={expenseDate:value('expDate'),category:value('expCategory'),paymentMethod:value('expMethod'),vendor:value('expVendor'),description:value('expMemo'),amount:A.money(value('expAmount')),bankAccount:value('expBankAccount'),receiptAttachmentRef:value('expAttachment')};A.date(expense.expenseDate);const learnCategory=!!el('expenseLearnCategory')?.checked&&A.classificationKey(expense.vendor).length>=2;const expenseId=expenseEdit?.id||'expense_csv_'+(await B().getClient().digest(A.expenseKey(expense))).slice(0,48);if(expenseBank&&!confirm('入力した科目・取引先・内容・支払方法で新規支出を登録し、この銀行明細と照合しますか？'))return;if(send(expenseBank?{type:'expenseFromBank',bankTxnId:expenseBank.id,expense,expectedRevision:expenseBank.revision,learnCategory}:{type:'saveExpense',expenseId,expense,skipDuplicate:!expenseEdit,learnCategory,expectedRevision:expenseEdit?.revision||0})){expenseEdit=null;expenseBank=null;categoryChosen=false;if(el('expenseLearnCategory'))el('expenseLearnCategory').checked=true;['expAmount','expVendor','expMemo','expAttachment'].forEach(id=>el(id).value='');notice('支出を同期キューに保存しました。');}});
@@ -79,7 +78,7 @@ root.accountingDuplicateBackup=guard(async()=>{
  const normalized=root.TsukinowaCloudCore.normalizeDates(records),business={...normalized};delete business.auditLogs;
  const digest=await client.digest(root.TsukinowaCloudCore.canonical(business));
  const backup={format:'geruninn-bank-review-backup-v1',projectId:client.getState().projectId,companyId:client.getState().companyId,exportedAt:new Date().toISOString(),digest,records:normalized};
- const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='geruninn-bank-review-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);duplicateBackup={digest};
+ const url=URL.createObjectURL(new Blob([JSON.stringify(backup,null,2)],{type:'application/json'})),a=document.createElement('a');a.href=url;a.download='geruninn-bank-review-'+Date.now()+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
  el('bankDuplicateStatus').textContent='バックアップを出力しました。安全な場所に保存されたことを確認してください。変更時は再出力が必要です。';
 });
 root.accountingDuplicateAction=guard(async(bankTxnId,keeperId,restore)=>{
