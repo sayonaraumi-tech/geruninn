@@ -1,0 +1,57 @@
+name: Isolated dependency refresh candidate
+on:
+  push:
+    branches:
+      - security/operations-read-isolation-20261116
+    paths:
+      - .github/workflows/dependency-refresh-candidate.yml
+permissions:
+  contents: write
+jobs:
+  create-candidate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: security/operations-read-isolation-20261116
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.25.0
+          run_install: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Produce lockfile-compatible candidate in a separate branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c security/dependency-refresh-20261116
+          pnpm install --frozen-lockfile
+          pnpm up --latest
+          git add package.json pnpm-lock.yaml
+          if git diff --cached --quiet; then
+            echo "No package updates proposed." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git commit -m "chore(security): propose updated development dependencies and locked transitive packages"
+          git push origin HEAD:refs/heads/security/dependency-refresh-20261116
+          echo "Candidate dependency branch pushed; not merged or deployed." >> "$GITHUB_STEP_SUMMARY"
+      - name: Run dependency advisory check on candidate
+        if: always()
+        run: |
+          echo "Production dependency audit" >> "$GITHUB_STEP_SUMMARY"
+          pnpm audit --prod --audit-level high
+          echo "Full tooling dependency audit" >> "$GITHUB_STEP_SUMMARY"
+          pnpm audit --audit-level high
+      - name: Run all unit/business tests on candidate
+        if: always()
+        run: pnpm test
+      - name: Check candidate Firestore rules with emulator
+        if: always()
+        run: pnpm test:rules

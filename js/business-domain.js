@@ -31,7 +31,7 @@ function onodaTotals(s){
  const month=String(s.carryoverMonth||s.unpaidMonthLabel||'').trim();
  return {taxableSubtotal,nonTaxSubtotal,subtotal,tax,currentAmount,carryoverAmount,carryoverLabel:onodaCarryoverLabel(month),paymentTotal:currentAmount+carryoverAmount};
 }
-function total(s){if(s.docType==='onoda')return onodaTotals(s).currentAmount;if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0;(s.items||[]).forEach(i=>{subtotal+=(Number(i.qty)||0)*(Number(i.price)||0);});subtotal+=Number(s.travelFee)||0;return Math.round(subtotal+subtotal*.1);}
+function total(s){if(s.docType==='onoda')return onodaTotals(s).currentAmount;if(s.docType==='receipt')return Number(s.receiptTotal)||0;let subtotal=0;(s.items||[]).forEach(i=>{subtotal+=(Number(i.qty)||0)*(Number(i.price)||0);});subtotal+=Number(s.travelFee)||0;const discount=Number(s.discountAmount)||0;if(discount>0)subtotal=Math.max(0,subtotal-discount);return Math.round(subtotal+subtotal*.1);}
 function summary(s){return s.docType==='onoda'?(s.invoiceDate||'').slice(0,7)+'月分 小野田月次施工':(s.bizJobMemo||(s.items||[]).map(x=>x.content).filter(Boolean).slice(0,2).join(' / ')||s.remarks||'工事').slice(0,120);}
 // Presentation metadata only: never used to calculate tax or sales.
 const CATEGORY_RULES=[['クロス張替',/クロス|壁紙/],['穴補修',/穴.*(?:補修|修理|埋)|(?:補修|修理).*穴/],['ドア補修',/(?:ドア|扉).*補修|補修.*(?:ドア|扉)/],['窓枠補修',/窓枠/],['CF/クッションフロア',/\bCF\b|クッションフロア/i],['巾木',/巾木|幅木/],['障子',/障子/],['天井塗装',/天井.*塗装|塗装.*天井/],['ガラスシート',/ガラス.*(?:シート|フィルム)/],['ダイノック',/ダイノック|ダイノク/],['フロアタイル',/フロアタイル/]];
@@ -85,6 +85,9 @@ function numberingMinute(now=new Date()){
 function createService(client,{now=()=>new Date()}={}){
  const stable=async(prefix,value)=>prefix+'_'+(await client.digest(String(value))).slice(0,48);
  const eventId=event=>stable('cal',event.googleEventId||event.id);
+ const readCollections=async names=>Object.fromEntries(await Promise.all(
+  names.map(async name=>[name,await client.listRecords(name)])
+ ));
  async function execute(cmd,numberRetries=0){
  cmd=core.normalizeDates(cmd);
  // Compatibility dispatch only: keep persisted commands and fingerprints intact.
@@ -98,16 +101,20 @@ function createService(client,{now=()=>new Date()}={}){
  if(cmd.type==='historicalPdfImport'&&client.getState().role!=='admin')throw Error('過去帳票取込は管理者のみです。');
  if(cmd.type==='saveExpense'&&client.getState().role!=='admin')throw Error('この会計操作は管理者のみ実行できます。');
  const expenseSeed=(cmd.type==='expenseFromBank'||cmd.type==='saveExpense'&&cmd.skipDuplicate)?(await client.listRecords('expenses')).filter(r=>{try{return A.live(r.payload)&&(cmd.type==='expenseFromBank'||A.expenseKey(r.payload)===A.expenseKey(cmd.expense));}catch(_){return false;}}):[];
- const bankSeed=cmd.type==='supplierFromBank'?Object.fromEntries(await Promise.all(['suppliers','supplierTransactions','expenses'].map(async n=>[n,await client.listRecords(n)]))):['bankCancelDuplicate','bankRestoreDuplicate'].includes(cmd.type)?Object.fromEntries(await Promise.all(COLLECTIONS.filter(n=>n!=='auditLogs').map(async n=>[n,await client.listRecords(n)]))):cmd.type==='importBank'?Object.fromEntries(await Promise.all(['settings','bankTransactions','sales','receivables','payments','documents','expenses'].map(async n=>[n,await client.listRecords(n)]))):null;
- const importSeed=cmd.type==='historicalPdfImport'?{documents:await client.listRecords('documents'),sales:await client.listRecords('sales')}:null;
+ const bankSeed=cmd.type==='supplierFromBank'
+  ?await readCollections(['suppliers','supplierTransactions','expenses'])
+  :cmd.type==='importBank'
+   ?await readCollections(['settings','bankTransactions','sales','receivables','payments','documents','expenses'])
+   :null;
+ const importSeed=cmd.type==='historicalPdfImport'?await readCollections(['documents','sales']):null;
  const repairing=receiptRepair||cmd.type==='repairFormalDocument';
  if(repairing&&client.getState().role!=='admin')throw Error('正式帳票の補録は管理者のみです。');
- const calendarSeed=(repairing||['calendar','registerCalendarSale'].includes(cmd.type)||cmd.type==='saveDocument'&&formalType(cmd.snapshot?.docType))?await client.listRecords('calendarLinks'):[];
+ const calendarSeed=(repairing||['calendar','registerCalendarSale','calendarSaleChange'].includes(cmd.type)||cmd.type==='saveDocument'&&formalType(cmd.snapshot?.docType))?await client.listRecords('calendarLinks'):[];
  const saleSeed=(repairing||cmd.type==='registerCalendarSale'||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('sales'):[];
- const deletionSeed=cmd.type==='deleteMisregistration'?Object.fromEntries(await Promise.all(['documents','sales','receivables','payments','projects','estimates','calendarLinks','bankTransactions','cashLedger'].map(async n=>[n,await client.listRecords(n)]))):null;
- const paymentSeed=(repairing||lifecycle||['importBank','bankMatch','payment','confirmBank'].includes(cmd.type)||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?await client.listRecords('payments'):[];
+ const deletionSeed=cmd.type==='deleteMisregistration'?await readCollections(['documents','sales','receivables','payments','projects','estimates','calendarLinks','bankTransactions','cashLedger']):null;
+ const paymentSeed=(repairing||lifecycle||['importBank','bankMatch','payment','confirmBank','calendarSaleChange'].includes(cmd.type)||cmd.type==='saveDocument'&&cmd.snapshot?.docType==='receipt')?(bankSeed?.payments??await client.listRecords('payments')):[];
  const cleanup=typeof module==='object'&&module.exports?require('./test-data-cleanup.js'):globalThis.TsukinowaTestCleanup;
- const cleanupPlan=cmd.type==='cleanTestData'?cleanup.plan(Object.fromEntries(await Promise.all(cleanup.COLLECTIONS.map(async n=>[n,await client.listRecords(n)])))):null;
+ const cleanupPlan=cmd.type==='cleanTestData'?cleanup.plan(await readCollections(cleanup.COLLECTIONS)):null;
  try{return await client.transact(cmd.operationId,cmd,async({read,write:rawWrite,remove,who,archiveAudit,reserveDocumentNumber,reserveUnique})=>{
   const paymentSales=new Map();
   const write=async(name,id,payload,action,expectedRevision)=>{if(name==='payments'&&payload.saleId&&!(cmd.type==='calendar'&&payload.sourceType==='calendar-cash')){const sale=await read(anchorCollection(payload.saleId),payload.saleId);if(sale){if(!A.live(sale.payload)&&!payload.deletedAt)throw Error('無効な請求書には入金できません。');const ids=paymentSales.get(payload.saleId)||new Set(sale.payload.paymentIds||[]);ids.add(id);paymentSales.set(payload.saleId,ids);}}const revision=await rawWrite(name,id,payload,action,expectedRevision);await AD.mirrorCash(name,id,payload,read,rawWrite);return revision;};
@@ -143,10 +150,60 @@ function createService(client,{now=()=>new Date()}={}){
     for(const alias of ids){const link=await read('calendarLinks',alias);if(link)await write('calendarLinks',alias,{...link.payload,saleId:id,...(cash?{cashSaleId:id}:{}),manualSaleConfirmed:true});}
     return {saleId:id,registered:true};
   }
+  if(cmd.type==='calendarSaleChange'){
+    // Admin-only correction of a sale registered from the 日程 (registerCalendarSale), no 請求書/領収書 involved.
+    // cancel = soft-void the sale and its own cash payment (cashLedger follows via mirrorCash); edit = same IDs, new values.
+    // Refused once anything else is attached (formal document, 入金登録, bank evidence): that is corrected where it was recorded.
+    if(who.role!=='admin')throw Error('日程から登録した売上の修正・取消は管理者のみです。');
+    if(!['edit','cancel'].includes(cmd.action))throw Error('操作を指定してください。');
+    const reason=String(cmd.reason||'').trim();if(!reason)throw Error('修正・取消の理由を入力してください。');if(reason.length>500)throw Error('理由が長すぎます。');
+    const id='calendar_cash_'+String(cmd.id||''),row=await read('sales',id);
+    if(!row||!A.live(row.payload))throw Error('日程から登録した売上が見つかりません。');
+    const sale=row.payload,payId='pay_'+id;
+    if(!['calendar-cash','calendar-manual'].includes(sale.sourceType)||sale.documentId||sale.calendarEventId!==String(cmd.id))throw Error('帳票に紐づく売上は保存帳票から訂正してください。');
+    const ps=await relatedPayments(id),own=ps.find(p=>(p.id||p.paymentId)===payId&&p.sourceType==='calendar-cash'),others=ps.filter(p=>p!==own&&Number(p.amount)>0);
+    if(others.length||ps.some(p=>p.bankTxnId||p.bankId))throw Error('入金登録・銀行照合済みの入金があります。先に入金を確認してください。');
+    const at=now().toISOString(),links=new Set([String(cmd.id),...calendarSeed.filter(r=>r.payload.saleId===id||r.payload.cashSaleId===id).map(r=>r.id)]);
+    if(cmd.action==='cancel'){
+      await write('sales',id,{...sale,deletedAt:at,documentStatus:'cancelled',deleteReason:'日程売上を取消／'+reason},'status change',row.revision);
+      if(own){const r=await read('payments',payId);await write('payments',payId,{...r.payload,deletedAt:at,deleteReason:'日程売上を取消／'+reason},'adjustment',r.revision);}
+      for(const key of links){const link=await read('calendarLinks',key);if(link)await write('calendarLinks',key,{...link.payload,saleId:'',cashSaleId:'',manualSaleConfirmed:false,cancelledSaleId:id},'status change');}
+      return {saleId:id,cancelled:true};
+    }
+    const v=cmd.sale||{},amount=A.money(v.amount),date=A.date(v.salesDate),customer=String(v.customer||'').trim()||'現金客',content=String(v.content||'').trim(),method=v.paymentMethod,memo=String(v.memo||'');
+    if(!content||amount<=0||!['銀行振込','現金','プラットフォーム経由','その他'].includes(method))throw Error('内容・金額・入金経路を確認してください。');
+    if(customer.length>200||content.length>200||memo.length>1000)throw Error('入力が長すぎます。');
+    const cash=method==='現金',next={...sale,sourceType:cash?'calendar-cash':'calendar-manual',customer,content,projectCategory:projectCategory({content}),amount,salesDate:date,saleDate:date,paymentMethod:method,memo,paymentIds:own||cash?[payId]:[],paymentVersion:(sale.paymentVersion||0)+1,editedAt:at,editReason:reason};
+    if(['customer','content','amount','salesDate','paymentMethod','memo'].every(k=>next[k]===sale[k])&&(!cash||own&&own.amount===amount&&own.paymentDate===date))return {saleId:id,unchanged:true};
+    await write('sales',id,next,'status change',row.revision);
+    if(cash){const r=await read('payments',payId);await write('payments',payId,{...(r?.payload||{}),id:payId,paymentId:payId,saleId:id,sourceType:'calendar-cash',sourceId:sale.sourceId,documentId:'',amount,paymentDate:date,date,method,confirmation:'cash-received',memo:memo||'日程から売上登録',deletedAt:null},'payment');}
+    else if(own){const r=await read('payments',payId);await write('payments',payId,{...r.payload,deletedAt:at,deleteReason:'入金経路を'+method+'に修正／'+reason},'adjustment',r.revision);}
+    for(const key of links){const link=await read('calendarLinks',key);if(link)await write('calendarLinks',key,{...link.payload,saleId:id,cashSaleId:cash?id:'',manualSaleConfirmed:true});}
+    return {saleId:id,edited:true};
+  }
+  if(cmd.type==='calendarLocal'){
+    // System (本地) schedule: stored in calendarLinks like synced events, never creates sales or payments.
+    const e=clone(cmd.event||{});if(e.id!==undefined&&e.id!==''&&!/^[A-Za-z0-9_-]{1,128}$/.test(String(e.id)))throw Error('日程IDが不正です。');
+    const id=e.id||await stable('cal','local:'+(e.localId||cmd.operationId)),row=await read('calendarLinks',id),old=row?.payload||null;
+    if(old&&old.source!=='local')throw Error('Google・取込の日程はシステム内で編集できません。');
+    if(old?.deletedAt)throw Error('削除済みの日程です。');
+    if(cmd.action==='delete'){if(!old)throw Error('日程が見つかりません。');const revision=await write('calendarLinks',id,{...old,deletedAt:now().toISOString(),deleteReason:'本地日程を削除'});return {id,revision};}
+    e.date=A.date(e.date);const title=String(e.title||'').trim();if(!title)throw Error('タイトルを入力してください。');
+    // Bounded plain text; times are an all-day date or an ISO date-time (stored normalized by cloud-core).
+    const iso=v=>/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?(Z|[+-]\d{2}:\d{2})$/.test(v)&&Number.isFinite(Date.parse(v)),start=String(e.start||e.date),end=String(e.end||'');
+    if(!(start===e.date||iso(start))||end&&!(iso(end)||/^\d{4}-\d{2}-\d{2}$/.test(end)))throw Error('日程の時刻が不正です。');
+    for(const [k,max] of [['title',200],['location',200],['description',4000],['copyOf',128]])if(String(e[k]||'').length>max)throw Error('日程の入力が長すぎます。');
+    const next={...(old||{}),id,source:'local',date:e.date,start,end,title,originalTitle:title,description:String(e.description||''),location:String(e.location||''),pushToGoogle:!!e.pushToGoogle,googleEventId:old?.googleEventId||'',calendarId:old?.calendarId||'',googleCalendarId:old?.googleCalendarId||'',...(!old&&e.copyOf?{copyOf:String(e.copyOf)}:{})};
+    if(next.pushToGoogle&&!next.googleEventId&&/^[a-v0-9]{5,1024}$/.test(cmd.googleEventId||'')){next.googleEventId=cmd.googleEventId;next.googleCreatePending=true;}
+    else if(old?.googleEventId&&!old.googleCreatePending)next.googlePatchPending=true;
+    const revision=await write('calendarLinks',id,next);return {id,revision,event:next};
+  }
   if(cmd.type==='calendar'){
     const e=clone(cmd.event),existing=e.googleEventId?calendarSeed.find(r=>r.payload.googleEventId===e.googleEventId):null,id=existing?.id||await eventId(e),row=await read('calendarLinks',id),old=row?.payload||{};
     if(old.calendarId&&e.googleCalendarId&&old.calendarId!==e.googleCalendarId)throw Error('同じGoogle event IDに異なるカレンダーが指定されています。');
     const formal=!!(old.documentId||old.linkedInvoiceId||old.linkedEstimateId||old.projectId);
+    // A 本地 event pushed to Google is owned by this system: a later sync only refreshes Google metadata.
+    if(old.source==='local'){const revision=await write('calendarLinks',id,{...old,googleEventId:old.googleEventId||e.googleEventId||'',calendarId:old.calendarId||e.googleCalendarId||'',googleCalendarId:old.googleCalendarId||e.googleCalendarId||'',updated:e.updated||old.updated||'',htmlLink:e.htmlLink||old.htmlLink||'',googleLatestTitle:e.title||'',googleStatus:e.googleStatus||'confirmed'});return {id,revision};}
     const incoming={id,googleEventId:e.googleEventId||'',calendarId:e.googleCalendarId||old.calendarId||'',googleCalendarId:e.googleCalendarId||old.calendarId||'',source:e.source||(e.googleEventId?'google':'ics')};
     for(const k of ['date','start','end','updated','htmlLink','uid'])incoming[k]=e[k]||'';
     incoming.googleLatestTitle=e.title||'';incoming.googleOriginalDescription=e.description||'';incoming.googleStatus=e.googleStatus||'confirmed';
@@ -506,8 +563,8 @@ function createService(client,{now=()=>new Date()}={}){
   }
   if(cmd.type==='payment'){
     const sale=await read(anchorCollection(cmd.saleId),cmd.saleId);if(!sale||!A.live(sale.payload))throw Error('有効な対象請求書が見つかりません。');
-    const amount=A.money(cmd.amount),paymentDate=A.date(cmd.paymentDate);
-    if(!['現金','銀行振込','プラットフォーム経由','その他','オンライン決済'].includes(cmd.method||'現金'))throw Error('入金経路を確認してください。');
+    const amount=A.money(cmd.amount),paymentDate=A.date(cmd.paymentDate),method=cmd.method||'現金';
+    if(!['現金','銀行振込','プラットフォーム経由','その他','オンライン決済'].includes(method))throw Error('入金経路を確認してください。');
     if(cmd.documentId&&sale.payload.documentId!==cmd.documentId)throw Error('対象請求書が訂正されています。読み込み直してください。');
     // Never attribute a combined monthly/old-balance receipt to this month's sale.
     if(sale.payload.docType==='onoda'){
@@ -517,7 +574,7 @@ function createService(client,{now=()=>new Date()}={}){
         if(amount>Math.max(0,sale.payload.amount-paid))throw Error('前月未入金分を含む合算入金は、本月分と過去分を元の売上・未収へ分けて登録してください。自動分配は行いません。');
       }
     }
-    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method:cmd.method||'現金',confirmation:cmd.method==='現金'?'cash-received':cmd.manualConfirmed?'bank-confirmed':'pending-bank',memo:cmd.memo||'',...(cmd.method==='プラットフォーム経由'&&String(cmd.platformName||'').trim()?{platformName:String(cmd.platformName).trim()}:{}),documentId:''};
+    const old=await read('payments',cmd.paymentId),payload={id:cmd.paymentId,paymentId:cmd.paymentId,saleId:cmd.saleId,amount,paymentDate,date:paymentDate,method,confirmation:method==='現金'?'cash-received':cmd.manualConfirmed?'bank-confirmed':'pending-bank',memo:cmd.memo||'',...(cmd.method==='プラットフォーム経由'&&String(cmd.platformName||'').trim()?{platformName:String(cmd.platformName).trim()}:{}),documentId:''};
     if(old){if(core.canonical(old.payload)!==core.canonical(payload))throw Error('入金IDが既存の入金と競合しています。');return {paymentId:cmd.paymentId,unchanged:true};}
     const reserved=(await relatedPayments(cmd.saleId)).filter(p=>A.confirmed(p)||p.confirmation==='pending-bank').reduce((n,p)=>n+Number(p.amount||0),0);
     if(amount>sale.payload.amount-reserved)throw Error('未収金額を超える入金です。既存入金を確認してください。');

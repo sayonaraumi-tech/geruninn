@@ -72,6 +72,19 @@ test('calendar manual sales are admin-only, cash mirrors atomically and bank sta
  }
  assert.equal((await admin.listRecords('sales')).length,2);assert.equal((await admin.listRecords('cashLedger')).length,1);assert.equal((await admin.listRecords('documents')).length,2);
 });
+test('日程売上 from a 本地 event: admin edit/cancel under real rules, staff denied, cash ledger follows',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ const {id}=await exec(a,{type:'calendarLocal',action:'save',event:{date:'2026-12-03',title:'試験 現地作業'}}),v={salesDate:'2026-12-03',customer:'試験客',content:'穴補修',amount:11000,paymentMethod:'現金'};
+ await exec(a,{type:'registerCalendarSale',id,sale:v});
+ await assert.rejects(exec(s,{type:'calendarSaleChange',id,action:'cancel',reason:'x'}),/管理者/);
+ await exec(a,{type:'calendarSaleChange',id,action:'edit',reason:'金額訂正',sale:{...v,amount:13200}});
+ const live=async n=>(await admin.listRecords(n)).filter(r=>!r.payload.deletedAt);
+ assert.deepEqual((await live('sales')).map(r=>r.payload.amount),[13200]);assert.deepEqual((await live('payments')).map(r=>r.payload.amount),[13200]);assert.deepEqual((await live('cashLedger')).map(r=>r.payload.amount),[13200]);
+ await exec(a,{type:'calendarSaleChange',id,action:'edit',reason:'振込に訂正',sale:{...v,amount:13200,paymentMethod:'銀行振込'}});
+ assert.equal((await live('payments')).length,0);assert.equal((await live('cashLedger')).length,0);assert.equal((await live('sales'))[0].payload.paymentMethod,'銀行振込');
+ await exec(a,{type:'calendarSaleChange',id,action:'cancel',reason:'取消試験'});
+ assert.equal((await live('sales')).length,0);assert.equal((await admin.listRecords('sales')).length,1);
+});
 test('platform channel and optional detail persist under unchanged admin/staff payment rules',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
  await exec(s,{type:'saveDocument',snapshot:snapshot('platform-rules'),expectedRevision:0});
@@ -104,6 +117,14 @@ test('two devices: estimate/acceptance, invoice/download idempotency, partial pa
   const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().action==='status change'&&d.data().before?.status==='見積済'&&d.data().after.status==='受注'));
   for(const d of audits.docs.slice(0,1)){await assertFails(deleteDoc(d.ref));await assertFails(updateDoc(d.ref,{action:'forged'}));}
  }finally{phone.stop();desktop.stop();admin.dispose();staff.dispose();}
+});
+test('本地日程 save/edit/delete passes the deployed rules for staff and admin without accounting writes',async()=>{
+ for(const role of ['staff','admin']){const client=await clientFor(role),service=createService(client);try{
+  const id='cal_local_rules_'+role,event={id,date:'2026-12-03',start:'2026-12-03',end:'2026-12-04',title:'本地 '+role};
+  await exec(service,{type:'calendarLocal',action:'save',event});await exec(service,{type:'calendarLocal',action:'save',event:{...event,title:'本地 変更'}});await exec(service,{type:'calendarLocal',action:'delete',event:{id}});
+  const row=(await getDoc(ref(db('admin'),'calendarLinks',id))).data().payload;assert.equal(row.source,'local');assert.equal(row.title,'本地 変更');assert.ok(row.deletedAt);
+  assert.equal((await getDocs(collection(db('admin'),`companies/${company}/sales`))).size,0);assert.equal((await getDocs(collection(db('admin'),`companies/${company}/payments`))).size,0);
+ }finally{client.dispose();}}
 });
 test('migration twice preserves local originals and existing cloud records, marker prevents duplicates',async()=>{
  const client=await clientFor('admin'),local=storage(),legacy={audit:[{id:'old-audit',action:'旧操作',user:'local',at:'2026-08-10'}],sales:[{id:'old-sale',sourceId:'old-doc',customer:'旧顧客',amount:100000,saleDate:'2026-08-01',invoiceDate:'2026-08-10'}],payments:[{id:'old-pay',saleId:'old-sale',amount:50000,date:'2026-08-15',method:'現金'}]};
@@ -654,4 +675,124 @@ test('two devices: CSV and bank new expense share a transaction identity under u
   await exec(a,{type:'saveExpense',expenseId:row.id,expense:{...expense,amount:6061},expectedRevision:0}).then(()=>assert.fail('stale write accepted'),()=>{});
   assert.equal(JSON.stringify(await one.listRecords('expenses')),before);
  }finally{one.dispose();two.dispose();}
+});
+
+test('cash payment cannot commit without its matching ledger mirror', async () => {
+ const admin = await clientFor('admin'), staff = await clientFor('staff');
+ try {
+  const service = createService(staff);
+  await exec(service, {type:'saveDocument',snapshot:snapshot('cash-mirror-guard'),expectedRevision:0});
+  const saleId = 'sale_cash-mirror-guard', id = 'missing-mirror';
+  const payment = {id,paymentId:id,saleId,amount:2000,paymentDate:'2026-09-22',date:'2026-09-22',method:'現金',confirmation:'cash-received'};
+  await assertFails(staff.transact('without-mirror', {id}, async ({read,write}) => {
+   const {payload,revision} = await read('sales', saleId);
+   await write('sales', saleId, {...payload,paymentIds:[id],paymentVersion:1}, 'payment', revision);
+   await write('payments', id, payment, 'payment', 0);
+   return {id};
+  }));
+  assert.equal((await admin.listRecords('payments')).length, 0);
+  const {paymentId} = await exec(service, {type:'payment',paymentId:'default-cash',saleId,amount:2000,paymentDate:payment.paymentDate});
+  const [saved] = await admin.listRecords('payments');
+  const [mirror] = await admin.listRecords('cashLedger');
+  assert.equal(saved.payload.confirmation, 'cash-received');
+  assert.equal(mirror.id, 'cash_' + paymentId);
+  assert.equal(mirror.payload.amount, payment.amount);
+ } finally {
+  admin.dispose();
+  staff.dispose();
+ }
+});
+
+test('legacy migration makes no cloud request when the stored raw backup is corrupt', async () => {
+ const source = storage();
+ source.setItem(LOCAL_KEYS.business, '{"sales":[]}');
+ const client = {
+  getState: () => ({role:'admin',companyId:company,user:{uid:'backup-test'}}),
+  digest: async () => 'a'.repeat(64),
+  transact: async () => assert.fail('migration contacted Firestore without a valid backup')
+ };
+ const key = 'tsukinowa_cloud_backup_v2_' + 'a'.repeat(48);
+ source.setItem(key, '{"raw":{}}');
+ await assert.rejects(migrateLegacy({client,storage:source}), /バックアップ/);
+ assert.equal(source.getItem(key), '{"raw":{}}');
+});
+
+test('staff can retry own operations but cannot read or reserve administrator deletion backups', async () => {
+ const admin = await clientFor('admin'), staff = await clientFor('staff');
+ try {
+  const service = createService(admin);
+  const id = 'private-error-backup';
+  await exec(service, {type:'migrateRecord',collection:'documents',id,payload:{
+   documentId:id,docType:'estimate',sourceType:'system-error',confirmed:false,
+   snapshot:{documentId:id,docType:'estimate',customerName:'非公開テスト'}
+  }});
+  const opId = 'delete_error_' + id + '_1';
+  await exec(service, {type:'deleteMisregistration',documentId:id,expectedRevision:1,reason:'誤生成'});
+  assert.equal((await getDoc(ref(db('admin'),'operations',opId))).data().result.backup.documentId, id);
+  await assertFails(getDoc(ref(db('staff'),'operations',opId)));
+  await assertFails(getDocs(collection(db('staff'), 'companies/tsukinowa/operations')));
+  await assertFails(setDoc(ref(db('staff'),'operations','delete_error_new_1'), {
+   actorId:'uid-staff',fingerprint:'test',result:{},createdAt:serverTimestamp()
+  }));
+  const command = {type:'saveDocument',operationId:'staff-own-operation',snapshot:snapshot('staff-retry'),expectedRevision:0};
+  const staffService = createService(staff);
+  const first = await staffService.execute(command);
+  assert.deepEqual(await staffService.execute(command), first);
+ } finally {
+  admin.dispose();
+  staff.dispose();
+ }
+});
+
+test('operations reads: staff sees own replay and number reservations, never admin backups or full log list',async()=>{
+ const path=id=>doc(db('admin'),`companies/${company}/operations/${id}`);
+ await env.withSecurityRulesDisabled(async ctx=>{
+  const root=ctx.firestore();
+  for(const [id,actorId,result] of [
+   ['admin-sensitive','uid-admin',{backup:{bankAccount:'private-bank',amount:900000}}],
+   ['staff-own','uid-staff',{ok:true}],
+   ['documentNumber_20261116-1000-01','uid-admin',{invoiceNo:'20261116-1000-01',documentId:'doc'}]
+  ])await setDoc(doc(root,`companies/${company}/operations/${id}`),{actorId,fingerprint:'test',createdAt:new Date(),result});
+ });
+ await assertSucceeds(getDoc(path('admin-sensitive')));
+ await assertFails(getDoc(doc(db('staff'),`companies/${company}/operations/admin-sensitive`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/staff-own`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/new-not-yet-created`)));
+ await assertSucceeds(getDoc(doc(db('staff'),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
+ await assertFails(getDocs(collection(db('staff'),`companies/${company}/operations`)));
+ await assertSucceeds(getDocs(collection(db('admin'),`companies/${company}/operations`)));
+ await assertFails(getDoc(doc(db('staff','another-company'),`companies/${company}/operations/staff-own`)));
+ await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(),`companies/${company}/operations/documentNumber_20261116-1000-01`)));
+});
+
+test('staff cannot squat invoice numbering with an isolated operation',async()=>{
+ const staff=db('staff');
+ const invoiceNo='20261116-1300-01';
+ const reservation={actorId:'uid-staff',fingerprint:'a'.repeat(64),
+   createdAt:serverTimestamp(),
+   result:{documentId:'nonexistent',invoiceNo,numberingMinute:'20261116-1300',numberingSequence:1}};
+ await assertFails(setDoc(doc(staff,`companies/${company}/operations/documentNumber_${invoiceNo}`),reservation));
+ const exists=await getDoc(doc(db('admin'),`companies/${company}/operations/documentNumber_${invoiceNo}`));
+ assert.equal(exists.exists(),false);
+});
+
+test('hostile direct finance writes require coupled audit and correct tenant identity',async()=>{
+ const admin=db('admin'),staff=db('staff'),other=db('staff','outside-company');
+ const guest=env.unauthenticatedContext().firestore();
+ const broken={schemaVersion:2,companyId:company,payload:{amount:1000000,status:'confirmed'},
+   revision:1,createdBy:'uid-admin',createdAt:serverTimestamp(),
+   updatedBy:'uid-admin',updatedAt:serverTimestamp(),lastOperationId:'fake',lastAuditId:'fake_0'};
+ for(const name of ['bankTransactions','payments','cashLedger','sales','expenses','documents','settings']){
+  await assertFails(setDoc(doc(admin,`companies/${company}/${name}/forged`),broken));
+  await assertFails(setDoc(doc(staff,`companies/${company}/${name}/forged`),broken));
+ }
+ await assertFails(setDoc(doc(other,`companies/${company}/payments/forged`),broken));
+ await assertFails(setDoc(doc(guest,`companies/${company}/payments/forged`),broken));
+ await assertFails(setDoc(doc(staff,`companies/${company}/operations/fake`),
+  {actorId:'uid-admin',fingerprint:'fake',result:{ok:true},createdAt:serverTimestamp()}));
+ await assertFails(setDoc(doc(staff,`companies/${company}/auditLogs/fake_0`),
+  {userId:'uid-admin',entityType:'payments',entityId:'forged',action:'payment',
+   operationId:'fake',before:null,after:{amount:1000000},timestamp:serverTimestamp()}));
+ await assertFails(deleteDoc(doc(admin,`companies/${company}/payments/forged`)));
+ await assertFails(updateDoc(doc(admin,`companies/${company}/payments/forged`),{payload:{amount:0}}));
 });

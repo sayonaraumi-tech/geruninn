@@ -66,34 +66,45 @@
   function displayTimestamp(value){const n=typeof value?.seconds==='number'?value.seconds*1000:Date.parse(value||'');return Number.isFinite(n)&&Math.abs(n)<=8640000000000000?new Date(n).toISOString():'';}
   function createClient(driver,onState=()=>{}){
     let state={phase:'unconfigured',user:null,role:null,companyId:null,error:null};
-    let config=null,authStop=null,generation=0;
+    let config=null,authStop=null,generation=0,authSession=0;
     const subscriptions=new Set();
     const emit=patch=>{state={...state,...patch};onState({...state});};
     function clearSubscriptions(){for(const stop of subscriptions)stop();subscriptions.clear();}
+    function stopAuth(){
+      authSession++;generation++;clearSubscriptions();
+      const stop=authStop;authStop=null;stop?.();
+    }
+    function assertCurrent(who){if(who.generation!==generation)throw Error('ログイン状態が変更されました。');}
     function identity(){if(state.phase!=='ready'||!state.user||!state.role)throw Error('権限のあるアカウントでログインしてください。');return {uid:state.user.uid,role:state.role,companyId:state.companyId,generation};}
     function scope(name){if(!COLLECTIONS.includes(name))throw Error('Unknown collection');return name;}
     function readable(name,id){const who=identity();scope(name);if(who.role==='staff'&&!STAFF_READ.includes(name)&&!(name==='settings'&&id==='system'))throw Error('この操作は管理者のみ利用できます。');return who;}
     async function start(input){
-      generation++;clearSubscriptions();if(authStop){authStop();authStop=null;}
-      config=validateConfig(input);
-      if(!config){emit({phase:'unconfigured',user:null,role:null,companyId:null,error:null});return;}
-      emit({phase:'initializing',user:null,role:null,companyId:config.companyId,projectId:config.firebase.projectId,error:null});
+      stopAuth();
+      const session=authSession;
+      config=null;
       try{
-        await driver.initialize(config.firebase);
-        authStop=driver.observeAuth(async user=>{
+        const settings=validateConfig(input);
+        config=settings;
+        if(!settings){emit({phase:'unconfigured',user:null,role:null,companyId:null,projectId:null,error:null});return;}
+        emit({phase:'initializing',user:null,role:null,companyId:settings.companyId,projectId:settings.firebase.projectId,error:null});
+        await driver.initialize(settings.firebase);
+        if(session!==authSession)return;
+        const stop=driver.observeAuth(async user=>{
+          if(session!==authSession)return;
           const ticket=++generation;clearSubscriptions();
           emit({phase:user?'authorizing':'signed-out',user:user?{uid:user.uid,email:user.email||''}:null,role:null,error:null});
           if(!user)return;
           try{
             const claims=await driver.claims(user);
             if(ticket!==generation)return;
-            if(claims.companyId!==config.companyId||!['admin','staff'].includes(claims.role)){
+            if(claims.companyId!==settings.companyId||!['admin','staff'].includes(claims.role)){
               emit({phase:'denied',role:null,error:'この会社へのアクセス権が未設定です。管理者に確認してください。'});return;
             }
             emit({phase:'ready',role:claims.role,error:null});
           }catch(e){if(ticket===generation)emit({phase:'error',role:null,error:e.message});}
-        },e=>{generation++;clearSubscriptions();emit({phase:'error',user:null,role:null,error:e.message});});
-      }catch(e){emit({phase:'error',user:null,role:null,error:e.message});throw e;}
+        },e=>{if(session===authSession){generation++;clearSubscriptions();emit({phase:'error',user:null,role:null,error:e.message});}});
+        if(session===authSession)authStop=stop;else stop();
+      }catch(e){if(session===authSession){emit({phase:'error',user:null,role:null,error:e.message});throw e;}}
     }
     async function signIn(email,password){if(!config)throw Error('クラウド接続はまだ設定されていません。');if(!email||!password)throw Error('メールとパスワードを入力してください。');return driver.signIn(email.trim(),password);}
     async function signOut(){generation++;clearSubscriptions();emit({phase:'signed-out',user:null,role:null,error:null});try{await driver.signOut();}catch(e){emit({phase:'error',error:'ログアウトを完了できませんでした。再試行してください。'});throw e;}}
@@ -108,7 +119,7 @@
       const who=identity();segment(operationId);
       const fingerprint=await driver.digest(canonical(command)),base=`companies/${who.companyId}`;
       const result=await driver.transaction(async tx=>{
-        if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
+        assertCurrent(who);
         const opPath=`${base}/operations/${operationId}`,previous=await tx.get(opPath);
         if(previous){if(previous.fingerprint!==fingerprint||previous.actorId!==who.uid)throw Error('Operation ID conflict');return previous.result;}
         const cache=new Map(),writes=[],legacyAudits=[],numberReservations=[];
@@ -141,7 +152,7 @@
           return {invoiceNo,numberingMinute:minute,numberingSequence:sequence};
         };
         const result=await planner({read,write,remove,who,archiveAudit,reserveDocumentNumber,reserveUnique});
-        if(who.generation!==generation)throw Error('ログイン状態が変更されました。');
+        assertCurrent(who);
         if(writes.length>30)throw Error('Transaction too large');
         if(!writes.length&&!legacyAudits.length)return result;
         const at=driver.timestamp();
@@ -155,20 +166,26 @@
         tx.set(opPath,{actorId:who.uid,fingerprint,result:JSON.parse(canonical(result)),createdAt:at});
         return result;
       });
-      if(who.generation!==generation)throw Error('ログイン状態が変更されました。');return result;
+      assertCurrent(who);return result;
     }
     async function isDocumentNumberReserved(invoiceNo){
       const who=identity();segment(invoiceNo);
-      return driver.transaction(async tx=>!!await tx.get(`companies/${who.companyId}/operations/documentNumber_${invoiceNo}`));
+      const reserved=await driver.transaction(async tx=>!!await tx.get(`companies/${who.companyId}/operations/documentNumber_${invoiceNo}`));
+      assertCurrent(who);return reserved;
     }
-    async function listRecords(name){const who=readable(name,null);if(!driver.list)throw Error('安全確認のため最新データを取得できません。再読込してください。');return driver.list(`companies/${who.companyId}/${name}`);}
+    async function listRecords(name){
+      const who=readable(name,null);
+      if(!driver.list)throw Error('安全確認のため最新データを取得できません。再読込してください。');
+      const records=await driver.list(`companies/${who.companyId}/${name}`);
+      assertCurrent(who);return records;
+    }
     async function put(name,id,payload,{operationId,expectedRevision=0}={}){
       if(identity().role!=='admin'||name==='auditLogs')throw Error('この操作は許可されていません。');
       return transact(operationId,{name,id,payload,expectedRevision},async({read,write})=>{
         const old=await read(name,id);const revision=await write(name,id,payload,undefined,expectedRevision);return {revision,replayed:!!old&&canonical(old.payload)===canonical(payload)};
       });
     }
-    return {start,signIn,signOut,listen,listRecords,put,transact,isDocumentNumberReserved,digest:driver.digest,getState:()=>({...state}),dispose:()=>{generation++;clearSubscriptions();if(authStop)authStop();}};
+    return {start,signIn,signOut,listen,listRecords,put,transact,isDocumentNumberReserved,digest:driver.digest,getState:()=>({...state}),dispose:()=>{stopAuth();config=null;state={phase:'unconfigured',user:null,role:null,companyId:null,error:null};}};
   }
   return {COLLECTIONS,STAFF_READ,LOCAL_KEYS,validateConfig,readLegacy,backupLegacy,canonical,normalizeDates,displayTimestamp,createClient};
 });

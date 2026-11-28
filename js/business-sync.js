@@ -1,6 +1,17 @@
 (function(root,factory){const api=factory(typeof module==='object'&&module.exports?require('./cloud-core.js'):root.TsukinowaCloudCore,typeof module==='object'&&module.exports?require('./business-domain.js'):root.TsukinowaBusiness);if(typeof module==='object'&&module.exports)module.exports=api;else root.TsukinowaSync=api;})(globalThis,function(core,domain){
 'use strict';
-function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
+// Purge only reloadable server snapshots; never remove uncommitted commands or backups.
+function purgeConfirmedSnapshots(storage, identity){
+ if(!identity?.projectId||!identity?.companyId||!identity?.user?.uid)return 0;
+ const prefix=`tsukinowa_cloud_v2_${identity.projectId}_${identity.companyId}_${identity.user.uid}_`;
+ let count=0;
+ for(const collection of domain.COLLECTIONS){
+  const key=prefix+collection;
+  if(storage.getItem(key)!==null){storage.removeItem(key);count++;}
+ }
+ return count;
+}
+function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStatus=()=>{},onCommitted=()=>{},onFailure=()=>{},online=()=>true}){
  const who=client.getState(),collections=domain.COLLECTIONS.filter(n=>who.role==='admin'||core.STAFF_READ.includes(n)),service=domain.createService(client),prefix=`tsukinowa_cloud_v2_${who.projectId}_${who.companyId}_${who.user.uid}_`,queueKey=prefix+'outbox';
  let stopped=false,running=null,error=null,reloading=false;const stops=[],rows={},serverSeen=new Set();let queue=[];
  function load(key,fallback){const raw=storage.getItem(key);if(!raw)return fallback;try{return JSON.parse(raw);}catch(e){throw Error('端末内の同期データを読み込めません。元データを保護して同期を停止しました。');}}
@@ -11,23 +22,28 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
  }
  const repaired=queue.map(item=>{if(item.blocked&&/Invalid (Date|time value)/i.test(item.error||'')){const backupKey=prefix+'invalid_date_'+item.command.operationId;storage.setItem(backupKey,JSON.stringify(item));return {...item,command:core.normalizeDates(item.command),blocked:false,error:null};}return item;});
  if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
- for(const name of collections)rows[name]=load(prefix+name,[]);
+ for(const name of collections){const raw=snapshotStorage.getItem(prefix+name);rows[name]=raw?JSON.parse(raw):[];}
  function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
  function start(){onData(rows);for(const name of collections)stops.push(client.listen(name,null,(value,meta)=>{
    if(stopped||reloading)return;
-   if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{storage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
+   if(!meta?.fromCache){serverSeen.add(name);rows[name]=value;try{snapshotStorage.setItem(prefix+name,JSON.stringify(value));}catch(e){error='キャッシュ保存に失敗しました。クラウドデータは保持されています。';}onData(rows);}
    // The app cache contains the last server-confirmed lifecycle state for these rows.
-   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||storage.getItem(prefix+name)!==null))){rows[name]=value;onData(rows);}
+   else if(value.length&&!(['calendarLinks','documents'].includes(name)&&(serverSeen.has(name)||snapshotStorage.getItem(prefix+name)!==null))){rows[name]=value;onData(rows);}
    status();
  },e=>{if(!stopped){if(name==='receivables'&&String(e.code||'').includes('permission-denied')){rows[name]=[];serverSeen.add(name);onData(rows);status();return;}error=e.message;status();}}));status();flush();}
  async function reload(){
-  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;storage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
+  reloading=true;try{const latest=await Promise.all(collections.map(async name=>[name,await client.listRecords(name)]));if(stopped)return;for(const [name,value] of latest){rows[name]=value;snapshotStorage.setItem(prefix+name,JSON.stringify(value));serverSeen.add(name);}onData(rows);}finally{reloading=false;}
  }
  function enqueue(command){
    if(stopped)throw Error('ログイン状態が変更されました。');
-   if(queue.some(x=>x.command.operationId===command.operationId))return command.operationId;
-   const entry={command:JSON.parse(core.canonical(core.normalizeDates(command))),createdAt:new Date().toISOString()};
+   const serialized=core.canonical(core.normalizeDates(command));
+   const existing=queue.find(x=>x.command.operationId===command.operationId);
+   if(existing){
+    if(core.canonical(existing.command)!==serialized)throw Error('Operation ID conflict');
+    return command.operationId;
+   }
+   const entry={command:JSON.parse(serialized),createdAt:new Date().toISOString()};
    const next=[...queue,entry];storage.setItem(queueKey,JSON.stringify(next));queue=next;error=null;status();flush();return command.operationId;
  }
  function flush(){
@@ -46,11 +62,9 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
      const backupKey=prefix+'bank_conflict_backup_'+item.command.operationId;
      if(!storage.getItem(backupKey))storage.setItem(backupKey,JSON.stringify(queue));
     }
-    try{const result=await service.execute(item.command);if(stopped)return;
-      if(item.command.type==='payment')await reload();
-      // Persist removal before issuing the next command. Replaying a committed operation is safe after a quota failure.
-      const next=queue.filter(x=>x!==item);storage.setItem(queueKey,JSON.stringify(next));queue=next;error=queue.find(x=>x.blocked)?.error||null;try{onCommitted(item.command,result);}catch(observerError){onFailure(item.command,'保存済み。画面を再読込してください：'+observerError.message);}
-    }catch(e){
+    let result;
+    try{result=await service.execute(item.command);}
+    catch(e){
       if(stopped)return;
       const transient=['unavailable','deadline-exceeded','cancelled','network-request-failed'].some(x=>String(e.code||'').includes(x))||!online();
       error=(e.code?'['+e.code+'] ':'')+(e.message||'Firestore同期失敗');
@@ -58,6 +72,20 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
       if(!transient&&item.command.type==='expenseFromBank'&&/既存の支出候補/.test(error)&&!resolved(item))continue;
       break;
     }
+    if(stopped)return;
+    try{
+      if(item.command.type==='payment')await reload();
+      if(stopped)return;
+      // Keep the same operation in the outbox until removal is durable.
+      const next=queue.filter(x=>x!==item);
+      storage.setItem(queueKey,JSON.stringify(next));
+      queue=next;
+    }catch(e){
+      error='クラウドに保存済み。同期の再試行が必要です：'+e.message;
+      break;
+    }
+    error=queue.find(x=>x.blocked)?.error||null;
+    try{onCommitted(item.command,result);}catch(e){onFailure(item.command,'保存済み。画面を再読込してください：'+e.message);}
    }
   })().finally(()=>{running=null;if(!stopped)status();});status();return running;
  }
@@ -77,9 +105,13 @@ function createSync({client,storage,onData=()=>{},onStatus=()=>{},onCommitted=()
 async function migrateLegacy({client,storage,onStatus=()=>{}}){
  if(client.getState().role!=='admin')throw Error('移行は管理者のみ実行できます。');
  const service=domain.createService(client),backup=core.backupLegacy(storage);if(backup.errors.length)throw Error('旧データに読込エラーがあります。原本を修復・確認してから移行してください。');
- const sourceHash=await client.digest(core.canonical(backup.raw)),sourceId='v2_'+sourceHash.slice(0,48),backupKey='tsukinowa_cloud_backup_'+sourceId;
+ const raw=core.canonical(backup.raw),sourceHash=await client.digest(raw),sourceId='v2_'+sourceHash.slice(0,48),backupKey='tsukinowa_cloud_backup_'+sourceId;
  // A verified raw backup must be durable before any Firestore request is issued.
- const encoded=JSON.stringify(backup);if(!storage.getItem(backupKey))storage.setItem(backupKey,encoded);if(!storage.getItem(backupKey))throw Error('バックアップを保存できません。移行は開始していません。');
+ try{
+  if(storage.getItem(backupKey)===null)storage.setItem(backupKey,JSON.stringify(backup));
+  const saved=JSON.parse(storage.getItem(backupKey));
+  if(saved?.format!==backup.format||saved.schemaVersion!==backup.schemaVersion||core.canonical(saved.raw)!==raw)throw Error('Backup mismatch');
+ }catch(e){throw Error('バックアップを確認できません。移行は開始していません。',{cause:e});}
  const stateKey='tsukinowa_cloud_migration_'+client.getState().companyId+'_'+sourceId;
  storage.setItem(stateKey,JSON.stringify({migrationVersion:2,status:'running',backupKey}));onStatus('移行中（元データとバックアップを保持）');
  try{
@@ -113,5 +145,5 @@ async function migrateLegacy({client,storage,onStatus=()=>{}}){
   storage.setItem(stateKey,JSON.stringify({migrationVersion:2,status:'success',backupKey,count:records.length}));onStatus('移行成功（元データ・バックアップ保持）');return {sourceId,count:records.length,backupKey};
  }catch(e){try{storage.setItem(stateKey,JSON.stringify({migrationVersion:2,status:'failed',backupKey,error:e.message}));}catch(_){}onStatus('移行失敗：'+e.message+'（元データは保持されています）');throw e;}
 }
-return {createSync,migrateLegacy};
+return {purgeConfirmedSnapshots,createSync,migrateLegacy};
 });

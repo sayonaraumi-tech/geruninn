@@ -58,3 +58,42 @@ test('startup stays initializing until Firebase restores auth, then waits for tr
 test('disposing the app unsubscribes without signing out or changing persistence',async()=>{
  const h=await ready();let signouts=0;h.driver.signOut=async()=>signouts++;h.client.dispose();assert.equal(signouts,0);
 });
+
+test('disposing during initialization prevents late auth registration', async () => {
+ const h = harness();
+ let finish;
+ h.driver.initialize = () => new Promise(resolve => { finish = resolve; });
+ h.driver.observeAuth = () => assert.fail('disposed client registered an auth listener');
+ const start = h.client.start(config);
+ h.client.dispose();
+ finish();
+ await start;
+ assert.notEqual(h.client.getState().phase, 'ready');
+});
+
+test('an old observer cannot restore access after the client is restarted', async () => {
+ const h = harness();
+ let previous;
+ const observe = h.driver.observeAuth;
+ h.driver.observeAuth = (next, error) => {
+  previous ||= {next, error};
+  return observe(next, error);
+ };
+ await h.client.start(config);
+ await h.client.start(config);
+ await h.auth(user('staff'));
+ await previous.next(user('admin'));
+ previous.error(Error('stale disconnect'));
+ assert.equal(h.client.getState().phase, 'ready');
+ assert.equal(h.client.getState().role, 'staff');
+});
+
+test('an outstanding server read cannot deliver rows after an account change', async () => {
+ const h = await ready();
+ let finish;
+ h.driver.list = () => new Promise(resolve => { finish = resolve; });
+ const reading = h.client.listRecords('bankTransactions');
+ await h.auth(user('staff'));
+ finish([{id:'admin-only-row'}]);
+ await assert.rejects(reading, /ログイン状態/);
+});
