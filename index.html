@@ -3945,10 +3945,10 @@ function renderCalendarGrid(){
    if(on){try{const api=saleApi();if(!api)throw Error('売上登録を利用できません。');if(mode==='edit')await api.change(saved.id,'edit',sale,reason);else await api.register(saved.id,sale);}
     catch(e){d.dataset.id=saved.id;renderCalendarGrid();renderSale(saved.id);$('ddLeError').textContent='日程は保存しました。売上：'+e.message;return;}}
    d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
-  $('ddLeSaleOn').addEventListener('change',()=>{$('ddLeSaleFields').hidden=!$('ddLeSaleOn').checked;if($('ddLeSaleOn').checked&&!$('ddLsContent').value)$('ddLsContent').value=$('ddLeTitle').value;saleHint();});
+  $('ddLeSaleOn').addEventListener('change',()=>{$('ddLeSaleFields').hidden=!$('ddLeSaleOn').checked;followEventDate();if($('ddLeSaleOn').checked&&!$('ddLsContent').value)$('ddLsContent').value=$('ddLeTitle').value;saleHint();});
   $('ddLsMethod').addEventListener('change',saleHint);$('ddLsDate').addEventListener('input',()=>{$('ddLsDate').dataset.touched='1';});
-  $('ddLeDate').addEventListener('change',()=>{if(!$('ddLsDate').dataset.touched)$('ddLsDate').value=$('ddLeDate').value;});
-  $('ddLsEdit').addEventListener('click',()=>{const st=saleApi()?.state(d.dataset.id);if(!st?.sale)return;const x=st.sale;d.dataset.saleMode='edit';fillSale({salesDate:x.salesDate||x.saleDate,customer:x.customer,content:x.content,amount:x.amount,paymentMethod:x.paymentMethod});$('ddLeSaleFields').hidden=false;$('ddLeSaleAdmin').hidden=true;$('ddLeSaleStatus').textContent='修正内容を入力して「保存」を押してください（保存時に理由を確認します）。';});
+  for(const type of ['input','change'])$('ddLeDate').addEventListener(type,followEventDate);
+  $('ddLsEdit').addEventListener('click',()=>{const st=saleApi()?.state(d.dataset.id);if(!st?.sale)return;const x=st.sale;d.dataset.saleMode='edit';fillSale({touched:true,salesDate:x.salesDate||x.saleDate,customer:x.customer,content:x.content,amount:x.amount,paymentMethod:x.paymentMethod});$('ddLeSaleFields').hidden=false;$('ddLeSaleAdmin').hidden=true;$('ddLeSaleStatus').textContent='修正内容を入力して「保存」を押してください（保存時に理由を確認します）。';});
   $('ddLsVoid').addEventListener('click',async()=>{const id=d.dataset.id,b=$('ddLsVoid');if(!id||b.disabled)return;const reason=prompt('売上を取消する理由（必須）\n取消後も記録は「取消済み」として残ります。','');if(reason===null)return;b.disabled=true;try{$('ddLeError').textContent='';await saleApi().change(id,'cancel',null,reason);renderCalendarGrid();renderSale(id);}catch(e){$('ddLeError').textContent=e.message;}finally{b.disabled=false;}});
   $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(id&&saleApi()?.state(id).sale){$('ddLeError').textContent='この予定には売上が登録されています。先に売上を取消してください。';return;}if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   return d;}
@@ -3959,7 +3959,10 @@ function renderCalendarGrid(){
   d.showModal();}
  // 売上・入金 from a 本地予定: TsukinowaBusinessUI.calendarSale (cloud: registerCalendarSale / calendarSaleChange; local: same records in bizState).
  const saleApi=()=>window.TsukinowaBusinessUI?.calendarSale;
- function saleValues(){return {salesDate:$('ddLsDate').value,customer:$('ddLsCustomer').value,content:$('ddLsContent').value,amount:$('ddLsAmount').value,paymentMethod:$('ddLsMethod').value};}
+ // 売上日 is the event's date unless the user set it (or is editing a registered sale): it follows every date change
+ // and is taken from the event at save time, so a stale value can never be sent.
+ function followEventDate(){if(!$('ddLsDate').dataset.touched)$('ddLsDate').value=$('ddLeDate').value;}
+ function saleValues(){followEventDate();return {salesDate:$('ddLsDate').value,customer:$('ddLsCustomer').value,content:$('ddLsContent').value,amount:$('ddLsAmount').value,paymentMethod:$('ddLsMethod').value};}
  function fillSale(v){$('ddLsDate').value=v.salesDate||'';$('ddLsDate').dataset.touched=v.touched?'1':'';$('ddLsCustomer').value=v.customer||'';$('ddLsContent').value=v.content||'';$('ddLsAmount').value=v.amount||'';$('ddLsMethod').value=v.paymentMethod||'現金';saleHint();}
  function saleHint(){$('ddLsHint').textContent=$('ddLsMethod').value==='現金'?'現金：売上と入金（現金出納）を同時に登録します。':'銀行振込など：売上のみ登録します（未収）。入金は銀行明細の照合または入金登録で記録します。';}
  // The sale section follows the synced data: re-render it when the state changes while the dialog is open
