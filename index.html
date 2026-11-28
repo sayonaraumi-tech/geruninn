@@ -3111,8 +3111,8 @@ function bizOnDocumentConfirmed(state){
     if(sale&&amount>0){const receiptSourceId=state.historyId||('receipt_'+(state.invoiceNo||'')+'_'+(state.invoiceDate||''));let pay=bizState.payments.find(p=>p.sourceId===receiptSourceId);const payload={sourceId:receiptSourceId,saleId:sale.id,date:state.invoiceDate||todayISO(),amount,method:state.paymentMethod||'現金',memo:'領収書から登録',updatedAt:new Date().toISOString()};if(pay){Object.assign(pay,payload)}else{pay=Object.assign({id:bizId('pay'),createdAt:new Date().toISOString()},payload);bizState.payments.push(pay);bizAudit('入金登録',`${sale.customer} ${amount}円 ${state.paymentMethod||'現金'}`)}bizPersist();bizRefreshAll()}
   }
 }
-function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
-function bizOutstanding(s){return Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
+function bizPaid(s){return bizState.payments.filter(p=>p.saleId===s.id&&!p.deletedAt&&p.confirmation!=='pending-bank').reduce((a,p)=>a+(Number(p.amount)||0),0)}
+function bizOutstanding(s){return s.deletedAt?0:Math.max(0,(Number(s.amount)||0)-bizPaid(s))}
 function bizRefreshAll(){const m=bizNowMonth(),auto=bizAutoValue;['calendarMonth','salesMonth','expenseMonth'].forEach(id=>auto(id,m));['paymentDate','expDate'].forEach(id=>auto(id,todayISO()));const sd=document.getElementById('salesDate');if(sd&&!sd.value&&docType!=='estimate'&&!registrationSnapshotLocked)sd.value=todayISO();renderDashboard();renderSales();renderExpenses();renderBank();renderCalendarEvents();renderPaymentSaleOptions();fillSettings()}
 function renderSales(){window.TsukinowaAccountingUI?.renderSales?.()}
 function bizOnodaPaymentHint(){const id=document.getElementById('paymentSale').value;const sale=bizState.sales.find(s=>s.id===id);document.getElementById('onodaPaymentHint').hidden=sale?.docType!=='onoda';}

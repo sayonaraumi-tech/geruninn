@@ -21,7 +21,8 @@ function showGooglePending(){
 function receiptOptions(){const select=el('receiptSale');if(!select)return;const value=select.value;select.replaceChildren(new Option('関連付けなし（独立した領収書）',''));for(const s of bizState.sales)select.add(new Option(`${s.customer} / ${s.invoiceNo||s.documentId||s.id} / 未収 ${bizMoney(bizOutstanding(s))}`,s.id));select.value=value;el('cloudReceiptFields').hidden=!enabled||docType!=='receipt';}
 let calendarSaleSaving=false;
 const openCalendarDetail=root.openEventModal;
-function eventSale(){const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);if(!e)return null;return bizState.sales.find(s=>root.TsukinowaAccounting.live(s)&&(s.calendarEventId===e.id||e.googleEventId&&s.googleEventId===e.googleEventId||[e.saleId,e.cashSaleId,e.receiptSaleId].includes(s.id)||[e.documentId,e.linkedInvoiceId,e.linkedReceiptId].filter(Boolean).includes(s.documentId)));}
+function saleForEvent(id){const e=bizState.calendar.find(x=>x.id===id);if(!e)return null;return bizState.sales.find(s=>root.TsukinowaAccounting.live(s)&&(s.calendarEventId===e.id||e.googleEventId&&s.googleEventId===e.googleEventId||[e.saleId,e.cashSaleId,e.receiptSaleId].includes(s.id)||[e.documentId,e.linkedInvoiceId,e.linkedReceiptId].filter(Boolean).includes(s.documentId)))||null;}
+function eventSale(){return saleForEvent(bizCurrentCalendarId);}
 function calendarSaleEvent(){
  const e=bizState.calendar.find(x=>x.id===bizCurrentCalendarId);
  return e&&!bizCalendarReviewReason(e,bizCalendarDocumentStates())?e:null;
@@ -276,7 +277,57 @@ function invoiceBalance(id){
  const anchor=doc.payload.saleId||doc.payload.receivableId||'sale_'+id;const sale=bizState.sales.find(s=>s.id===anchor||s.documentId===id)||(rows.receivables||[]).find(r=>r.id===anchor)?.payload;
  return root.TsukinowaOutstanding.view({...doc,payload:{...doc.payload,amount:doc.payload.amount??sale?.amount??root.TsukinowaBusiness.total(doc.payload.snapshot),documentId:doc.payload.documentId||id,docType:doc.payload.docType||doc.payload.snapshot.docType}},sale,rows.payments||[]);
 }
-root.TsukinowaBusinessUI={registerPayment,invoiceBalance,patchPending,googleError(message,id){googleErrors.set(id,message);if(lastStatus.state==='error')return;el('coreSyncStatus').textContent=(bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+message;el('cloudRealtime').textContent=message;},
+// 日程から売上・入金を登録（請求書・領収書なし）. Cloud reuses registerCalendarSale / calendarSaleChange (admin only).
+// Local mode writes the same IDs and fields into bizState: sale calendar_cash_<eventId>; 現金 adds its payment pay_<saleId>
+// (cash-received), other methods leave the sale 未収 for 入金登録. Cancel keeps the records as voided (deletedAt).
+const CAL_METHODS=['銀行振込','現金','プラットフォーム経由','その他'];
+function calendarSaleInput(v){const A=root.TsukinowaAccounting,amount=A.money(v.amount),date=A.date(v.salesDate),customer=String(v.customer||'').trim()||'現金客',content=String(v.content||'').trim(),method=v.paymentMethod,memo=String(v.memo||'');
+ if(!content||!(amount>0)||!CAL_METHODS.includes(method))throw Error('内容・金額・入金経路を確認してください。');if(customer.length>200||content.length>200||memo.length>1000)throw Error('入力が長すぎます。');return {amount,date,customer,content,method,memo};}
+function calendarSaleState(eventId){
+ const e=bizState.calendar.find(x=>x.id===eventId&&!x.deletedAt),sale=e?saleForEvent(eventId):null,admin=!enabled||client?.getState().role==='admin';
+ const own=!!sale&&sale.id==='calendar_cash_'+eventId&&['calendar-cash','calendar-manual'].includes(sale.sourceType)&&!sale.documentId;
+ const attached=!!sale&&bizState.payments.some(p=>p.saleId===sale.id&&!p.deletedAt&&(p.id!=='pay_'+sale.id||p.bankTxnId||p.bankId));
+ return {event:e||null,sale,paid:sale?bizPaid(sale):0,outstanding:sale?bizOutstanding(sale):0,admin,cloud:enabled,
+  cancelled:!sale&&!!e?.cancelledSaleId,canRegister:(eventId?!!e:true)&&!sale&&!e?.cancelledSaleId&&admin&&!(enabled&&client?.getState().phase!=='ready'),canChange:own&&admin&&!attached,attached};
+}
+async function cloudCalendarCommand(cmd){
+ if(!sync||client?.getState().phase!=='ready')throw Error('クラウドにログインしてから登録してください。');
+ const op=command(cmd);if(!op)throw Error('保存できません。');await sync.flush();const pending=sync.getQueue().find(x=>x.command.operationId===op);
+ if(pending)throw Error(pending.error||'未同期です。オンラインで同期完了を確認してください。');await sync.reload();
+}
+async function registerCalendarSaleFor(eventId,value){
+ // Cloud: the command re-checks the event, admin role and existing sales inside the transaction (the listener may lag the save).
+ const st=calendarSaleState(eventId);if(!st.admin)throw Error('売上登録は管理者のみです。');if(st.sale)return {saleId:st.sale.id,registered:true};
+ if(!enabled&&!st.event)throw Error('日程が見つかりません。');const v=calendarSaleInput(value);
+ if(enabled){await cloudCalendarCommand({type:'registerCalendarSale',id:eventId,sale:{salesDate:v.date,customer:v.customer,content:v.content,amount:v.amount,paymentMethod:v.method,memo:v.memo}});return {saleId:'calendar_cash_'+eventId,registered:true};}
+ const id='calendar_cash_'+eventId,payId='pay_'+id,cash=v.method==='現金',at=new Date().toISOString(),e=st.event;
+ if(bizState.sales.some(s=>s.id===id))throw Error('過去の売上記録があります。管理者が確認してください。');
+ bizState.sales.unshift({id,sourceType:cash?'calendar-cash':'calendar-manual',sourceId:eventId,documentId:'',documentStatus:'active',docType:'manual',invoiceNo:'',customer:v.customer,content:v.content,amount:v.amount,salesDate:v.date,saleDate:v.date,invoiceDate:'',paymentMethod:v.method,calendarEventId:eventId,googleEventId:e.googleEventId||'',manualConfirmed:true,memo:v.memo,paymentIds:cash?[payId]:[],paymentVersion:0,createdAt:at});
+ if(cash)bizState.payments.push({id:payId,paymentId:payId,saleId:id,sourceType:'calendar-cash',sourceId:eventId,documentId:'',amount:v.amount,paymentDate:v.date,date:v.date,method:'現金',confirmation:'cash-received',memo:v.memo||'日程から売上登録',createdAt:at});
+ Object.assign(e,{saleId:id,...(cash?{cashSaleId:id}:{}),manualSaleConfirmed:true});
+ bizAudit('日程から売上登録',`${v.customer} ${v.amount}円 ${v.method}`);bizPersist();bizRefreshAll();return {saleId:id,registered:true};
+}
+async function changeCalendarSaleFor(eventId,action,value,reasonText){
+ const st=calendarSaleState(eventId),reason=String(reasonText||'').trim();
+ if(!st.admin)throw Error('日程から登録した売上の修正・取消は管理者のみです。');if(!st.sale)throw Error('日程から登録した売上が見つかりません。');
+ if(!st.canChange)throw Error(st.attached?'入金登録・銀行照合済みの入金があります。先に入金を確認してください。':'帳票に紐づく売上は保存帳票から訂正してください。');
+ if(!['edit','cancel'].includes(action))throw Error('操作を指定してください。');if(!reason)throw Error('修正・取消の理由を入力してください。');
+ const v=action==='edit'?calendarSaleInput(value):null;
+ if(enabled){await cloudCalendarCommand({type:'calendarSaleChange',id:eventId,action,reason,...(v?{sale:{salesDate:v.date,customer:v.customer,content:v.content,amount:v.amount,paymentMethod:v.method,memo:v.memo}}:{})});return {saleId:st.sale.id,[action==='edit'?'edited':'cancelled']:true};}
+ const sale=st.sale,payId='pay_'+sale.id,own=bizState.payments.find(p=>p.id===payId&&!p.deletedAt),at=new Date().toISOString(),e=st.event;
+ if(action==='cancel'){
+  Object.assign(sale,{deletedAt:at,documentStatus:'cancelled',deleteReason:'日程売上を取消／'+reason});if(own)Object.assign(own,{deletedAt:at,deleteReason:'日程売上を取消／'+reason});
+  Object.assign(e,{saleId:'',cashSaleId:'',manualSaleConfirmed:false,cancelledSaleId:sale.id});bizAudit('日程売上を取消',`${sale.customer} ${sale.amount}円 ${reason}`);
+ }else{
+  const cash=v.method==='現金';
+  Object.assign(sale,{sourceType:cash?'calendar-cash':'calendar-manual',customer:v.customer,content:v.content,amount:v.amount,salesDate:v.date,saleDate:v.date,paymentMethod:v.method,memo:v.memo,paymentIds:own||cash?[payId]:[],paymentVersion:(sale.paymentVersion||0)+1,editedAt:at,editReason:reason});
+  if(cash){const p=bizState.payments.find(x=>x.id===payId),next={id:payId,paymentId:payId,saleId:sale.id,sourceType:'calendar-cash',sourceId:eventId,documentId:'',amount:v.amount,paymentDate:v.date,date:v.date,method:'現金',confirmation:'cash-received',memo:v.memo||'日程から売上登録',deletedAt:null};if(p)Object.assign(p,next);else bizState.payments.push({...next,createdAt:at});}
+  else if(own)Object.assign(own,{deletedAt:at,deleteReason:'入金経路を'+v.method+'に修正／'+reason});
+  Object.assign(e,{saleId:sale.id,cashSaleId:cash?sale.id:'',manualSaleConfirmed:true});bizAudit('日程売上を修正',`${v.customer} ${v.amount}円 ${v.method} ${reason}`);
+ }
+ bizPersist();bizRefreshAll();return {saleId:sale.id,[action==='edit'?'edited':'cancelled']:true};
+}
+root.TsukinowaBusinessUI={registerPayment,calendarSale:{state:calendarSaleState,register:registerCalendarSaleFor,change:changeCalendarSaleFor},invoiceBalance,patchPending,googleError(message,id){googleErrors.set(id,message);if(lastStatus.state==='error')return;el('coreSyncStatus').textContent=(bizGoogleNeedToken()?'Google未接続・システム保存済':'Google反映待ち')+'：'+message;el('cloudRealtime').textContent=message;},
  configure(value){const changed=enabled!==value;enabled=value;if(enabled){if(changed)clearView();el('coreSyncStatus').textContent='ログイン待ち';}else el('coreSyncStatus').textContent='端末内保存';},
  auth(state,instance){client=instance;const next=state.phase==='ready'?`${state.projectId}/${state.companyId}/${state.user.uid}/${state.role}`:'';
   // The core removes listeners on every token refresh, so rebuild once per auth-ready transition.
