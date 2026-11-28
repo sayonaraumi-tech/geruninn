@@ -72,6 +72,19 @@ test('calendar manual sales are admin-only, cash mirrors atomically and bank sta
  }
  assert.equal((await admin.listRecords('sales')).length,2);assert.equal((await admin.listRecords('cashLedger')).length,1);assert.equal((await admin.listRecords('documents')).length,2);
 });
+test('日程売上 from a 本地 event: admin edit/cancel under real rules, staff denied, cash ledger follows',async()=>{
+ const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
+ const {id}=await exec(a,{type:'calendarLocal',action:'save',event:{date:'2026-12-03',title:'試験 現地作業'}}),v={salesDate:'2026-12-03',customer:'試験客',content:'穴補修',amount:11000,paymentMethod:'現金'};
+ await exec(a,{type:'registerCalendarSale',id,sale:v});
+ await assert.rejects(exec(s,{type:'calendarSaleChange',id,action:'cancel',reason:'x'}),/管理者/);
+ await exec(a,{type:'calendarSaleChange',id,action:'edit',reason:'金額訂正',sale:{...v,amount:13200}});
+ const live=async n=>(await admin.listRecords(n)).filter(r=>!r.payload.deletedAt);
+ assert.deepEqual((await live('sales')).map(r=>r.payload.amount),[13200]);assert.deepEqual((await live('payments')).map(r=>r.payload.amount),[13200]);assert.deepEqual((await live('cashLedger')).map(r=>r.payload.amount),[13200]);
+ await exec(a,{type:'calendarSaleChange',id,action:'edit',reason:'振込に訂正',sale:{...v,amount:13200,paymentMethod:'銀行振込'}});
+ assert.equal((await live('payments')).length,0);assert.equal((await live('cashLedger')).length,0);assert.equal((await live('sales'))[0].payload.paymentMethod,'銀行振込');
+ await exec(a,{type:'calendarSaleChange',id,action:'cancel',reason:'取消試験'});
+ assert.equal((await live('sales')).length,0);assert.equal((await admin.listRecords('sales')).length,1);
+});
 test('platform channel and optional detail persist under unchanged admin/staff payment rules',async()=>{
  const admin=await clientFor('admin'),staff=await clientFor('staff'),a=createService(admin),s=createService(staff);
  await exec(s,{type:'saveDocument',snapshot:snapshot('platform-rules'),expectedRevision:0});
@@ -104,6 +117,14 @@ test('two devices: estimate/acceptance, invoice/download idempotency, partial pa
   const audits=await getDocs(collection(db('admin'),`companies/${company}/auditLogs`));assert(audits.docs.some(d=>d.data().action==='status change'&&d.data().before?.status==='見積済'&&d.data().after.status==='受注'));
   for(const d of audits.docs.slice(0,1)){await assertFails(deleteDoc(d.ref));await assertFails(updateDoc(d.ref,{action:'forged'}));}
  }finally{phone.stop();desktop.stop();admin.dispose();staff.dispose();}
+});
+test('本地日程 save/edit/delete passes the deployed rules for staff and admin without accounting writes',async()=>{
+ for(const role of ['staff','admin']){const client=await clientFor(role),service=createService(client);try{
+  const id='cal_local_rules_'+role,event={id,date:'2026-12-03',start:'2026-12-03',end:'2026-12-04',title:'本地 '+role};
+  await exec(service,{type:'calendarLocal',action:'save',event});await exec(service,{type:'calendarLocal',action:'save',event:{...event,title:'本地 変更'}});await exec(service,{type:'calendarLocal',action:'delete',event:{id}});
+  const row=(await getDoc(ref(db('admin'),'calendarLinks',id))).data().payload;assert.equal(row.source,'local');assert.equal(row.title,'本地 変更');assert.ok(row.deletedAt);
+  assert.equal((await getDocs(collection(db('admin'),`companies/${company}/sales`))).size,0);assert.equal((await getDocs(collection(db('admin'),`companies/${company}/payments`))).size,0);
+ }finally{client.dispose();}}
 });
 test('migration twice preserves local originals and existing cloud records, marker prevents duplicates',async()=>{
  const client=await clientFor('admin'),local=storage(),legacy={audit:[{id:'old-audit',action:'旧操作',user:'local',at:'2026-08-10'}],sales:[{id:'old-sale',sourceId:'old-doc',customer:'旧顧客',amount:100000,saleDate:'2026-08-01',invoiceDate:'2026-08-10'}],payments:[{id:'old-pay',saleId:'old-sale',amount:50000,date:'2026-08-15',method:'現金'}]};
