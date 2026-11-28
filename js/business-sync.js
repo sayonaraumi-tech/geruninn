@@ -26,7 +26,8 @@ function createSync({client,storage,snapshotStorage=storage,onData=()=>{},onStat
   return item;});
  if(JSON.stringify(repaired)!==JSON.stringify(queue)){storage.setItem(queueKey,JSON.stringify(repaired));queue=repaired;}
  for(const name of collections){const raw=snapshotStorage.getItem(prefix+name);rows[name]=raw?JSON.parse(raw):[];}
- function status(){onStatus({state:error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced',error,pending:queue.length,ready:serverSeen.size===collections.length});}
+ // 'synced' is only reported with the data it describes: a coalesced delivery still waiting is handed over first.
+ function status(){const state=error?'error':!online()?'offline':queue.length||serverSeen.size<collections.length?'syncing':'synced';if(state==='synced'&&dataTimer&&!stopped)deliver();onStatus({state,error,pending:queue.length,ready:serverSeen.size===collections.length});}
  function saveQueue(){storage.setItem(queueKey,JSON.stringify(queue));}
  // Listener snapshots arrive per collection and again for metadata-only changes (cache → server).
  // Unchanged rows are not re-delivered, and changes arriving together are delivered once (one UI render).
