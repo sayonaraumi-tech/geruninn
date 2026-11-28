@@ -4,6 +4,8 @@ for(const m of html.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/g))new vm.Scri
 assert(!html.includes('clean_reset_done'));assert(!html.includes('rows.slice(0, 500)'));assert(!html.includes('bizEscape('));
 for(const name of fs.readdirSync(path.join(root,'js')))if(name.endsWith('.js'))new vm.Script(fs.readFileSync(path.join(root,'js',name),'utf8'));
 const manifest=JSON.parse(fs.readFileSync(path.join(root,'manifest.webmanifest')));for(const icon of manifest.icons)assert(fs.existsSync(path.join(root,icon.src)));
+// Versioned third-party scripts are pinned with Subresource Integrity (the Google Identity script is versionless and cannot be).
+for(const tag of html.match(/<script[^>]+src="https:\/\/[^"]+"[^>]*>/g)||[])if(!tag.includes('accounts.google.com/gsi/client'))assert.match(tag,/integrity="sha(384|512)-[A-Za-z0-9+\/=]+" crossorigin="anonymous"/,tag);
 const handlers={},deleted=[],added=[],writes=[],data=new Map();let skipped=false,claimed=false;
 const cache={addAll:async r=>added.push(...r),put:async(k,v)=>{writes.push(k);data.set(k,v);},match:async k=>data.get(k)};
 const scope='https://example.com/geruninn/';let online=true;
