@@ -1,4 +1,5 @@
 // Real browser UI and real Firestore emulator. Only Authentication and PDF rendering are test adapters.
+const openSavedActions=require('./saved-actions.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
 const root=path.join(__dirname,'..');
@@ -61,11 +62,11 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await page.evaluate(()=>{document.getElementById('salesMonth').value='2026-09';document.getElementById('receivableAsOf').value='2026-10-01';renderSales();});
  assert.equal(await page.locator('#salesRows tr').count(),1);assert.equal(await page.evaluate(()=>TsukinowaAccountingUI.exportRows('salesRegister').find(r=>r[0]==='2026-09-20')[6]),'0');
  await page.evaluate(()=>bizSwitchPage('savedDocs'));
- for(const id of ['active','replacement','september'])assert.equal(await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).getByRole('button',{name:'履歴から削除',exact:true}).count(),0);
+ for(const id of ['active','replacement','september']){const row=page.locator(`#allSavedDocsList [data-document-id="${id}"]`);await openSavedActions(row);assert(await row.getByRole('button').count()>0,id);assert.equal(await row.getByRole('button',{name:'履歴から削除',exact:true}).count(),0);}
  await page.screenshot({path:path.join(root,'../cleanup-before-'+width+'.png')});
  const before=await env.withSecurityRulesDisabled(async c=>{const {getDocs,collection}=require('firebase/firestore');const out={};for(const n of ['sales','payments','bankTransactions','calendarLinks'])out[n]=(await getDocs(collection(c.firestore(),'companies/tsukinowa/'+n))).docs.map(d=>({id:d.id,...d.data()}));return out;});
  for(const id of ['old','void','duplicate','cancelled']){
-  await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).getByRole('button',{name:'履歴から削除',exact:true}).click();await page.waitForFunction(id=>!loadConfirmedHistory().some(d=>d.documentId===id),id);
+  await openSavedActions(page.locator(`#allSavedDocsList [data-document-id="${id}"]`));await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).getByRole('button',{name:'履歴から削除',exact:true}).click();await page.waitForFunction(id=>!loadConfirmedHistory().some(d=>d.documentId===id),id);
   assert.equal(await page.locator(`#allSavedDocsList [data-document-id="${id}"]`).count(),0);
  }
  await page.evaluate(()=>{setDocType('invoice');renderConfirmedHistory();});assert.equal(await page.locator('#confirmedHistoryList').getByRole('button',{name:'履歴から削除',exact:true}).count(),0);

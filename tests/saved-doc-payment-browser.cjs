@@ -1,4 +1,5 @@
 // 保存帳票 → 入金登録 / 領収書: 売上・入金 and ホーム update at once (no reload, no second reconciliation) and no duplicate payment. Real Firestore emulator; only Authentication is a test adapter.
+const openSavedActions=require('./saved-actions.cjs');
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
 const root=path.join(__dirname,'..');
@@ -29,7 +30,7 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await page.evaluate(()=>{bizSwitchPage('dashboard');homePeriodMode.value='month';homeMonth.value='2026-11';renderDashboard();bizSwitchPage('savedDocs');});
  const before=await state();assert.equal(before.payments,'0');assert.equal(before.receivable,'110,000');
  // 1) The 入金登録 button on a saved invoice reuses the existing payment form and registerPayment(); a double click registers once.
- await page.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).click();
+ await openSavedActions(page.locator('#allSavedDocsList'));await page.locator('#allSavedDocsList').getByRole('button',{name:'入金登録',exact:true}).click();
  await page.locator('#paymentDate').fill('2026-11-28');await page.locator('#paymentAmount').fill('40000');await page.locator('#paymentType').selectOption('銀行振込');
  await page.locator('#paymentSubmit').dblclick();
  await page.waitForFunction(()=>kpiPayments.textContent==='40,000');

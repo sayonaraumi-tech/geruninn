@@ -78,26 +78,47 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     await page.evaluate(()=>{const c=document.getElementById('customerName');c.value='';c.dispatchEvent(new Event('input',{bubbles:true}));});
     // 見積履歴 filters: client-side over the existing rows.
     await page.evaluate(()=>{bizSwitchPage('estimates');estimateShowIssued.checked=true;renderEstimates();});
-    const estRows=()=>page.locator('#estimateRows tr:not([hidden])').count();assert.equal(await estRows(),2);
+    const estRows=()=>page.locator('#estimateList tr[data-estimate-row]').count();assert.equal(await estRows(),2);
     await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('2026');assert.equal(await estRows(),1);assert.match(await page.locator('#ddEstimateFilters').innerText(),/表示 1 件 ／ 見積書 2 件/);
-    await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('all');await page.locator('#ddEstimateFilters select[data-ddf="state"]').selectOption('受注');assert.equal(await estRows(),1);assert.match(await page.locator('#estimateRows tr:not([hidden])').innerText(),/佐藤様/);
+    await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('all');await page.locator('#ddEstimateFilters select[data-ddf="state"]').selectOption('受注');assert.equal(await estRows(),1);assert.match(await page.locator('#estimateList tr[data-estimate-row]').innerText(),/佐藤様/);
     await page.locator('#ddEstimateFilters select[data-ddf="month"]').selectOption('11');assert.equal(await estRows(),0);
+    assert.match(await page.locator('#estimateGroups .dd-empty').innerText(),/該当する見積書はありません/);
     await page.locator('#ddEstimateFilters [data-ddf-reset]').click();assert.equal(await estRows(),2);
+    // 霧藍 design structure: one filter panel holding the selects, the search and the count; month panels with a title bar.
+    assert.equal(await page.locator('#ddEstimateFilters #estimateSearch').isVisible(),true);assert.equal(await page.locator('#ddEstimateFilters select[data-ddf]').count(),3);
+    for(const t of await page.locator('#estimateGroups .dd-month-group>h3').evaluateAll(hs=>hs.map(h=>h.textContent)))assert.match(t,/^\d{4}年\d{1,2}月 \d+件$/);
+    assert.deepEqual(await page.locator('#estimateGroups thead').first().locator('th').allInnerTexts(),['見積日 ▼','顧客','項目分類 / 内容摘要','金額','状態','日程','操作']);
+    assert.equal(await page.locator('#pageEstimates>.biz-section .biz-table-wrap').first().isVisible(),false,'the mobile table is not shown on desktop');
     // 保存帳票 filters.
-    await page.evaluate(()=>bizSwitchPage('savedDocs'));const savedRows=()=>page.locator('#allSavedDocsList>div:not([hidden])').count();assert.equal(await savedRows(),2);
-    await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('receipt');assert.equal(await savedRows(),1);assert.match(await page.locator('#allSavedDocsList>div:not([hidden])').innerText(),/佐藤様/);
+    await page.evaluate(()=>bizSwitchPage('savedDocs'));const savedRows=()=>page.locator('#allSavedDocsList [data-saved-row]').count();assert.equal(await savedRows(),2);
+    await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('receipt');assert.equal(await savedRows(),1);assert.match(await page.locator('#allSavedDocsList [data-saved-row]').innerText(),/佐藤様/);
     await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('all');await page.locator('#ddSavedFilters select[data-ddf="fy"]').selectOption('2026');assert.equal(await savedRows(),1);
     await page.locator('#ddSavedFilters [data-ddf-reset]').click();assert.equal(await savedRows(),2);
+    // 霧藍 design: month panels, 状態 badge, row actions in the 操作▾ menu (closed until clicked, one open at a time).
+    assert.equal(await page.locator('#ddSavedFilters #savedDocSearch').isVisible(),true);
+    assert.match(await page.locator('#allSavedDocsList .dd-month-group>h3').first().textContent(),/^\d{4}年\d{1,2}月　\d+件$/);
+    assert.deepEqual(await page.locator('#allSavedDocsList thead').first().locator('th').allInnerTexts(),['発行日','書類','取引先','番号','金額','状態','操作']);
+    assert.deepEqual(await page.locator('#allSavedDocsList [data-saved-row] .biz-badge').allInnerTexts(),['発行済・ロック','発行済・ロック']);
+    assert.equal(await page.locator('#allSavedDocsList').getByRole('button',{name:'開く',exact:true}).count(),0);
+    const menus=page.locator('#allSavedDocsList details.action-menu>summary');assert.deepEqual(await menus.allInnerTexts(),['操作 ▾','操作 ▾']);
+    await menus.first().click();assert.equal(await page.locator('#allSavedDocsList').getByRole('button',{name:'開く',exact:true}).count(),1);assert.equal(await page.locator('#allSavedDocsList').getByRole('button',{name:'再ダウンロード',exact:true}).count(),1);
+    await menus.nth(1).click();assert.equal(await page.locator('#allSavedDocsList details.action-menu[open]').count(),1);
+    await page.locator('#ddSavedFilters').click({position:{x:5,y:5}});assert.equal(await page.locator('#allSavedDocsList details.action-menu[open]').count(),0);
     // 売上・入金: one manual-sale entry point and metric cards from the rendered register.
     await page.evaluate(()=>bizSwitchPage('sales'));
     assert.equal(await page.locator('#pageSales .biz-title button',{hasText:'手動売上'}).isVisible(),false);assert.equal(await page.locator('#pageSales .biz-title button:visible',{hasText:'売上登録'}).count(),1);
     assert.deepEqual(await page.locator('#ddSalesMetrics [data-dd-metric]').allInnerTexts(),['54,800','0','54,800']);
     // 支出・現金: metric cards and the CSV button opens the existing 支出CSV取込 file input.
+    // panel title bar: 46px, 13px padding, border-bottom (design .panel h3)
+    const titleBar=await page.locator('#paymentRegistrationForm>.biz-section-head').evaluate(h=>{const c=getComputedStyle(h);return [Math.round(h.getBoundingClientRect().height),c.paddingLeft,c.borderBottomWidth,c.fontSize];});
+    assert.deepEqual(titleBar,[46,'13px','1px','13px']);
     await page.evaluate(()=>bizSwitchPage('expenses'));assert.deepEqual(await page.locator('#ddExpenseMetrics [data-dd-metric]').evaluateAll(xs=>xs.map(x=>x.dataset.ddMetric+'='+x.innerText)),['cash=0','card=24,200','advance=0']);
+    assert(await page.evaluate(()=>{const top=e=>e.getBoundingClientRect().top;return top(document.querySelector('#pageExpenses .expense-ledger'))<top(document.getElementById('expDate'));}),'支出一覧 comes right after the KPI cards');
     const [chooser]=await Promise.all([page.waitForEvent('filechooser'),page.locator('#pageExpenses .biz-title button',{hasText:'CSVインポート'}).click()]);assert.equal(await chooser.element().evaluate(e=>e.id),'expenseFile');
     // 銀行照合: counts and 月別未照合明細 from the existing bank rows.
     await page.evaluate(()=>bizSwitchPage('bank'));assert.deepEqual(await page.locator('#ddBankMetrics [data-dd-metric]').allInnerTexts(),['2 件','1 件','1 件']);
     assert.match(await page.locator('#ddBankMonthly').innerText(),/2026-11　1 件[\s\S]*ヤマダ サマ/);assert.doesNotMatch(await page.locator('#ddBankMonthly').innerText(),/カード引落/);
+    assert(await page.evaluate(()=>{const a=document.querySelector('#pageBank .bank-transactions').getBoundingClientRect(),b=document.getElementById('ddBankMonthly').getBoundingClientRect();return Math.abs(a.top-b.top)<1&&a.right<b.left;}),'銀行取引 | 月別未照合明細 side by side');
     await page.locator('#ddBankMonthly [data-dd-bank="b1"]').click();
     // 設定: design heading and read-only company info from the 帳票 template.
     await page.evaluate(()=>bizSwitchPage('settings'));assert.deepEqual(await page.getByRole('heading',{level:1}).evaluateAll(xs=>xs.filter(x=>x.getClientRects().length).map(x=>x.innerText)),['設定']);

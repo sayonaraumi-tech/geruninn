@@ -259,24 +259,34 @@ function archiveDocument(h){
 }
 function renderDocuments(boxId,kind){
  const box=el(boxId);if(!box)return;box.replaceChildren();const q=(el('savedDocSearch')?.value||'').toLowerCase();
+ // desktop 保存帳票 (霧藍 design) shows the same actions in month-grouped rows with an 操作▾ menu; 帳票 history and mobile keep the cards
+ const lists=!kind&&root.TsukinowaDesktopLists?.active()?root.TsukinowaDesktopLists:null,items=[];
  history.forEach((h,i)=>{if(kind&&h.docType!==kind||!kind&&q&&![h.customerName,h.invoiceNo,h.documentId].join(' ').toLowerCase().includes(q))return;
-  const row=document.createElement('div');row.className='biz-card';row.dataset.documentId=h.documentId;row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
-  const label=document.createElement('strong');label.textContent=`${documentLabels[h.documentStatus]} ｜ ${docTypeLabel(h.docType)} ｜ ${h.customerName||''}`;if(h.documentStatus!=='active')label.style.color='#a23';row.append(label);
-  const detail=document.createElement('p');detail.textContent=`${h.sourceType==='historicalPdfImport'?'過去PDF ｜ ':''}No.${h.invoiceNo||''} ｜ ${h.invoiceDate||''} ｜ ID: ${h.documentId}`+(h.statusReason?' ｜ 理由: '+h.statusReason:'')+(h.revisedFromDocumentId?' ｜ 訂正元: '+h.revisedFromDocumentId:'')+(h.duplicateOfDocumentId?' ｜ 原帳票: '+h.duplicateOfDocumentId:'')+(h.revisedToDocumentId?' ｜ 訂正版: '+h.revisedToDocumentId:'');row.append(detail);
-  const add=(text,fn)=>{const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=text;b.onclick=fn;row.append(b);};
+  // parts keep the card order: actions and the balance summary
+  const parts=[],add=(text,fn)=>parts.push({text,run:fn});
+  const label=`${documentLabels[h.documentStatus]} ｜ ${docTypeLabel(h.docType)} ｜ ${h.customerName||''}`;
+  const detail=`${h.sourceType==='historicalPdfImport'?'過去PDF ｜ ':''}No.${h.invoiceNo||''} ｜ ${h.invoiceDate||''} ｜ ID: ${h.documentId}`+(h.statusReason?' ｜ 理由: '+h.statusReason:'')+(h.revisedFromDocumentId?' ｜ 訂正元: '+h.revisedFromDocumentId:'')+(h.duplicateOfDocumentId?' ｜ 原帳票: '+h.duplicateOfDocumentId:'')+(h.revisedToDocumentId?' ｜ 訂正版: '+h.revisedToDocumentId:'');
   if(h.sourceType==='historicalPdfImport'){add('取込原本情報',()=>root.TsukinowaHistoricalUI.showSource(rows.documents.find(r=>r.id===h.documentId).payload));}else{add('開く',()=>openSavedDoc(i));add('再ダウンロード',()=>redownloadSavedDoc(i));}
   if(h.documentStatus!=='active'&&client?.getState().role==='admin'&&root.TsukinowaBusiness.canDeleteMisregistration(rows.documents.find(r=>r.id===h.documentId)?.payload||{}))add('誤登録を削除',()=>deleteMisregistration(h));
   if(client?.getState().role==='admin'&&['void','duplicate','revised','cancelled'].includes(h.documentStatus))add('履歴から削除',()=>archiveDocument(h));
   if(client?.getState().role==='admin'&&h.documentStatus==='active'){if(h.sourceType!=='historicalPdfImport')add('訂正版を作成',()=>manageDocument(i,'revision'));add('無効にする',()=>manageDocument(i,'void'));add('重複として無効',()=>manageDocument(i,'duplicate'));}
+  let summary='',amount=null;
   if(['invoice','onoda'].includes(h.docType)){
-   const v=invoiceBalance(h.documentId);
-   const summary=document.createElement('p');summary.textContent=`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`;row.append(summary);
+   const v=invoiceBalance(h.documentId);amount=v.invoiceAmount;
+   summary=`請求額 ${bizMoney(v.invoiceAmount)} ｜ 累計入金額 ${bizMoney(v.paidAmount)} ｜ 未入金残高 ${bizMoney(v.outstandingAmount)} ｜ 入金状態 ${v.paymentStatus}`;parts.push({summary});
    if(v.active&&v.outstandingAmount>0&&client?.getState().role==='admin')add('入金登録',()=>root.openInvoiceBalance(h.documentId,'payment'));
    add('入金履歴',()=>root.openInvoiceBalance(h.documentId));
    if(v.active&&v.outstandingAmount>0)add('未入金残高請求書',()=>root.openInvoiceBalance(h.documentId,'pdf'));
-  }
+  }else if(typeof root.bizCalcDocumentTotal==='function'){amount=h.docType==='receipt'?(Number(h.receiptTotal)||0):root.bizCalcDocumentTotal(h);}
+  if(lists){items.push({date:h.invoiceDate,kind:h.docType,status:h.documentStatus,row:lists.savedRow({id:h.documentId,date:h.invoiceDate,kind:(h.sourceType==='historicalPdfImport'?'過去PDF ':'')+docTypeLabel(h.docType),customer:h.customerName||'',number:h.invoiceNo,amount,status:h.documentStatus,info:[detail.replace(/^過去PDF ｜ /,''),summary],actions:parts.filter(x=>x.text)})});return;}
+  const row=document.createElement('div');row.className='biz-card';row.dataset.documentId=h.documentId;row.dataset.savedRow='';row.style.cssText='padding:12px;margin-bottom:8px;border:1px solid #ddd';
+  const strong=document.createElement('strong');strong.textContent=label;if(h.documentStatus!=='active')strong.style.color='#a23';row.append(strong);
+  const p=document.createElement('p');p.textContent=detail;row.append(p);
+  for(const x of parts){if(x.summary){const s=document.createElement('p');s.textContent=x.summary;row.append(s);continue;}const b=document.createElement('button');b.type='button';b.className='biz-btn';b.textContent=x.text;b.onclick=x.run;row.append(b);}
   box.append(row);
- });if(!box.childNodes.length)box.textContent='保存済み帳票はありません。';
+ });
+ if(lists)return lists.render('saved',items);
+ if(!box.childNodes.length)box.textContent='保存済み帳票はありません。';
 }
 root.renderAllSavedDocs=function(){if(!enabled)return original.renderAllSavedDocs();renderDocuments('allSavedDocsList');};
 root.renderConfirmedHistory=function(){if(!enabled)return original.renderConfirmedHistory();renderDocuments('confirmedHistoryList',docType);};

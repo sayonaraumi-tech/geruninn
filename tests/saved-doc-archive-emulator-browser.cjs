@@ -1,4 +1,5 @@
 // 保存帳票: 無効 → 履歴から削除 (admin, cloud), real browser UI + real Firestore emulator + repo firestore.rules.
+const openSavedActions=require('./saved-actions.cjs');
 // Also counts full re-renders of the saved-document list per operation (metadata-only snapshots must not re-render).
 const {chromium}=require('playwright'),assert=require('node:assert/strict'),fs=require('node:fs'),http=require('node:http'),path=require('node:path');
 const {initializeTestEnvironment}=require('@firebase/rules-unit-testing');
@@ -28,17 +29,17 @@ const server=http.createServer((req,res)=>{const pathname=new URL(req.url,'http:
  await p.evaluate(()=>{bizSwitchPage('chohyo');setDocType('invoice');document.getElementById('customerName').value='test';document.getElementById('invoiceDate').value='2026-11-28';document.getElementById('salesDate').value='2026-11-28';items=[{content:'試験',qty:1,unit:'式',price:6400,taxable:true}];recalc();saveConfirmedHistory();});
  await p.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0&&loadConfirmedHistory().length===1,null,{timeout:15000});
  await p.evaluate(()=>bizSwitchPage('savedDocs'));
- const card=()=>p.locator('#allSavedDocsList .biz-card').first();
- answers.push('てst');await card().getByRole('button',{name:'無効にする'}).click();
- await p.waitForFunction(()=>/無効/.test(document.querySelector('#allSavedDocsList .biz-card strong')?.textContent||''),null,{timeout:15000});
+ const card=()=>p.locator('#allSavedDocsList [data-saved-row]').first();
+ answers.push('てst');await openSavedActions(card());await card().getByRole('button',{name:'無効にする'}).click();
+ await p.waitForFunction(()=>/無効/.test(document.querySelector('#allSavedDocsList [data-saved-row] :is(strong,.biz-badge)')?.textContent||''),null,{timeout:15000});
  await p.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue().length===0,null,{timeout:15000});
  await p.waitForTimeout(500);
  // A refused 日程 command (as in production) must not hold 履歴から削除.
  await p.evaluate(()=>TsukinowaBusinessUI.enqueue({type:'calendarSaleChange',id:'cal_missing',action:'cancel',reason:'x'}));
  await p.waitForFunction(()=>TsukinowaBusinessUI.getSync().getQueue()[0]?.blocked,null,{timeout:10000});
  await p.evaluate(()=>{window.savedRenders=0;const f=window.renderAllSavedDocs;window.renderAllSavedDocs=function(){window.savedRenders++;return f.apply(this,arguments);};});
- await card().getByRole('button',{name:'履歴から削除'}).click();
- await p.waitForFunction(()=>!document.querySelector('#allSavedDocsList .biz-card'),null,{timeout:15000}).catch(async()=>{throw Error('archive held: '+JSON.stringify(await queue()));});
+ await openSavedActions(card());await card().getByRole('button',{name:'履歴から削除'}).click();
+ await p.waitForFunction(()=>!document.querySelector('#allSavedDocsList [data-saved-row]'),null,{timeout:15000}).catch(async()=>{throw Error('archive held: '+JSON.stringify(await queue()));});
  await p.waitForTimeout(1500);
  const renders=await p.evaluate(()=>window.savedRenders);console.log('saved-doc list renders for one 履歴から削除:',renders);
  assert.ok(renders<=2,'saved-doc list re-rendered '+renders+' times for one operation');

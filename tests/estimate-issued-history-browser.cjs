@@ -6,9 +6,9 @@ module.exports=async(page)=>{
  const before=await page.evaluate(()=>JSON.stringify([...testRecords]));
  await page.evaluate(()=>{bizSwitchPage('estimates');renderEstimates();});
  const customer=await page.evaluate(id=>bizState.estimates.find(e=>e.id===id).customer,id);
- assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),0);
+ assert.equal(await page.locator('#estimateList').getByText(customer,{exact:true}).count(),0);
  await page.locator('#estimateShowIssued').check();
- const row=page.locator('#estimateRows tr').filter({hasText:customer});
+ const row=page.locator('#estimateList tr[data-estimate-row]').filter({hasText:customer});
  assert.match(await row.innerText(),/請求書発行済/);
  assert.equal(await row.getByRole('button',{name:'請求書へ',exact:true}).count(),0);
  assert.equal(await row.getByRole('button',{name:'入金',exact:true}).count(),0);
@@ -19,7 +19,7 @@ module.exports=async(page)=>{
   await TsukinowaBusinessUI.getSync().reload();
  },id);
  await page.evaluate(()=>{bizSwitchPage('estimates');document.getElementById('estimateShowIssued').checked=false;renderEstimates();});
- assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),0);
+ assert.equal(await page.locator('#estimateList').getByText(customer,{exact:true}).count(),0);
  assert.equal(await page.evaluate(()=>JSON.stringify([...testRecords])),before,'history browsing, hydration and stale commands cannot mutate accounting');
  for(const stage of ['partial','paid']){
   await page.evaluate(async({id,stage})=>{
@@ -27,7 +27,7 @@ module.exports=async(page)=>{
    await testService.execute({type:'payment',operationId:crypto.randomUUID(),paymentId:crypto.randomUUID(),saleId:sale.id,amount,paymentDate:'2026-10-21',method:'銀行振込',manualConfirmed:true});
    await TsukinowaBusinessUI.getSync().reload();renderEstimates();
   },{id,stage});
-  assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),0,stage);
+  assert.equal(await page.locator('#estimateList').getByText(customer,{exact:true}).count(),0,stage);
  }
  // Same customer/amount/calendar with missing or different estimate identity
  // must stay visible even while the original is paid in full.
@@ -39,9 +39,9 @@ module.exports=async(page)=>{
   }
   await TsukinowaBusinessUI.getSync().reload();renderEstimates();
  },id);
- assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),2);
+ assert.equal(await page.locator('#estimateList').getByText(customer,{exact:true}).count(),2);
  await page.locator('#estimateShowIssued').check();
- assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),3);
+ assert.equal(await page.locator('#estimateList').getByText(customer,{exact:true}).count(),3);
  await page.locator('#estimateShowIssued').uncheck();
  await page.evaluate(async id=>{
   const sale=bizState.sales.find(s=>s.estimateId===id);
@@ -53,6 +53,6 @@ module.exports=async(page)=>{
  },id);
  assert.equal(await page.evaluate(id=>bizState.sales.some(s=>s.estimateId===id),id),false);
  assert.equal(await page.evaluate(id=>bizEstimateInvoices(id).length,id),1);
- assert.equal(await page.locator('#estimateRows').getByText(customer,{exact:true}).count(),2);
+ assert.equal(await page.locator('#estimateList').getByText(customer,{exact:true}).count(),2);
  console.log('PASS issued estimate history: unpaid/partial/paid, equal-amount jobs, missing references, original read-only, stale actions, reload and cancelled legacy sale identity');
 };

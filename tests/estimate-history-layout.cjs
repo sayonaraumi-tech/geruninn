@@ -10,19 +10,19 @@ module.exports=async(page)=>{
    bizState.estimates.push({...bizState.estimates[2],id:'newer',displayCreatedAt:{seconds:1793674800,nanoseconds:2}}, {...bizState.estimates[2],id:'older',displayCreatedAt:{seconds:1793674800,nanoseconds:1}});
    renderEstimates();
   });
-  const dates=()=>page.locator('#estimateRows tr td:first-child').allTextContents();
+  const dates=()=>page.locator('#estimateList tr[data-estimate-row] td:first-child').allTextContents();
   assert.deepEqual(await dates(),['2026-11-03','2026-11-03','2026-11-03','2026-10-26','2026-10-14','2026-10-09','2026-10-06','2026-10-03']);
-  assert.match(await page.locator('#estimateRows tr').first().innerHTML(),/newer/);
-  assert.match(await page.locator('#estimateRows tr').nth(1).innerHTML(),/older/);
-  const metrics=await page.locator('#estimateRows tr').evaluateAll(rows=>rows.map(row=>{
+  assert.match(await page.locator('#estimateList tr[data-estimate-row]').first().innerHTML(),/newer/);
+  assert.match(await page.locator('#estimateList tr[data-estimate-row]').nth(1).innerHTML(),/older/);
+  const metrics=await page.locator('#estimateList tr[data-estimate-row]').evaluateAll(rows=>rows.map(row=>{
    const cells=[...row.cells],buttons=[...row.querySelectorAll('button')],tops=buttons.map(b=>b.getBoundingClientRect().top);
    return {tops,buttons:buttons.length,nowrap:[0,3,4,5,6].every(i=>getComputedStyle(cells[i]).whiteSpace==='nowrap'),font:getComputedStyle(cells[0]).fontSize,fit:buttons.every(b=>b.scrollWidth<=b.clientWidth),height:row.getBoundingClientRect().height};
   }));
   for(const m of metrics){assert.equal(m.buttons,3);assert.equal(new Set(m.tops).size,1);assert(m.nowrap);assert(m.fit);assert.equal(m.font,width>800?'12px':'13px');/* desktop: 霧藍 design table 12px */assert(m.height<90);}
   assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-  if(width===1920)assert(await page.locator('#pageEstimates .biz-table-wrap').evaluate(e=>e.scrollWidth<=e.clientWidth));
+  if(width===1920)assert(await page.locator('#pageEstimates .biz-table-wrap:visible').evaluateAll(ws=>ws.length>0&&ws.every(e=>e.scrollWidth<=e.clientWidth)));
   if(width===390)assert(await page.locator('#pageEstimates .biz-table-wrap').evaluate(e=>e.scrollWidth>e.clientWidth));
-  await page.locator('#estimateSearch').fill('株式会社');assert.equal((await dates())[0],'2026-11-03');assert.match(await page.locator('#estimateRows tr').first().innerHTML(),/newer/);
+  await page.locator('#estimateSearch').fill('株式会社');assert.equal((await dates())[0],'2026-11-03');assert.match(await page.locator('#estimateList tr[data-estimate-row]').first().innerHTML(),/newer/);
   await page.getByRole('button',{name:'見積日'}).click();assert.equal((await dates())[0],'2026-10-03');assert.equal(await page.locator('#estimateDateHeader').getAttribute('aria-sort'),'ascending');
   await page.getByRole('button',{name:'見積日'}).click();assert.equal((await dates())[0],'2026-11-03');
   if(process.env.PREVIEW_DIR)await page.screenshot({path:require('node:path').join(process.env.PREVIEW_DIR,'estimate-history-'+width+'.png'),fullPage:true});
