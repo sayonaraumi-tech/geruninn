@@ -1219,6 +1219,11 @@ body.dd .dd-form input:not([type=checkbox]),body.dd .dd-form textarea{font:inher
 body.dd .dd-error{color:#bb3f3f;font-size:12px;min-height:16px;margin:8px 0 0}
 body.dd .dd-dialog-actions{display:flex;gap:8px;align-items:center;margin-top:10px}
 body.dd .dd-dialog-actions span{flex:1}
+/* home: 売上・入金 CSV basis (read-only) */
+body.dd #ddHomeRegister{margin-top:13px}
+body.dd #ddHomeRegister .dd-reg-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+body.dd #ddHomeRegister .biz-card h3{font-size:11px}
+body.dd #ddHomeRegister .biz-card:after{content:none}
 /* 旧データ notes in 売上 (desktop only; mobile unchanged) */
 body.dd small.register-note.dd-only{display:block!important}
 }
@@ -3927,7 +3932,7 @@ function renderHomeAnalytics(){
   cache.clear();const fy=currentFY(),m=+bizNowMonth().slice(5);
   ui.compareFY??=fy;ui.balanceFY??=fy;ui.compareMonth??=m;ui.balanceMonth??=m;
   box.innerHTML='<section class="dd-panel"><h3>売上・支出推移比較</h3>'+comparison()+'</section><section class="dd-panel"><h3>月次収支比較</h3>'+balance()+'</section>';
-  renderRecentSales();
+  renderRecentSales();renderHomeRegister();
  }
  // ---------- Calendar month grid (same rows as the existing list) ----------
  let calDay=null;
@@ -3977,6 +3982,14 @@ function renderRecentSales(){
  let rows=[];try{const U=U_(),A=A_();if(U?.salesRegister)rows=U.salesRegister(A.periodFilter({year:currentFY()}),todayISO(),true).slice(0,5);}catch{}
  box.innerHTML='<section class="dd-panel"><h3>最近の売上<button type="button" class="biz-btn" data-dd-go="sales">売上・入金へ</button></h3><div class="biz-table-wrap"><table class="biz-table"><thead><tr><th>売上日</th><th>取引先</th><th>工事内容</th><th class="biz-money">金額</th><th class="biz-money">入金済</th><th>状態</th></tr></thead><tbody>'
  +(rows.map(r=>'<tr><td>'+esc(r.salesDate)+'</td><td>'+esc(r.customer)+'</td><td>'+esc(r.content)+'</td><td class="biz-money">'+esc(bizMoney(r.amount))+'</td><td class="biz-money">'+esc(bizMoney(r.paid))+'</td><td><span class="register-status'+(r.status==='入金済'?' paid':'')+'">'+esc(r.status)+'</span></td></tr>').join('')||'<tr><td colspan="6" class="biz-muted">今年度の売上はまだありません。</td></tr>')+'</tbody></table></div></section>';
+}
+// ---------- Home: the 売上・入金 CSV basis next to the existing KPIs (read-only, no KPI is changed) ----------
+function renderHomeRegister(){
+ const box=$('ddHomeRegister'),U=U_();if(!box||!desktop()||!U?.registerBasis||!U.homePeriod)return;
+ let p,b,asOf=$('receivableAsOf')?.value||todayISO();try{p=U.homePeriod();b=U.registerBasis(p,asOf);}catch{box.innerHTML='';return;}
+ box.innerHTML='<section class="dd-panel"><h3>売上・入金CSVと同じ基準<button type="button" class="biz-btn" data-dd-go="sales">売上・入金へ</button></h3><div class="dd-pad"><div class="dd-reg-cards">'
+ +metricCards([['売上（売上日が期間内・'+b.count+'件）',bizMoney(b.sales),'reg-sales'],['入金済（入金基準日 '+asOf+' まで）',bizMoney(b.paid),'reg-paid'],['未収（この期間の売上の残り）',bizMoney(b.outstanding),'reg-outstanding']])
+ +'</div><p class="compare-note" data-dd-reg-note>上段の「入金」は期間内の入金日の合計、「未収金」は期間末時点のすべての未収です（集計方法は変更していません）。差の内訳：期間後の入金（この期間の売上分） ＋'+esc(bizMoney(b.laterPaid))+' ／ 他期間の売上・売上リンクなしへの期間内入金 −'+esc(bizMoney(b.otherPeriodPaid))+'</p></div></section>';
 }
 // ---------- 売上・入金: metric cards from the rendered register ----------
 function renderSalesMetrics(){
@@ -4068,6 +4081,7 @@ function showDesktopPreview(){
   const sync=$('bizSyncState');if(sync)sync.before(crumb,themes);else top.append(crumb,themes);
   // Home
   addHeaderActions('pageDashboard',[button('＋ 予定登録','',()=>{bizSwitchPage('calendar');openLocalEvent('');}),button('売上登録','',()=>{bizSwitchPage('sales');if(typeof openManualSale==='function')openManualSale();}),button('支出登録','',()=>{bizSwitchPage('expenses');scrollToEl('expDate')();}),button('＋ 帳票作成','primary',go('chohyo'))]);
+  const kpis=document.querySelector('#pageDashboard>.home-secondary');if(kpis){const r=ensure('ddHomeRegister','',x=>kpis.after(x));r.addEventListener('click',e=>{const g=e.target.closest('[data-dd-go]');if(g)bizSwitchPage(g.dataset.ddGo);});}
   const note=document.querySelector('#pageDashboard>p.biz-muted');
   if(note){const a=document.createElement('div');a.id='ddHomeAnalytics';a.className='dd-only';note.after(a);
    a.addEventListener('change',e=>{const k=e.target.dataset?.dd;if(!k)return;ui[k]=/^(compareMetric|compareMode)$/.test(k)?e.target.value:+e.target.value;renderHomeAnalytics();});

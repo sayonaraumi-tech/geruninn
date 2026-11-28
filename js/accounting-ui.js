@@ -229,7 +229,12 @@ root.renderDashboard=function(){if(!el('homeMonth'))return;const now=bizNowMonth
  el('homeBreakdown').innerHTML=table(['内訳','金額'],[...Object.entries(m.categories).filter(([,v])=>v).map(([k,v])=>['支出 / '+(!k||k==='undefined'?'内容要確認':k),v]),...m.incomeChannels.map(c=>['入金経路 / '+c.channel+(c.platformName?' / '+c.platformName:''),c.amount])].map(([k,v])=>'<tr>'+cell(k)+cell(money(v))+'</tr>').join(''));root.renderYearEnd?.();};
 root.TsukinowaAccountingUI.homePeriod=homePeriod;root.TsukinowaAccountingUI.homeData=homeData;
 // Read-only accessors for the desktop design views: same register calculation and the last rendered register.
-root.TsukinowaAccountingUI.salesRegister=(period,asOf,descending=false)=>A.salesRegister(registerData(),period,asOf,descending);root.TsukinowaAccountingUI.salesRegisterView=()=>registerView;
+root.TsukinowaAccountingUI.salesRegister=(period,asOf,descending=false)=>A.salesRegister(registerData(),period,asOf,descending);
+// Read-only: the 売上・入金 CSV basis for a period (same salesRegister rows) and how it differs from the home KPIs.
+// laterPaid = confirmed payments after the period end (up to asOf) for sales in the period (CSV counts, home 入金 does not);
+// otherPeriodPaid = confirmed payments dated in the period for sales outside it or without a sale (home counts, CSV does not).
+root.TsukinowaAccountingUI.registerBasis=(period,asOf)=>{const d=registerData(),rows=A.salesRegister(d,period,asOf),ids=new Set(rows.map(s=>s.id)),total=(rs,k)=>rs.reduce((n,r)=>n+(Number(r[k])||0),0),day=p=>p.paymentDate||p.date||'',ps=A.unique(d.payments||[]).filter(p=>A.confirmed(p)&&Number(p.amount)>0);
+ return {count:rows.length,sales:total(rows,'amount'),paid:total(rows,'paid'),outstanding:total(rows,'outstanding'),laterPaid:total(ps.filter(p=>ids.has(p.saleId)&&day(p)>period.end&&day(p)<=asOf),'amount'),otherPeriodPaid:total(ps.filter(p=>!ids.has(p.saleId)&&period.includes(day(p))),'amount')};};root.TsukinowaAccountingUI.salesRegisterView=()=>registerView;
 // Read-only visibility for old records that the CSV exports list but the totals do not count:
 // unconfirmed payments (e.g. migrated 銀行振込 without a bank match), a 入金日 written only on the
 // saved document, and confirmed invoices that have no sale. Nothing here changes any amount.
