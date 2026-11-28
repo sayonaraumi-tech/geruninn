@@ -1075,7 +1075,10 @@ body.dd .biz-btn.ok{color:var(--dd-acc);border-color:color-mix(in srgb,var(--dd-
 body.dd .biz-btn.danger{color:#bb3f3f}
 body.dd .biz-field label,body.dd .sales-filters label{color:var(--dd-mut)}
 body.dd .biz-field input,body.dd .biz-field select,body.dd .biz-field textarea,body.dd .biz-section input:not([type=checkbox]):not([type=radio]):not([type=file]),body.dd .biz-section select{background:var(--dd-panel);color:var(--dd-fg);border:1px solid var(--dd-line);border-radius:6px}
+body.dd :is(.app-page,dialog,#bizEventModal) :is(input,select,textarea):not([type=checkbox]):not([type=radio]){background:var(--dd-panel);color:var(--dd-fg);border-color:var(--dd-line);border-radius:6px}
+body.dd[data-dd-theme="dark"] :is(.app-page,dialog,#bizEventModal) :is(input,select){color-scheme:dark}
 body.dd .sales-filters{background:var(--dd-bg)}
+body.dd .biz-inline-banner{background:var(--dd-panel);border-color:var(--dd-line);color:var(--dd-fg)}
 body.dd .biz-badge{border-radius:4px;font-weight:700;font-size:10px}
 body.dd .biz-alert{border-radius:6px;background:var(--dd-selected);border-color:var(--dd-line);color:var(--dd-fg)}
 body.dd dialog{background:var(--dd-panel);color:var(--dd-fg)}
