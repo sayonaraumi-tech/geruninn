@@ -3393,7 +3393,9 @@ function bizGoogleMergeEvent(x){
   if(i<0){bizState.calendar.push(x);return 'added';}
   const old=bizState.calendar[i];
   // Keep the local ID so existing invoice/project references continue to resolve.
-  const merged={...old,...x,id:old.id,...(old.source==='local'?{source:'local'}:{})};
+  // A 本地 event pushed to Google is owned by this system: only Google metadata is refreshed (same rule as the cloud command).
+  if(old.source==='local'){bizState.calendar[i]={...old,googleEventId:old.googleEventId||x.googleEventId,googleCalendarId:old.googleCalendarId||x.googleCalendarId||'',updated:x.updated||old.updated||'',htmlLink:x.htmlLink||old.htmlLink||'',googleLatestTitle:x.title||'',googleStatus:x.googleStatus||'confirmed'};return 'updated';}
+  const merged={...old,...x,id:old.id};
   if(bizHasFormalData(old)){
     for(const key of ['title','originalTitle','description','customerName','officialAmount','paymentMethod','projectCategory','area'])merged[key]=old[key]??x[key];
     merged.googleLatestTitle=x.title;
@@ -3726,6 +3728,8 @@ function bizCalendarVisibleRows(documents=bizCalendarDocumentStates()){
 function bizCalendarSource(e){return e?.source==='local'?'local':e?.googleEventId?'google':'ics';}
 function bizCalendarSourceLabel(e){return {local:'本地',google:'Google',ics:'取込'}[bizCalendarSource(e)];}
 function bizNewGoogleEventId(){return 'tl'+Array.from(crypto.getRandomValues(new Uint8Array(15)),b=>(b%32).toString(32)).join('');}
+// HH:MM in Japan time for a stored start/end (cloud-core stores date-times as UTC ISO strings).
+function bizJstTime(v){const t=String(v||'');if(t.length<=10)return '';const d=new Date(t);return Number.isFinite(d.getTime())?d.toLocaleTimeString('sv-SE',{timeZone:'Asia/Tokyo',hour:'2-digit',minute:'2-digit'}):'';}
 function bizNextDate(d){const x=new Date(d+'T00:00:00Z');x.setUTCDate(x.getUTCDate()+1);return x.toISOString().slice(0,10);}
 function bizLocalEventFields(input){
   const date=TsukinowaAccounting.date(input.date),title=String(input.title||'').trim();if(!title)throw Error('タイトルを入力してください。');
@@ -3760,7 +3764,7 @@ async function bizDeleteLocalEvent(id){
 function bizLocalCopyOf(id){return bizState.calendar.find(x=>!x.deletedAt&&x.source==='local'&&x.copyOf===id);}
 async function bizCopyGoogleEventsToLocal(ids){
   let n=0;for(const id of ids){const g=bizState.calendar.find(x=>x.id===id);if(!g||g.deletedAt||bizCalendarSource(g)==='local'||bizLocalCopyOf(id))continue;
-    const time=v=>String(v||'').length>10?String(v).slice(11,16):'';await bizSaveLocalEvent({date:g.date,title:g.title,startTime:time(g.start),endTime:time(g.end),description:g.description||'',location:g.location||'',copyOf:g.id});n++;}
+    await bizSaveLocalEvent({date:g.date,title:g.title,startTime:bizJstTime(g.start),endTime:bizJstTime(g.end),description:g.description||'',location:g.location||'',copyOf:g.id});n++;}
   return n;
 }
 function renderCalendarEvents(){
@@ -3918,7 +3922,7 @@ function renderHomeAnalytics(){
   $('ddLeSave').addEventListener('click',async()=>{try{$('ddLeError').textContent='';const saved=await bizSaveLocalEvent({id:d.dataset.id||'',date:$('ddLeDate').value,startTime:$('ddLeStart').value,endTime:$('ddLeEnd').value,title:$('ddLeTitle').value,location:$('ddLeLocation').value,description:$('ddLeMemo').value,pushToGoogle:$('ddLePush').checked});calDay=saved.date;d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   return d;}
- function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=v=>String(v||'').length>10?String(v).slice(11,16):'';d.dataset.id=e?.id||'';
+ function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=bizJstTime;d.dataset.id=e?.id||'';
   $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';
   d.showModal();}
  async function copyToLocal(ids){if(!ids.length)return;if(!confirm(ids.length+'件のGoogle日程を本地日程としてコピーします。\n元のGoogle日程の記録は変更しません。コピー後はコピーした本地日程を表示します。'))return;try{const n=await bizCopyGoogleEventsToLocal(ids);renderCalendarGrid();alert(n+'件を本地日程にコピーしました。');}catch(e){alert(e.message);}}
