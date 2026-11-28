@@ -39,7 +39,10 @@ test('push toggle marks a Google create; a later Google sync keeps the event 本
  row=list('calendarLinks')[0];assert.equal(row.googleEventId,'tlabc123def456','an assigned Google ID never changes');
  await exec({type:'calendarCreated',id:'cal_local_a',googleEventId:'tlabc123def456',calendarId:''});
  await exec({type:'calendar',event:{googleEventId:'tlabc123def456',googleCalendarId:'shared',date:'2026-12-03',start:event.start,end:event.end,title:'Google側で変更'}});
- row=list('calendarLinks')[0];assert.equal(list('calendarLinks').length,1);assert.equal(row.source,'local');assert.equal(row.title,'Google側で変更');
+ row=list('calendarLinks')[0];assert.equal(list('calendarLinks').length,1);assert.equal(row.source,'local');assert.equal(row.title,event.title,'Google sync never overwrites a 本地 event');assert.equal(row.googleLatestTitle,'Google側で変更');assert.equal(row.location,event.location);
+ await exec({type:'calendarLocal',action:'save',event:{...event,title:'本地で変更',pushToGoogle:true}});
+ await exec({type:'calendar',event:{googleEventId:'tlabc123def456',googleCalendarId:'shared',date:'2026-11-30',start:'2026-11-30',end:'2026-12-01',title:'古いGoogle側'}});
+ row=list('calendarLinks')[0];assert.deepEqual([row.title,row.date,Date.parse(row.start),row.googlePatchPending],['本地で変更','2026-12-03',Date.parse(event.start),true],'a pending 本地 edit survives a stale Google sync');
  const fresh=await harness();await fresh.exec({type:'calendarLocal',action:'save',event:{...event,pushToGoogle:true},googleEventId:'bad id!'});assert.equal(fresh.list('calendarLinks')[0].googleCreatePending,undefined);
 });
 test('invalid input is rejected before any write',async()=>{
@@ -47,5 +50,13 @@ test('invalid input is rejected before any write',async()=>{
  await assert.rejects(exec({type:'calendarLocal',action:'save',event:{...event,title:'  '}}),/タイトル/);
  await assert.rejects(exec({type:'calendarLocal',action:'save',event:{...event,date:'2026-13-40'}}));
  await assert.rejects(exec({type:'calendarLocal',action:'delete',event:{id:'missing'}}),/見つかりません/);
+ await assert.rejects(exec({type:'calendarLocal',action:'save',event:{...event,id:'../sales/x'}}),/日程IDが不正/);
+ await assert.rejects(exec({type:'calendarLocal',action:'save',event:{...event,title:'x'.repeat(201)}}),/長すぎます/);
+ await assert.rejects(exec({type:'calendarLocal',action:'save',event:{...event,description:'x'.repeat(4001)}}),/長すぎます/);
  assert.equal(list('calendarLinks').length,0);
+});
+test('markup in time fields is never stored; text fields are stored as plain text for escaped rendering',async()=>{
+ const {exec,list}=await harness();
+ await exec({type:'calendarLocal',action:'save',event:{...event,start:'<img src=x onerror=alert(1)>',end:'"><script>',title:'<b>佐藤様</b>'}});
+ const [row]=list('calendarLinks');assert.equal(row.start,event.date);assert.equal(row.end,'');assert.equal(row.title,'<b>佐藤様</b>');
 });
