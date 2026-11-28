@@ -4,7 +4,8 @@ const {chromium}=require('playwright');
 const root=path.resolve(__dirname,'..');
 const server=http.createServer((req,res)=>{try{const f=path.join(root,new URL(req.url,'http://x').pathname.replace(/^\/$/,'/index.html'));res.setHeader('Content-Type',f.endsWith('.js')?'text/javascript':f.endsWith('.html')?'text/html':'application/json');res.end(fs.readFileSync(f));}catch{res.statusCode=404;res.end();}});
 const routes=['dashboard','calendar','estimates','chohyo','savedDocs','sales','expenses','bank','settings'];
-const seed=()=>{localStorage.setItem('tsukinowa_business_v1',JSON.stringify({calendar:[{id:'c1',date:'2026-11-12',title:'山田様 クロス張替え',start:{date:'2026-11-12'},googleEventId:'c1'}],sales:[{id:'s1',saleDate:'2026-11-12',salesDate:'2026-11-12',amount:54800,customer:'山田様'}],payments:[],expenses:[{id:'x1',expenseDate:'2026-11-10',date:'2026-11-10',amount:24200,category:'材料仕入'}],bank:[],audit:[],estimates:[],projects:[]}));localStorage.setItem('tsukinowa_preserved','yes');};
+const seed=()=>{localStorage.setItem('tsukinowa_business_v1',JSON.stringify({calendar:[{id:'c1',date:'2026-11-12',title:'山田様 クロス張替え',start:{date:'2026-11-12'},googleEventId:'c1'}],sales:[{id:'s1',saleDate:'2026-11-12',salesDate:'2026-11-12',amount:54800,customer:'山田様'}],payments:[],expenses:[{id:'x1',expenseDate:'2026-11-10',date:'2026-11-10',amount:24200,category:'材料仕入'}],bank:[{id:'b1',key:'b1',date:'2026-11-05',desc:'ヤマダ サマ',incoming:54800,outgoing:0,matched:false},{id:'b2',key:'b2',date:'2026-10-30',desc:'カード引落',incoming:0,outgoing:24200,matched:true}],audit:[],estimates:[{id:'e1',date:'2026-11-03',customer:'田中様',amount:77000,status:'見積済',content:'クロス張替'},{id:'e2',date:'2025-09-20',customer:'佐藤様',amount:10000,status:'受注',content:'穴補修'}],projects:[]}));
+ localStorage.setItem('tsukinowa_chohyo_confirmed_history_v1',JSON.stringify([{historyId:'h1',docType:'invoice',customerName:'山田様',invoiceNo:'20261112-001',invoiceDate:'2026-11-12',items:[{content:'クロス張替',qty:1,price:49818}],travelFee:0,savedAt:'2026-11-12T03:00:00.000Z'},{historyId:'h2',docType:'receipt',customerName:'佐藤様',invoiceNo:'R-1',invoiceDate:'2025-10-01',receiptTotal:11000,savedAt:'2025-10-01T03:00:00.000Z'}]));localStorage.setItem('tsukinowa_preserved','yes');};
 // The theme key and the editor's existing last-tab/scroll UI keys are not business data.
 const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localStorage).filter(k=>k!=='tsukinowa_ui_theme'&&!/_v1_(lastTab|scrollY)$/.test(k)).sort().map(k=>[k,localStorage.getItem(k)])));
 (async()=>{
@@ -26,6 +27,9 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     assert.deepEqual(style,{pad:'0px',bar:'rgb(20, 20, 20)',nav:'static'},width+'px keeps the previous top navigation');
     await page.evaluate(()=>bizSwitchPage('chohyo'));assert.equal(await page.locator('#previewArea').isVisible(),false,'mobile preview stays behind the existing toggle');
     assert.equal(await page.locator('#confirmedHistoryCard').isVisible(),true,'mobile keeps the history card');
+    await page.evaluate(()=>bizSwitchPage('dashboard'));assert.equal(await page.locator('#pageDashboard h1').innerText(),'経営ダッシュボード','mobile keeps the previous heading');
+    await page.evaluate(()=>bizSwitchPage('settings'));assert.equal(await page.locator('#pageSettings h1').innerText(),'Google Calendar API 接続設定');
+    await page.evaluate(()=>bizSwitchPage('sales'));assert(await page.locator('#pageSales .biz-title button',{hasText:'手動売上'}).isVisible(),'mobile keeps its manual-sale button');
    }else{
     const nav=await page.locator('#bizNav').boundingBox(),bar=await page.locator('.biz-topbar').boundingBox();
     assert.equal(nav.x,0);assert.equal(Math.round(nav.width),205);assert.equal(Math.round(bar.x),205,'top header starts after the sidebar');
@@ -45,6 +49,12 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     await page.locator('#ddHomeAnalytics select[data-dd="compareMode"]').selectOption('years');assert.equal(await page.locator('#ddHomeAnalytics .compare-slot').count(),3);
     await page.locator('#ddHomeAnalytics select[data-dd="compareMetric"]').selectOption('expenses');assert.match(await page.locator('#ddHomeAnalytics .compare-foot').innerText(),/支出/);
     assert.match(await page.locator('#ddHomeAnalytics .balance-stats').innerText(),/24,200/);
+    // 月次収支比較: the primary figure is the existing 収支差額 KPI; 売上 − 支出 is a labelled reference.
+    await page.evaluate(()=>{homePeriodMode.value='month';homeMonth.value='2026-11';renderDashboard();});
+    assert.equal(await page.locator('#ddHomeAnalytics [data-dd-balance="difference"]').innerText(),(await page.locator('#kpiDifference').innerText())+' 円','primary = 確認済み入金 − 支出');
+    assert.equal(await page.locator('#ddHomeAnalytics [data-dd-balance="reference"]').innerText(),'30,600 円');assert.match(await page.locator('#ddHomeAnalytics .balance-primary').innerText(),/参考：売上 − 支出（未回収を含む）/);
+    assert.match(await page.locator('#ddRecentSales').innerText(),/山田様[\s\S]*54,800/,'recent sales from the existing register');
+    assert.deepEqual(await page.getByRole('heading',{level:1}).evaluateAll(xs=>xs.filter(x=>x.getClientRects().length).map(x=>x.innerText)),['ホーム'],'design page heading in markup');
     // Calendar grid shows the same rows as the list and opens the existing event dialog.
     await page.evaluate(()=>bizSwitchPage('calendar'));
     assert.equal(await page.locator('#ddCalendar [data-dd-day]').count(),30);
@@ -54,8 +64,7 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     await page.locator('#pageCalendar .biz-title button',{hasText:'翌月'}).click();assert.equal(await page.locator('#calendarMonth').inputValue(),'2026-12');assert.equal(await page.locator('#ddCalendar [data-dd-day]').count(),31);
     // 帳票: live preview beside the form, the document itself keeps its A4 width.
     await page.evaluate(()=>bizSwitchPage('chohyo'));
-    assert.equal(await page.locator('#previewArea').isVisible(),false,'preview keeps the existing toggle');assert(await page.locator('#ddPreviewPlaceholder').isVisible());
-    await page.locator('#ddPreviewPlaceholder button').click();assert(await page.locator('#previewArea').isVisible());assert.equal(await page.locator('#ddPreviewPlaceholder').isVisible(),false);
+    assert(await page.locator('#previewArea').isVisible(),'desktop preview is always visible on 帳票');assert.equal(await page.locator('#ddPreviewPlaceholder').isVisible(),false);assert.equal(await page.locator('#pageChohyo .btn-preview').isVisible(),false,'no preview toggle on desktop');
     const form=await page.locator('#pageChohyo .editor-card').first().boundingBox(),preview=await page.locator('#previewArea').boundingBox();assert(preview.x>form.x+form.width,'preview is to the right of the form');
     assert.equal(await page.locator('#previewArea .invoice').evaluate(e=>e.offsetWidth),Math.round(210*96/25.4),'invoice layout width stays 210mm');
     // The PDF export clones .invoice into an off-screen 210mm stage (doPrint); the design CSS must not reach that clone.
@@ -63,11 +72,40 @@ const businessStorage=page=>page.evaluate(()=>JSON.stringify(Object.keys(localSt
     const withDesign=await exportStyle();await page.evaluate(()=>document.body.classList.remove('dd'));const withoutDesign=await exportStyle();await page.evaluate(()=>document.body.classList.add('dd'));
     assert.equal(withDesign,withoutDesign,'PDF export clone is identical with and without the desktop design');
     await page.locator('#ddChohyoHead button',{hasText:'保存帳票へ'}).click();assert.equal(await page.locator('#bizNav button.active').getAttribute('data-page'),'savedDocs');
-    await page.evaluate(()=>bizSwitchPage('chohyo'));assert.equal(await page.locator('#previewArea').isVisible(),false,'preview resets after navigation');
+    assert.equal(await page.locator('#previewArea').evaluate(x=>x.classList.contains('show')),false,'leaving 帳票 still clears the preview');
+    await page.evaluate(()=>{bizSwitchPage('chohyo');const c=document.getElementById('customerName');c.value='再表示テスト';c.dispatchEvent(new Event('input',{bubbles:true}));});
+    assert(await page.locator('#previewArea').isVisible());assert.equal(await page.locator('#dCustomer').innerText(),'再表示テスト','re-opened preview shows the current form');
+    await page.evaluate(()=>{const c=document.getElementById('customerName');c.value='';c.dispatchEvent(new Event('input',{bubbles:true}));});
+    // 見積履歴 filters: client-side over the existing rows.
+    await page.evaluate(()=>{bizSwitchPage('estimates');estimateShowIssued.checked=true;renderEstimates();});
+    const estRows=()=>page.locator('#estimateRows tr:not([hidden])').count();assert.equal(await estRows(),2);
+    await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('2026');assert.equal(await estRows(),1);assert.match(await page.locator('#ddEstimateFilters').innerText(),/表示 1 件 ／ 見積書 2 件/);
+    await page.locator('#ddEstimateFilters select[data-ddf="fy"]').selectOption('all');await page.locator('#ddEstimateFilters select[data-ddf="state"]').selectOption('受注');assert.equal(await estRows(),1);assert.match(await page.locator('#estimateRows tr:not([hidden])').innerText(),/佐藤様/);
+    await page.locator('#ddEstimateFilters select[data-ddf="month"]').selectOption('11');assert.equal(await estRows(),0);
+    await page.locator('#ddEstimateFilters [data-ddf-reset]').click();assert.equal(await estRows(),2);
+    // 保存帳票 filters.
+    await page.evaluate(()=>bizSwitchPage('savedDocs'));const savedRows=()=>page.locator('#allSavedDocsList>div:not([hidden])').count();assert.equal(await savedRows(),2);
+    await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('receipt');assert.equal(await savedRows(),1);assert.match(await page.locator('#allSavedDocsList>div:not([hidden])').innerText(),/佐藤様/);
+    await page.locator('#ddSavedFilters select[data-ddf="kind"]').selectOption('all');await page.locator('#ddSavedFilters select[data-ddf="fy"]').selectOption('2026');assert.equal(await savedRows(),1);
+    await page.locator('#ddSavedFilters [data-ddf-reset]').click();assert.equal(await savedRows(),2);
+    // 売上・入金: one manual-sale entry point and metric cards from the rendered register.
+    await page.evaluate(()=>bizSwitchPage('sales'));
+    assert.equal(await page.locator('#pageSales .biz-title button',{hasText:'手動売上'}).isVisible(),false);assert.equal(await page.locator('#pageSales .biz-title button:visible',{hasText:'売上登録'}).count(),1);
+    assert.deepEqual(await page.locator('#ddSalesMetrics [data-dd-metric]').allInnerTexts(),['54,800','0','54,800']);
+    // 支出・現金: metric cards and the CSV button opens the existing 支出CSV取込 file input.
+    await page.evaluate(()=>bizSwitchPage('expenses'));assert.equal(await page.locator('#ddExpenseMetrics [data-dd-metric="total"]').innerText(),'24,200');
+    const [chooser]=await Promise.all([page.waitForEvent('filechooser'),page.locator('#pageExpenses .biz-title button',{hasText:'CSVインポート'}).click()]);assert.equal(await chooser.element().evaluate(e=>e.id),'expenseFile');
+    // 銀行照合: counts and 月別未照合明細 from the existing bank rows.
+    await page.evaluate(()=>bizSwitchPage('bank'));assert.deepEqual(await page.locator('#ddBankMetrics [data-dd-metric]').allInnerTexts(),['2 件','1 件','1 件']);
+    assert.match(await page.locator('#ddBankMonthly').innerText(),/2026-11　1 件[\s\S]*ヤマダ サマ/);assert.doesNotMatch(await page.locator('#ddBankMonthly').innerText(),/カード引落/);
+    await page.locator('#ddBankMonthly [data-dd-bank="b1"]').click();
+    // 設定: design heading and read-only company info from the 帳票 template.
+    await page.evaluate(()=>bizSwitchPage('settings'));assert.deepEqual(await page.getByRole('heading',{level:1}).evaluateAll(xs=>xs.filter(x=>x.getClientRects().length).map(x=>x.innerText)),['設定']);
+    const info=await page.locator('#ddCompanyInfo').innerText();for(const v of ['月輪合同会社','T7040003023888','10月1日〜翌年9月30日','読み取り専用'])assert(info.includes(v),v);assert.equal(await page.locator('#ddCompanyInfo input').count(),0,'company info is not editable');
    }
    assert.equal(await businessStorage(page),before,width+'px leaves business data untouched');
    assert.deepEqual(errors,[]);
-   console.log(`PASS ${width}px: ${mobile?'previous mobile UI, no desktop-design elements':'design shell, sidebar navigation, themes, home analytics, calendar grid, 帳票 split view'}, unchanged business data`);
+   console.log(`PASS ${width}px: ${mobile?'previous mobile UI and headings, no desktop-design elements':'design shell, sidebar, themes, home analytics with 収支差額 + 参考, recent sales, calendar grid, always-on 帳票 preview, filters, metric cards, bank monthly panel, read-only company info'}, unchanged business data`);
    await context.close();
   }
  }finally{await browser.close();server.close();}
