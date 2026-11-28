@@ -72,5 +72,10 @@ const business={estimates:[],projects:[],calendar:[google,system],audit:[],expen
  assert.equal(posts.length,1);assert.equal(posts[0].id,pushed.googleEventId);assert.deepEqual([posts[0].summary,posts[0].start,posts[0].end],['Google連携テスト',{date:'2026-12-10'},{date:'2026-12-11'}]);
  pushed=(await stored()).find(e=>e.id===pushed.id);assert.equal(pushed.googleCreatePending,false);assert.equal(pushed.source,'local');
  assert.deepEqual([(await page.evaluate(()=>bizState.sales.length)),(await page.evaluate(()=>bizState.payments.length))],[0,0],'calendar never creates money records');
+ // start time only: reopening and saving again keeps working (end is stored equal to start)
+ await page.locator(newButton).click();await page.fill('#ddLeDate','2026-12-04');await page.fill('#ddLeStart','09:00');await page.fill('#ddLeTitle','開始のみ');await page.locator('#ddLeSave').click();
+ const startOnly=(await stored()).find(e=>e.title==='開始のみ');assert.equal(startOnly.end,startOnly.start);
+ await page.locator('#ddCalendar [data-dd-edit="'+startOnly.id+'"]').click();assert.equal(await page.inputValue('#ddLeEnd'),'');await page.fill('#ddLeTitle','開始のみ（再保存）');await page.locator('#ddLeSave').click();
+ assert.equal(await page.locator('#ddLeError').textContent(),'');assert.equal((await stored()).find(e=>e.id===startOnly.id).title,'開始のみ（再保存）');
  assert.deepEqual(errors,[]);await page.close();}
  console.log('local calendar browser tests passed');}finally{await browser.close();server.close();}})().catch(e=>{console.error(e);process.exit(1);});

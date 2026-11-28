@@ -3982,7 +3982,7 @@ function renderCalendarGrid(){
   $('ddLeDelete').addEventListener('click',async()=>{const id=d.dataset.id;if(id&&saleApi()?.state(id).sale){$('ddLeError').textContent='この予定には売上が登録されています。先に売上を取消してください。';return;}if(!id||!confirm('この本地日程を削除しますか？（記録は削除済みとして残ります）'))return;try{await bizDeleteLocalEvent(id);d.close();renderCalendarGrid();}catch(e){$('ddLeError').textContent=e.message;}});
   return d;}
  function openLocalEvent(id){const d=localDialog(),e=id?bizState.calendar.find(x=>x.id===id):null,t=bizJstTime;d.dataset.id=e?.id||'';
-  $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';renderSale(e?.id||'');
+  $('ddLocalTitle').textContent=e?'本地予定を編集':'本地予定を登録';$('ddLeDate').value=e?.date||calDay||bizNowMonth()+'-01';$('ddLeStart').value=t(e?.start);$('ddLeEnd').value=e&&e.end===e.start?'':t(e?.end);$('ddLeTitle').value=e?.title||'';$('ddLeLocation').value=e?.location||'';$('ddLeMemo').value=e?.description||'';$('ddLePush').checked=!!e?.pushToGoogle;$('ddLePush').disabled=!!e?.googleEventId;$('ddLeDelete').hidden=!e;$('ddLeError').textContent='';renderSale(e?.id||'');
   d.showModal();}
  // 売上・入金 from a 本地予定: TsukinowaBusinessUI.calendarSale (cloud: registerCalendarSale / calendarSaleChange; local: same records in bizState).
  const saleApi=()=>window.TsukinowaBusinessUI?.calendarSale;
